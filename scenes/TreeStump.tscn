@@ -1,0 +1,27 @@
+[gd_scene load_steps=4 format=3 uid="uid://c3hj5k6l7m8oa"]
+
+[ext_resource type="Script" uid="uid://cuu8lp6minotj" path="res://scripts/TreeStump.gd" id="1_4vfxu"]
+[ext_resource type="Script" uid="uid://bbh1pyej32pbs" path="res://scripts/Interactable.gd" id="2_5wfxu"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_1a2b3"]
+height = 1.0
+
+[node name="TreeStump" type="StaticBody3D"]
+script = ExtResource("1_4vfxu")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+shape = SubResource("CylinderShape3D_1a2b3")
+
+[node name="Interactable" type="Area3D" parent="."]
+collision_layer = 2
+collision_mask = 0
+monitoring = false
+script = ExtResource("2_5wfxu")
+interaction_prompt = "Press E to Chop"
+
+[node name="InteractionCollision" type="CollisionShape3D" parent="Interactable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+shape = SubResource("CylinderShape3D_1a2b3")

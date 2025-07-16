@@ -1,0 +1,33 @@
+[gd_scene load_steps=5 format=3 uid="uid://bxfur3dgahudm"]
+
+[ext_resource type="Script" uid="uid://fqvox8thgdky" path="res://scripts/Deer.gd" id="1_deer_script"]
+[ext_resource type="PackedScene" uid="uid://7vyag1p0bp16" path="res://assets/animals/Deer.gltf" id="2_deer_model"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_i3h01"]
+size = Vector3(0.64624, 1.39893, 2.34236)
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_detection"]
+radius = 10.0
+
+[node name="Deer" type="CharacterBody3D"]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 0, 0, 0)
+collision_layer = 8
+script = ExtResource("1_deer_script")
+
+[node name="DeerModel" parent="." instance=ExtResource("2_deer_model")]
+transform = Transform3D(-0.8, 0, -6.99382e-08, 0, 0.8, 0, 6.99382e-08, 0, -0.8, 0, 0, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, -0.0281597, 2.35778, -0.342675)
+shape = SubResource("BoxShape3D_i3h01")
+
+[node name="DetectionArea" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 6
+monitorable = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="DetectionArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
+shape = SubResource("SphereShape3D_detection")
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]

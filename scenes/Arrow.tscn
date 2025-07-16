@@ -1,0 +1,33 @@
+[gd_scene load_steps=5 format=3 uid="uid://b2k5m8oap3q7r"]
+
+[ext_resource type="Script" uid="uid://btwpocac35f1x" path="res://scripts/Arrow.gd" id="1_arrow_script"]
+[ext_resource type="PackedScene" uid="uid://b42hmlgsxwvnx" path="res://assets/tools/Arrow.glb" id="2_arrow_model"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_arrow"]
+height = 0.6
+radius = 0.02
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_detector"]
+height = 0.8
+radius = 0.1
+
+[node name="Arrow" type="RigidBody3D"]
+collision_layer = 4
+collision_mask = 9
+script = ExtResource("1_arrow_script")
+
+[node name="ArrowModel" parent="." instance=ExtResource("2_arrow_model")]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, 0)
+shape = SubResource("CylinderShape3D_arrow")
+
+[node name="AreaDetector" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 8
+monitorable = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="AreaDetector"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, 0)
+shape = SubResource("CylinderShape3D_detector")

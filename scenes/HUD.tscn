@@ -1,0 +1,88 @@
+[gd_scene load_steps=5 format=3 uid="uid://b9hj2k3l4m5n7"]
+
+[ext_resource type="Script" path="res://scripts/Hotbar.gd" id="1_5vfxu"]
+[ext_resource type="Script" path="res://scripts/HUD.gd" id="2_6wfxu"]
+[ext_resource type="PackedScene" uid="uid://bv5n6m8uao2p4" path="res://scenes/Inventory.tscn" id="3_inventory"]
+[ext_resource type="Theme" uid="uid://ck27nol81b6wj" path="res://ui/bark_moss_theme.tres" id="4_theme"]
+
+[node name="HUD" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+theme = ExtResource("4_theme")
+script = ExtResource("2_6wfxu")
+
+[node name="Hotbar" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -180.0
+offset_top = -100.0
+offset_right = 180.0
+offset_bottom = -20.0
+script = ExtResource("1_5vfxu")
+
+[node name="HotbarBackground" type="PanelContainer" parent="Hotbar"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Hotbar/HotbarBackground"]
+layout_mode = 2
+alignment = 1
+
+[node name="Crosshair" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -10.0
+offset_top = -10.0
+offset_right = 10.0
+offset_bottom = 10.0
+mouse_filter = 2
+
+[node name="InteractionDot" type="Panel" parent="Crosshair"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -4.0
+offset_top = -4.0
+offset_right = 4.0
+offset_bottom = 4.0
+mouse_filter = 2
+modulate = Color(0.918, 0.878, 0.835, 0.9)
+
+[node name="InteractionPrompt" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -150.0
+offset_top = 50.0
+offset_right = 150.0
+offset_bottom = 100.0
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.918, 0.878, 0.835, 1)
+theme_override_colors/font_shadow_color = Color(0.137, 0.2, 0.165, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+text = ""
+horizontal_alignment = 1
+vertical_alignment = 1
+mouse_filter = 2
+
+[node name="Inventory" parent="." instance=ExtResource("3_inventory")] 

@@ -1,0 +1,180 @@
+[gd_scene load_steps=3 format=3 uid="uid://bpv8qx2narlt5"]
+
+[ext_resource type="Script" path="res://scripts/PauseMenu.gd" id="1_pausemenu_script"]
+[ext_resource type="Theme" uid="uid://ck27nol81b6wj" path="res://ui/bark_moss_theme.tres" id="2_theme"]
+
+[node name="PauseMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 0
+theme = ExtResource("2_theme")
+script = ExtResource("1_pausemenu_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.137, 0.2, 0.165, 0.85)
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="MenuPanel" type="PanelContainer" parent="CenterContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(450, 550)
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/MenuPanel"]
+layout_mode = 2
+
+[node name="Spacer0" type="Control" parent="CenterContainer/MenuPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 30)
+
+[node name="Title" type="Label" parent="CenterContainer/MenuPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+theme_override_font_sizes/font_size = 38
+theme_override_colors/font_color = Color(0.918, 0.878, 0.835, 1)
+theme_override_colors/font_shadow_color = Color(0.137, 0.2, 0.165, 1)
+theme_override_constants/shadow_offset_x = 3
+theme_override_constants/shadow_offset_y = 3
+text = "Game Paused"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Spacer1" type="Control" parent="CenterContainer/MenuPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 40)
+
+[node name="ResumeButton" type="Button" parent="CenterContainer/MenuPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(350, 55)
+theme_override_colors/font_color = Color(0.3, 0.4, 0.35, 1)
+theme_override_colors/font_shadow_color = Color(0.918, 0.878, 0.835, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+text = "Resume Game"
+
+[node name="Spacer2" type="Control" parent="CenterContainer/MenuPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 15)
+
+[node name="SettingsButton" type="Button" parent="CenterContainer/MenuPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(350, 55)
+theme_override_colors/font_color = Color(0.3, 0.4, 0.35, 1)
+theme_override_colors/font_shadow_color = Color(0.918, 0.878, 0.835, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+text = "Settings"
+
+[node name="Spacer3" type="Control" parent="CenterContainer/MenuPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 15)
+
+[node name="QuitToMenuButton" type="Button" parent="CenterContainer/MenuPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(350, 55)
+theme_override_colors/font_color = Color(0.3, 0.4, 0.35, 1)
+theme_override_colors/font_shadow_color = Color(0.918, 0.878, 0.835, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+text = "Quit to Main Menu"
+
+[node name="Spacer4" type="Control" parent="CenterContainer/MenuPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 15)
+
+[node name="QuitGameButton" type="Button" parent="CenterContainer/MenuPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(350, 55)
+theme_override_colors/font_color = Color(0.3, 0.4, 0.35, 1)
+theme_override_colors/font_shadow_color = Color(0.918, 0.878, 0.835, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+text = "Quit Game"
+
+[node name="Spacer5" type="Control" parent="CenterContainer/MenuPanel/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 30)
+
+[node name="SettingsModal" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -150.0
+offset_right = 200.0
+offset_bottom = 150.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="SettingsModal"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="SettingsModal/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(0.918, 0.878, 0.835, 1)
+text = "Settings"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="SettingsModal/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 20)
+
+[node name="VolumeLabel" type="Label" parent="SettingsModal/VBoxContainer"]
+layout_mode = 2
+text = "Master Volume"
+
+[node name="VolumeSlider" type="HSlider" parent="SettingsModal/VBoxContainer"]
+layout_mode = 2
+max_value = 100.0
+value = 75.0
+
+[node name="FullscreenCheckbox" type="CheckBox" parent="SettingsModal/VBoxContainer"]
+layout_mode = 2
+text = "Fullscreen"
+
+[node name="Spacer2" type="Control" parent="SettingsModal/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 20)
+
+[node name="HBoxContainer" type="HBoxContainer" parent="SettingsModal/VBoxContainer"]
+layout_mode = 2
+
+[node name="CloseButton" type="Button" parent="SettingsModal/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.3, 0.4, 0.35, 1)
+theme_override_colors/font_shadow_color = Color(0.918, 0.878, 0.835, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+text = "Close"
+
+[node name="ConfirmationDialog" type="ConfirmationDialog" parent="."]
+title = "Confirm Quit"
+initial_position = 2
+size = Vector2i(450, 180)
+theme_override_colors/font_color = Color(0.3, 0.4, 0.35, 1)
+theme_override_colors/font_shadow_color = Color(0.918, 0.878, 0.835, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+dialog_text = "Are you sure you want to quit to the main menu? 
+Any unsaved progress will be lost."
+
+[connection signal="pressed" from="CenterContainer/MenuPanel/VBoxContainer/ResumeButton" to="." method="_on_resume_pressed"]
+[connection signal="pressed" from="CenterContainer/MenuPanel/VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
+[connection signal="pressed" from="CenterContainer/MenuPanel/VBoxContainer/QuitToMenuButton" to="." method="_on_quit_to_menu_pressed"]
+[connection signal="pressed" from="CenterContainer/MenuPanel/VBoxContainer/QuitGameButton" to="." method="_on_quit_game_pressed"]
+[connection signal="pressed" from="SettingsModal/VBoxContainer/HBoxContainer/CloseButton" to="." method="_on_settings_close_pressed"] 

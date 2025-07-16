@@ -1,0 +1,32 @@
+[gd_scene load_steps=5 format=3 uid="uid://csdcnou8im87o"]
+
+[ext_resource type="Script" uid="uid://b5q03enop00dm" path="res://scripts/DeerCorpse.gd" id="1_deer_corpse_script"]
+[ext_resource type="Script" uid="uid://bbh1pyej32pbs" path="res://scripts/Interactable.gd" id="2_interactable_script"]
+[ext_resource type="PackedScene" uid="uid://7vyag1p0bp16" path="res://assets/animals/Deer.gltf" id="3_deer_model"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_deer_corpse"]
+radius = 0.588697
+height = 2.57697
+
+[node name="DeerCorpse" type="StaticBody3D"]
+collision_layer = 16
+collision_mask = 0
+script = ExtResource("1_deer_corpse_script")
+
+[node name="DeerCorpseModel" parent="." instance=ExtResource("3_deer_model")]
+transform = Transform3D(-2.62268e-08, 0.6, 0, -0.6, -2.62268e-08, 0, 0, 0, 0.6, 0, 0, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(0.574379, 0.45899, 0.677803, 0.698299, 0.157348, -0.698299, -0.427164, 0.874396, -0.230135, 1.59936, 0.173602, 0.224658)
+shape = SubResource("CapsuleShape3D_deer_corpse")
+
+[node name="Interactable" type="Area3D" parent="."]
+transform = Transform3D(0.885426, 0.458991, 0.0731322, 0, 0.157348, -0.987543, -0.46478, 0.874397, 0.13932, 1.46166, 0.126398, -0.0376605)
+collision_layer = 2
+collision_mask = 0
+monitoring = false
+script = ExtResource("2_interactable_script")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Interactable"]
+transform = Transform3D(0.707107, 0, 0.707107, 0, 1, 0, -0.707107, 0, 0.707107, 0, 0.3, 0)
+shape = SubResource("CapsuleShape3D_deer_corpse")

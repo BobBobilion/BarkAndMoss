@@ -1,0 +1,49 @@
+[gd_resource type="Theme" load_steps=5 format=3]
+
+[ext_resource type="Theme" uid="uid://ck27nol81b6wj" path="res://ui/bark_moss_theme.tres" id="1_base_theme"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_slot_normal"]
+bg_color = Color(0.8, 0.75, 0.7, 0.9)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.545, 0.357, 0.169, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+shadow_color = Color(0.137, 0.2, 0.165, 0.4)
+shadow_size = 2
+shadow_offset = Vector2(1, 2)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_slot_selected"]
+bg_color = Color(0.98, 0.94, 0.89, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.545, 0.357, 0.169, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+shadow_color = Color(0.545, 0.357, 0.169, 0.6)
+shadow_size = 4
+shadow_offset = Vector2(0, 2)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_slot_empty"]
+bg_color = Color(0.6, 0.55, 0.5, 0.7)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.4, 0.35, 0.3, 0.8)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[resource]
+base_type = ExtResource("1_base_theme")
+Panel/styles/panel = SubResource("StyleBoxFlat_slot_normal") 

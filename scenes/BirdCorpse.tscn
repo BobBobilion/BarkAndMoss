@@ -1,0 +1,32 @@
+[gd_scene load_steps=5 format=3 uid="uid://b516v1luyxpft"]
+
+[ext_resource type="Script" uid="uid://bcjohdsvv5kxf" path="res://scripts/BirdCorpse.gd" id="1_bird_corpse_script"]
+[ext_resource type="Script" uid="uid://bbh1pyej32pbs" path="res://scripts/Interactable.gd" id="2_interactable_script"]
+[ext_resource type="PackedScene" uid="uid://t2fff6d21o2v" path="res://assets/animals/Mourning dove.glb" id="3_dove_model"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_bird_corpse"]
+radius = 0.0697292
+height = 0.340951
+
+[node name="BirdCorpse" type="StaticBody3D"]
+collision_layer = 16
+collision_mask = 0
+script = ExtResource("1_bird_corpse_script")
+
+[node name="DoveCorpseModel" parent="." instance=ExtResource("3_dove_model")]
+transform = Transform3D(-8.74228e-09, 0.2, 0, -0.2, -8.74228e-09, 0, 0, 0, 0.2, 0, 0, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(0.504201, 0.738292, -0.448002, -0.706085, 0.0537477, -0.706085, -0.497218, 0.672336, 0.548397, 0.118753, 0.0658592, 0.0529635)
+shape = SubResource("CapsuleShape3D_bird_corpse")
+
+[node name="Interactable" type="Area3D" parent="."]
+transform = Transform3D(0.0397389, 0.738292, -0.673309, -0.998555, 0.0537477, 2.71856e-09, 0.0361888, 0.672336, 0.739361, 0.0264665, 0.0591408, -0.0310785)
+collision_layer = 2
+collision_mask = 0
+monitoring = false
+script = ExtResource("2_interactable_script")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Interactable"]
+transform = Transform3D(0.707107, 0, 0.707107, 0, 1, 0, -0.707107, 0, 0.707107, 0, 0.125, 0)
+shape = SubResource("CapsuleShape3D_bird_corpse")

@@ -1,0 +1,37 @@
+[gd_scene load_steps=5 format=3 uid="uid://d1vj4p3yqxfmh"]
+
+[ext_resource type="Script" uid="uid://cuu6dgliub5mc" path="res://scripts/Dog.gd" id="1_2vfxu"]
+[ext_resource type="PackedScene" uid="uid://b587x1wipli2m" path="res://assets/animals/Dog.glb" id="2_dog_model"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_2y4vw"]
+radius = 0.170439
+height = 0.983119
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_4d5e6"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:rotation")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+properties/2/path = NodePath(".:velocity")
+properties/2/spawn = false
+properties/2/replication_mode = 1
+
+[node name="Dog" type="CharacterBody3D"]
+script = ExtResource("1_2vfxu")
+
+[node name="DogModel" parent="." instance=ExtResource("2_dog_model")]
+transform = Transform3D(-0.25, 0, -3.7749e-08, 0, 0.25, 0, 3.7749e-08, 0, -0.25, 0, 0, 0)
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.384408, 0.923163, 0, -0.923163, 0.384408, -0.00387713, 0.457592, -0.154414)
+shape = SubResource("CapsuleShape3D_2y4vw")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 1.2, 2)
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_4d5e6")

@@ -1,0 +1,334 @@
+[gd_scene load_steps=4 format=3 uid="uid://b1hj2k3l4m5n6"]
+
+[ext_resource type="Script" uid="uid://prwi1jwo01rr" path="res://scripts/MainMenu.gd" id="1_3vfxu"]
+[ext_resource type="Theme" uid="uid://cyoxrwsnvsuny" path="res://ui/bark_moss_theme.tres" id="2_theme"]
+[ext_resource type="Texture2D" uid="uid://3aevha36wkev" path="res://assets/coverart.png" id="3_coverart"]
+
+[node name="MainMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_3vfxu")
+
+[node name="Background" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3_coverart")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -150.0
+offset_top = -200.0
+offset_right = 150.0
+offset_bottom = 200.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Title" type="Label" parent="VBoxContainer"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.918, 0.878, 0.835, 1)
+theme_override_colors/font_shadow_color = Color(0.137, 0.2, 0.165, 1)
+theme_override_constants/shadow_offset_x = 3
+theme_override_constants/shadow_offset_y = 3
+theme_override_font_sizes/font_size = 42
+text = "Bark & Moss"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Spacer1" type="Control" parent="VBoxContainer"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+
+[node name="PlayButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "Play"
+
+[node name="JoinButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "Join Game"
+
+[node name="SettingsButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "Settings"
+
+[node name="ExitButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "Exit"
+
+[node name="JoinModal" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -150.0
+offset_right = 200.0
+offset_bottom = 150.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="JoinModal"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="JoinModal/VBoxContainer"]
+layout_mode = 2
+text = "Join Game"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="JoinModal/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="InfoText" type="Label" parent="JoinModal/VBoxContainer"]
+layout_mode = 2
+text = "Enter the host's IP address to join their game:"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="IPInput" type="LineEdit" parent="JoinModal/VBoxContainer"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+placeholder_text = "127.0.0.1"
+
+[node name="Spacer2" type="Control" parent="JoinModal/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="HBoxContainer" type="HBoxContainer" parent="JoinModal/VBoxContainer"]
+layout_mode = 2
+
+[node name="CancelButton" type="Button" parent="JoinModal/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.098, 0.145, 0.118, 1)
+text = "Cancel"
+
+[node name="ConnectButton" type="Button" parent="JoinModal/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.098, 0.145, 0.118, 1)
+text = "Connect"
+
+[node name="CharacterSelectModal" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -250.0
+offset_top = -200.0
+offset_right = 250.0
+offset_bottom = 200.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CharacterSelectModal"]
+layout_mode = 2
+
+[node name="Spacer0" type="Control" parent="CharacterSelectModal/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Title" type="Label" parent="CharacterSelectModal/VBoxContainer"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.098, 0.145, 0.118, 1)
+theme_override_font_sizes/font_size = 32
+text = "Choose Your Character"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Spacer1" type="Control" parent="CharacterSelectModal/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="CharacterContainer" type="HBoxContainer" parent="CharacterSelectModal/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="BarkPanel" type="PanelContainer" parent="CharacterSelectModal/VBoxContainer/CharacterContainer"]
+custom_minimum_size = Vector2(180, 200)
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CharacterSelectModal/VBoxContainer/CharacterContainer/BarkPanel"]
+layout_mode = 2
+
+[node name="CharacterName" type="Label" parent="CharacterSelectModal/VBoxContainer/CharacterContainer/BarkPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.098, 0.145, 0.118, 1)
+theme_override_font_sizes/font_size = 24
+text = "Bark"
+horizontal_alignment = 1
+
+[node name="CharacterType" type="Label" parent="CharacterSelectModal/VBoxContainer/CharacterContainer/BarkPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.204, 0.306, 0.255, 1)
+text = "The Loyal Dog"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="CharacterSelectModal/VBoxContainer/CharacterContainer/BarkPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Description" type="Label" parent="CharacterSelectModal/VBoxContainer/CharacterContainer/BarkPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.204, 0.306, 0.255, 1)
+text = "Fast and agile with keen senses. Perfect for hunting and tracking prey through the wilderness."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Spacer2" type="Control" parent="CharacterSelectModal/VBoxContainer/CharacterContainer/BarkPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 15)
+layout_mode = 2
+
+[node name="Spacer" type="Control" parent="CharacterSelectModal/VBoxContainer/CharacterContainer"]
+custom_minimum_size = Vector2(20, 0)
+layout_mode = 2
+
+[node name="MossPanel" type="PanelContainer" parent="CharacterSelectModal/VBoxContainer/CharacterContainer"]
+custom_minimum_size = Vector2(180, 200)
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CharacterSelectModal/VBoxContainer/CharacterContainer/MossPanel"]
+layout_mode = 2
+
+[node name="CharacterName" type="Label" parent="CharacterSelectModal/VBoxContainer/CharacterContainer/MossPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.098, 0.145, 0.118, 1)
+theme_override_font_sizes/font_size = 24
+text = "Moss"
+horizontal_alignment = 1
+
+[node name="CharacterType" type="Label" parent="CharacterSelectModal/VBoxContainer/CharacterContainer/MossPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.204, 0.306, 0.255, 1)
+text = "The Survivor"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="CharacterSelectModal/VBoxContainer/CharacterContainer/MossPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Description" type="Label" parent="CharacterSelectModal/VBoxContainer/CharacterContainer/MossPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.204, 0.306, 0.255, 1)
+text = "Resourceful and skilled with tools. Capable of crafting, building, and surviving in harsh conditions."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Spacer2" type="Control" parent="CharacterSelectModal/VBoxContainer/CharacterContainer/MossPanel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 15)
+layout_mode = 2
+
+[node name="Spacer3" type="Control" parent="CharacterSelectModal/VBoxContainer"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+
+[node name="PlayButton" type="Button" parent="CharacterSelectModal/VBoxContainer"]
+custom_minimum_size = Vector2(200, 50)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_colors/font_color = Color(0.098, 0.145, 0.118, 1)
+disabled = true
+text = "Play"
+
+[node name="Spacer4" type="Control" parent="CharacterSelectModal/VBoxContainer"]
+custom_minimum_size = Vector2(0, 15)
+layout_mode = 2
+
+[node name="BackButton" type="Button" parent="CharacterSelectModal/VBoxContainer"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_colors/font_color = Color(0.098, 0.145, 0.118, 1)
+text = "Back"
+
+[node name="Spacer5" type="Control" parent="CharacterSelectModal/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="SettingsModal" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -150.0
+offset_right = 200.0
+offset_bottom = 150.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="SettingsModal"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="SettingsModal/VBoxContainer"]
+layout_mode = 2
+text = "Settings"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="SettingsModal/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="VolumeLabel" type="Label" parent="SettingsModal/VBoxContainer"]
+layout_mode = 2
+text = "Master Volume"
+
+[node name="VolumeSlider" type="HSlider" parent="SettingsModal/VBoxContainer"]
+layout_mode = 2
+value = 75.0
+
+[node name="FullscreenCheckbox" type="CheckBox" parent="SettingsModal/VBoxContainer"]
+layout_mode = 2
+text = "Fullscreen"
+
+[node name="Spacer2" type="Control" parent="SettingsModal/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="HBoxContainer" type="HBoxContainer" parent="SettingsModal/VBoxContainer"]
+layout_mode = 2
+
+[node name="CloseButton" type="Button" parent="SettingsModal/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.3, 0.4, 0.35, 1)
+text = "Close"
+
+[connection signal="pressed" from="VBoxContainer/PlayButton" to="." method="_on_play_pressed"]
+[connection signal="pressed" from="VBoxContainer/JoinButton" to="." method="_on_join_pressed"]
+[connection signal="pressed" from="VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
+[connection signal="pressed" from="VBoxContainer/ExitButton" to="." method="_on_exit_pressed"]
+[connection signal="pressed" from="JoinModal/VBoxContainer/HBoxContainer/CancelButton" to="." method="_on_join_cancel_pressed"]
+[connection signal="pressed" from="JoinModal/VBoxContainer/HBoxContainer/ConnectButton" to="." method="_on_connect_pressed"]
+[connection signal="gui_input" from="CharacterSelectModal/VBoxContainer/CharacterContainer/BarkPanel" to="." method="_on_bark_panel_clicked"]
+[connection signal="gui_input" from="CharacterSelectModal/VBoxContainer/CharacterContainer/MossPanel" to="." method="_on_moss_panel_clicked"]
+[connection signal="pressed" from="CharacterSelectModal/VBoxContainer/PlayButton" to="." method="_on_play_character_pressed"]
+[connection signal="pressed" from="CharacterSelectModal/VBoxContainer/BackButton" to="." method="_on_character_back_pressed"]
+[connection signal="pressed" from="SettingsModal/VBoxContainer/HBoxContainer/CloseButton" to="." method="_on_settings_close_pressed"]

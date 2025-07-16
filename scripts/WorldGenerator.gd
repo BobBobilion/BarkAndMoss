@@ -1,0 +1,623 @@
+class_name WorldGenerator
+extends Node3D
+
+# --- Imports ---
+const BiomeManagerClass = preload("res://scripts/BiomeManager.gd")
+
+# --- Signals ---
+signal terrain_generation_complete
+
+# --- Constants ---
+const TREE_SCENE_PATH: String = "res://scenes/Tree.tscn"
+const ROCK_SCENE_PATH: String = "res://scenes/Rock.tscn"  # We'll create this scene for rocks
+
+# Terrain generation constants - Using centralized scaling system
+const TERRAIN_RESOLUTION: int = GameConstants.WORLD.TERRAIN_RESOLUTION
+const TERRAIN_CHUNKS: int = 4        # Divide terrain into chunks for better performance
+
+# --- Properties ---
+@export var tree_count: int = GameConstants.WORLD.TREE_COUNT
+@export var rock_count: int = GameConstants.WORLD.ROCK_COUNT
+@export var world_size: Vector2 = GameConstants.WORLD.WORLD_SIZE
+@export var tree_spacing: float = GameConstants.WORLD.TREE_SPACING
+
+var tree_scene: PackedScene
+var rock_scene: PackedScene
+var terrain_mesh: MeshInstance3D
+var terrain_collision: StaticBody3D
+var biome_manager: BiomeManagerClass
+
+# Cache for terrain height lookup
+var terrain_vertices: PackedFloat32Array
+var terrain_size: Vector2
+
+# Asset caches organized by biome type
+var tree_models_cache: Dictionary = {}  # BiomeType -> Array[Mesh]
+var rock_models_cache: Dictionary = {}  # BiomeType -> Array[Mesh]
+
+
+# --- Engine Callbacks ---
+
+func _ready() -> void:
+	"""Initializes the world generator, loads resources, and generates the world."""
+	# Add to group for easy finding by other scripts
+	add_to_group("world_generator")
+	
+	_initialize_biome_manager()
+	_load_resources()
+	# Use call_deferred to ensure terrain generation happens after scene is fully ready
+	call_deferred("_generate_world")
+
+
+# --- Private Methods ---
+
+func _initialize_biome_manager() -> void:
+	"""Initialize the biome manager for terrain and asset generation."""
+	biome_manager = BiomeManagerClass.new()
+	print("WorldGenerator: Biome manager initialized")
+
+
+func _load_resources() -> void:
+	"""Loads necessary scenes and resources for biome-based generation."""
+	# Load the base tree and rock scenes
+	tree_scene = load(TREE_SCENE_PATH)
+	# Note: We'll create the rock scene later if it doesn't exist
+	if ResourceLoader.exists(ROCK_SCENE_PATH):
+		rock_scene = load(ROCK_SCENE_PATH)
+	
+	# Preload tree and rock models for each biome type
+	print("WorldGenerator: Loading biome-specific assets...")
+	_load_biome_assets()
+	print("WorldGenerator: All biome assets loaded successfully")
+
+
+func _load_biome_assets() -> void:
+	"""Load and cache all tree and rock meshes for each biome type."""
+	# Load tree assets for each biome
+	for biome_type in BiomeManagerClass.BiomeType.values():
+		var tree_assets: Array[String] = biome_manager.get_tree_assets_for_biome(biome_type)
+		var rock_assets: Array[String] = biome_manager.get_rock_assets_for_biome(biome_type)
+		
+		# Load tree meshes for this biome
+		tree_models_cache[biome_type] = []
+		for asset_path in tree_assets:
+			if ResourceLoader.exists(asset_path):
+				var mesh: Mesh = load(asset_path)
+				if mesh:
+					tree_models_cache[biome_type].append(mesh)
+		
+		# Load rock meshes for this biome  
+		rock_models_cache[biome_type] = []
+		for asset_path in rock_assets:
+			if ResourceLoader.exists(asset_path):
+				var mesh: Mesh = load(asset_path)
+				if mesh:
+					rock_models_cache[biome_type].append(mesh)
+		
+		print("WorldGenerator: Loaded ", tree_models_cache[biome_type].size(), " tree meshes and ", 
+			  rock_models_cache[biome_type].size(), " rock meshes for biome ", biome_type)
+
+
+func _generate_world() -> void:
+	"""Generates the complete world in the correct order."""
+	print("WorldGenerator: Starting biome-based world generation...")
+	await _generate_terrain()
+	print("WorldGenerator: Terrain generation complete, starting forest generation...")
+	_generate_forest()
+	print("WorldGenerator: Forest generation complete, starting rock generation...")
+	_generate_rocks()
+	print("WorldGenerator: World generation complete!")
+	terrain_generation_complete.emit()
+
+
+func _generate_terrain() -> void:
+	"""Creates biome-based terrain using procedural mesh generation with noise."""
+	# Create the terrain mesh
+	terrain_mesh = MeshInstance3D.new()
+	terrain_mesh.name = "TerrainMesh"
+	
+	# Generate the heightmap and mesh using biome data
+	var mesh: ArrayMesh = _create_biome_terrain_mesh()
+	terrain_mesh.mesh = mesh
+	
+	# Create a material that uses vertex colors for biome variation
+	var terrain_material: StandardMaterial3D = _create_biome_aware_terrain_material()
+	terrain_mesh.material_override = terrain_material
+	
+	# Ensure the mesh can cast and receive shadows properly
+	terrain_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	
+	add_child(terrain_mesh)
+	print("WorldGenerator: Biome-based terrain mesh created")
+	
+	# Create collision for the terrain and wait for it to be ready
+	await _create_terrain_collision()
+
+
+func _create_biome_terrain_mesh() -> ArrayMesh:
+	"""Creates the actual mesh for the terrain using biome-based height generation."""
+	var vertices: PackedVector3Array = PackedVector3Array()
+	var normals: PackedVector3Array = PackedVector3Array()
+	var uvs: PackedVector2Array = PackedVector2Array()
+	var colors: PackedColorArray = PackedColorArray()  # Add vertex colors for biome variation
+	var indices: PackedInt32Array = PackedInt32Array()
+	
+	# Store terrain data for height lookups
+	terrain_size = world_size
+	terrain_vertices = PackedFloat32Array()
+	
+	# Generate vertices with height from biome manager
+	for z in range(TERRAIN_RESOLUTION + 1):
+		for x in range(TERRAIN_RESOLUTION + 1):
+			# Convert grid coordinates to world coordinates
+			var world_x: float = (float(x) / TERRAIN_RESOLUTION - 0.5) * world_size.x
+			var world_z: float = (float(z) / TERRAIN_RESOLUTION - 0.5) * world_size.y
+			
+			# Use biome manager for height calculation
+			var height: float = biome_manager.get_terrain_height_at_position(Vector3(world_x, 0, world_z))
+			
+			# Store vertex
+			var vertex: Vector3 = Vector3(world_x, height, world_z)
+			vertices.append(vertex)
+			
+			# Store height for later lookup
+			terrain_vertices.append(height)
+			
+			# Calculate UV coordinates
+			var uv: Vector2 = Vector2(float(x) / TERRAIN_RESOLUTION, float(z) / TERRAIN_RESOLUTION)
+			uvs.append(uv)
+			
+			# Get biome-specific color for this vertex
+			var biome_type: BiomeManagerClass.BiomeType = biome_manager.get_biome_at_position(Vector3(world_x, 0, world_z))
+			var biome_color: Color = _get_biome_grass_color(biome_type)
+			colors.append(biome_color)
+	
+	# Generate indices for triangles
+	for z in range(TERRAIN_RESOLUTION):
+		for x in range(TERRAIN_RESOLUTION):
+			var top_left: int = z * (TERRAIN_RESOLUTION + 1) + x
+			var top_right: int = top_left + 1
+			var bottom_left: int = (z + 1) * (TERRAIN_RESOLUTION + 1) + x
+			var bottom_right: int = bottom_left + 1
+			
+			# First triangle (top-left, top-right, bottom-left) - counter-clockwise when viewed from above
+			indices.append(top_left)
+			indices.append(top_right)
+			indices.append(bottom_left)
+			
+			# Second triangle (top-right, bottom-right, bottom-left) - counter-clockwise when viewed from above
+			indices.append(top_right)
+			indices.append(bottom_right)
+			indices.append(bottom_left)
+	
+	# Calculate normals
+	normals = _calculate_normals(vertices, indices)
+	
+	# Create mesh
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_COLOR] = colors  # Add vertex colors for biome variation
+	arrays[Mesh.ARRAY_INDEX] = indices
+	
+	var mesh: ArrayMesh = ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	
+	return mesh
+
+
+func _calculate_normals(vertices: PackedVector3Array, indices: PackedInt32Array) -> PackedVector3Array:
+	"""Calculate smooth normals for the terrain mesh."""
+	var normals: PackedVector3Array = PackedVector3Array()
+	normals.resize(vertices.size())
+	
+	# Initialize all normals to zero
+	for i in range(normals.size()):
+		normals[i] = Vector3.ZERO
+	
+	# Calculate face normals and accumulate
+	for i in range(0, indices.size(), 3):
+		var i0: int = indices[i]
+		var i1: int = indices[i + 1]
+		var i2: int = indices[i + 2]
+		
+		var v0: Vector3 = vertices[i0]
+		var v1: Vector3 = vertices[i1]
+		var v2: Vector3 = vertices[i2]
+		
+		var face_normal: Vector3 = (v1 - v0).cross(v2 - v0).normalized()
+		
+		normals[i0] += face_normal
+		normals[i1] += face_normal
+		normals[i2] += face_normal
+	
+	# Normalize all accumulated normals
+	for i in range(normals.size()):
+		normals[i] = normals[i].normalized()
+	
+	return normals
+
+
+func _create_terrain_collision() -> void:
+	"""Creates collision shape for the terrain."""
+	print("WorldGenerator: Creating terrain collision...")
+	
+	terrain_collision = StaticBody3D.new()
+	terrain_collision.name = "TerrainCollision"
+	
+	# Set collision layers - terrain should be on layer 1 (default)
+	terrain_collision.collision_layer = 1  # Terrain is on layer 1
+	terrain_collision.collision_mask = 0   # Terrain doesn't need to detect anything
+	
+	var collision_shape: CollisionShape3D = CollisionShape3D.new()
+	collision_shape.name = "TerrainCollisionShape"
+	
+	# Use the mesh as collision shape
+	if terrain_mesh and terrain_mesh.mesh:
+		var shape: ConcavePolygonShape3D = terrain_mesh.mesh.create_trimesh_shape()
+		if shape:
+			collision_shape.shape = shape
+			print("WorldGenerator: Terrain collision shape created successfully")
+		else:
+			printerr("WorldGenerator: Failed to create terrain collision shape!")
+			return
+	else:
+		printerr("WorldGenerator: No terrain mesh available for collision!")
+		return
+	
+	terrain_collision.add_child(collision_shape)
+	add_child(terrain_collision)
+	print("WorldGenerator: Terrain collision added to scene")
+	
+	# Wait a frame to ensure collision is fully registered
+	await get_tree().process_frame
+	print("WorldGenerator: Terrain collision is now active")
+
+
+func _generate_forest() -> void:
+	"""
+	Generates biome-specific forests by placing tree instances based on biome type and density.
+	This should only run on the server to ensure consistency.
+	"""
+	if not multiplayer.is_server():
+		return
+
+	var trees_spawned: int = 0
+	var max_attempts: int = tree_count * 3  # Allow multiple attempts to find valid positions
+	var attempts: int = 0
+
+	while trees_spawned < tree_count and attempts < max_attempts:
+		attempts += 1
+		
+		# Get a random position and determine its biome
+		var world_pos: Vector3 = _get_random_world_position()
+		var biome_type: BiomeManagerClass.BiomeType = biome_manager.get_biome_at_position(world_pos)
+		
+		# Check if we should spawn a tree in this biome (based on density)
+		var tree_density: float = biome_manager.get_tree_density_for_biome(biome_type)
+		if randf() > tree_density:
+			continue
+		
+		# Get biome-appropriate tree mesh
+		var tree_mesh: Mesh = _get_random_tree_mesh_for_biome(biome_type)
+		if not tree_mesh:
+			continue
+		
+		# Create tree instance
+		var tree_instance: Node3D = tree_scene.instantiate()
+		
+		# Add the tree mesh to the visuals node
+		var visuals_node: Node3D = tree_instance.get_node("Visuals")
+		if visuals_node:
+			# Clear existing placeholder meshes
+			for child in visuals_node.get_children():
+				child.queue_free()
+			# Create and add mesh instance with the biome-appropriate mesh
+			var mesh_instance: MeshInstance3D = MeshInstance3D.new()
+			mesh_instance.mesh = tree_mesh
+			mesh_instance.scale = Vector3(2.5, 2.5, 2.5)  # Increased tree size by 2.5x
+			visuals_node.add_child(mesh_instance)
+		
+		# Create accurate collision based on the actual tree mesh
+		_create_accurate_tree_collision(tree_instance, tree_mesh, biome_type)
+		
+		var surface_position: Vector3 = _get_surface_position(world_pos)
+		var rotation_y: float = randf() * TAU
+		
+		# Use call_deferred to ensure nodes are added safely
+		call_deferred("_add_tree_to_scene", tree_instance, surface_position, rotation_y)
+		trees_spawned += 1
+
+	print("WorldGenerator: Spawned ", trees_spawned, " biome-specific trees")
+
+
+func _generate_rocks() -> void:
+	"""
+	Generates biome-specific rocks based on biome type and rock density.
+	"""
+	if not multiplayer.is_server():
+		return
+
+	var rocks_spawned: int = 0
+	var max_attempts: int = rock_count * 3
+	var attempts: int = 0
+
+	while rocks_spawned < rock_count and attempts < max_attempts:
+		attempts += 1
+		
+		# Get a random position and determine its biome
+		var world_pos: Vector3 = _get_random_world_position()
+		var biome_type: BiomeManagerClass.BiomeType = biome_manager.get_biome_at_position(world_pos)
+		
+		# Check if we should spawn a rock in this biome (based on density)
+		var rock_density: float = biome_manager.get_rock_density_for_biome(biome_type)
+		if randf() > rock_density:
+			continue
+		
+		# Get biome-appropriate rock mesh
+		var rock_mesh: Mesh = _get_random_rock_mesh_for_biome(biome_type)
+		if not rock_mesh:
+			continue
+		
+		# Create rock instance with accurate collision
+		var static_body: StaticBody3D = StaticBody3D.new()
+		var mesh_instance: MeshInstance3D = MeshInstance3D.new()
+		var collision_shape: CollisionShape3D = CollisionShape3D.new()
+		
+		# Set up the mesh
+		mesh_instance.mesh = rock_mesh
+		
+		# Create accurate collision shape from the actual mesh geometry
+		var trimesh_shape: ConcavePolygonShape3D = rock_mesh.create_trimesh_shape()
+		if trimesh_shape:
+			collision_shape.shape = trimesh_shape
+			print("WorldGenerator: Created accurate collision for rock using trimesh")
+		else:
+			# Fallback to convex shape if trimesh fails
+			var convex_shape: ConvexPolygonShape3D = rock_mesh.create_convex_shape()
+			if convex_shape:
+				collision_shape.shape = convex_shape
+				print("WorldGenerator: Created collision for rock using convex shape")
+			else:
+				# Last resort: use AABB-based box shape
+				var box_shape: BoxShape3D = BoxShape3D.new()
+				box_shape.size = rock_mesh.get_aabb().size
+				collision_shape.shape = box_shape
+				print("WorldGenerator: Used fallback box collision for rock")
+		
+		# Set collision properties for environment objects
+		static_body.collision_layer = 2  # Environment layer
+		static_body.collision_mask = 0   # Rocks don't need to detect anything
+		
+		# Assemble the rock
+		static_body.add_child(mesh_instance)
+		static_body.add_child(collision_shape)
+		
+		var surface_position: Vector3 = _get_surface_position(world_pos)
+		var rotation_y: float = randf() * TAU
+		var scale_factor: float = randf_range(1.0, 15.0)  # Random scale from current size (1x) to 15x larger
+		
+		static_body.scale = Vector3(scale_factor, scale_factor, scale_factor)
+		
+		# Use call_deferred to ensure nodes are added safely
+		call_deferred("_add_rock_to_scene", static_body, surface_position, rotation_y)
+		rocks_spawned += 1
+
+	print("WorldGenerator: Spawned ", rocks_spawned, " biome-specific rocks")
+
+
+func _add_tree_to_scene(tree: Node3D, pos: Vector3, rot_y: float) -> void:
+	"""Adds a tree instance to the scene with a given position and rotation."""
+	tree.position = pos
+	tree.rotation.y = rot_y
+	add_child(tree)
+
+
+func _add_rock_to_scene(rock: Node3D, pos: Vector3, rot_y: float) -> void:
+	"""Adds a rock instance to the scene with a given position and rotation."""
+	rock.position = pos
+	rock.rotation.y = rot_y
+	add_child(rock)
+
+
+func _get_random_tree_mesh_for_biome(biome_type: BiomeManagerClass.BiomeType) -> Mesh:
+	"""Returns a random tree mesh appropriate for the given biome."""
+	if not tree_models_cache.has(biome_type):
+		return null
+	
+	var meshes: Array = tree_models_cache[biome_type]
+	if meshes.is_empty():
+		return null
+	
+	var random_index: int = randi() % meshes.size()
+	return meshes[random_index]
+
+
+func _get_random_rock_mesh_for_biome(biome_type: BiomeManagerClass.BiomeType) -> Mesh:
+	"""Returns a random rock mesh appropriate for the given biome."""
+	if not rock_models_cache.has(biome_type):
+		return null
+	
+	var meshes: Array = rock_models_cache[biome_type]
+	if meshes.is_empty():
+		return null
+	
+	var random_index: int = randi() % meshes.size()
+	return meshes[random_index]
+
+
+func _create_accurate_tree_collision(tree_instance: Node3D, tree_mesh: Mesh, biome_type: BiomeManagerClass.BiomeType) -> void:
+	"""
+	Creates accurate collision shapes based on the actual tree mesh geometry.
+	"""
+	var collision_shape: CollisionShape3D = tree_instance.get_node("CollisionShape")
+	var interactable_collision: CollisionShape3D = tree_instance.get_node("Interactable/CollisionShape3D")
+	
+	if not collision_shape or not interactable_collision:
+		print("WorldGenerator: Could not find collision shapes for tree")
+		return
+	
+	# Create accurate collision shape from the actual tree mesh
+	var accurate_shape: Shape3D = null
+	
+	# Try convex shape first (good balance of accuracy and performance for trees)
+	var convex_shape: ConvexPolygonShape3D = tree_mesh.create_convex_shape()
+	if convex_shape:
+		accurate_shape = convex_shape
+		print("WorldGenerator: Created accurate tree collision using convex shape")
+	else:
+		# Fallback to trimesh for maximum accuracy
+		var trimesh_shape: ConcavePolygonShape3D = tree_mesh.create_trimesh_shape()
+		if trimesh_shape:
+			accurate_shape = trimesh_shape
+			print("WorldGenerator: Created accurate tree collision using trimesh shape")
+		else:
+			# Keep existing cylinder collision as last resort
+			print("WorldGenerator: Using fallback cylinder collision for tree")
+			_adjust_collision_for_biome_tree_fallback(tree_instance, biome_type)
+			return
+	
+	# Apply the accurate collision shape to both collision areas
+	if accurate_shape:
+		collision_shape.shape = accurate_shape
+		interactable_collision.shape = accurate_shape
+		
+		# Scale collision shape to match the 2.5x visual scaling
+		collision_shape.scale = Vector3(2.5, 2.5, 2.5)
+		interactable_collision.scale = Vector3(2.5, 2.5, 2.5)
+		
+		# Position collision shapes properly (trees are usually centered at base)
+		collision_shape.position = Vector3.ZERO
+		interactable_collision.position = Vector3.ZERO
+
+
+func _adjust_collision_for_biome_tree_fallback(tree_instance: Node3D, biome_type: BiomeManagerClass.BiomeType) -> void:
+	"""
+	Fallback collision adjustment using simple cylinder shapes (legacy method).
+	"""
+	var collision_shape: CollisionShape3D = tree_instance.get_node("CollisionShape")
+	var interactable_collision: CollisionShape3D = tree_instance.get_node("Interactable/CollisionShape3D")
+	
+	if not collision_shape or not interactable_collision:
+		return
+	
+	# Get the cylinder shape from both collision areas
+	var main_shape: CylinderShape3D = collision_shape.shape as CylinderShape3D
+	var interact_shape: CylinderShape3D = interactable_collision.shape as CylinderShape3D
+	
+	if not main_shape or not interact_shape:
+		return
+	
+	# Adjust collision based on biome type (scaled for 2.5x tree size)
+	match biome_type:
+		BiomeManagerClass.BiomeType.MOUNTAIN:
+			# Dead trees are typically taller and thinner
+			main_shape.height = 20.0  # 8.0 * 2.5
+			main_shape.radius = 2.0   # 0.8 * 2.5
+			interact_shape.height = 20.0
+			interact_shape.radius = 2.0
+			collision_shape.position.y = 10.0  # 4.0 * 2.5
+			interactable_collision.position.y = 10.0
+		BiomeManagerClass.BiomeType.FOREST:
+			# Forest trees are typically medium height and thickness
+			main_shape.height = 15.0  # 6.0 * 2.5
+			main_shape.radius = 2.5   # 1.0 * 2.5
+			interact_shape.height = 15.0
+			interact_shape.radius = 2.5
+			collision_shape.position.y = 7.5  # 3.0 * 2.5
+			interactable_collision.position.y = 7.5
+		BiomeManagerClass.BiomeType.AUTUMN:
+			# Autumn trees are similar to forest trees
+			main_shape.height = 13.75  # 5.5 * 2.5
+			main_shape.radius = 2.25   # 0.9 * 2.5
+			interact_shape.height = 13.75
+			interact_shape.radius = 2.25
+			collision_shape.position.y = 6.875  # 2.75 * 2.5
+			interactable_collision.position.y = 6.875
+		BiomeManagerClass.BiomeType.SNOW:
+			# Snow trees might be a bit shorter due to snow weight
+			main_shape.height = 12.5  # 5.0 * 2.5
+			main_shape.radius = 2.0   # 0.8 * 2.5
+			interact_shape.height = 12.5
+			interact_shape.radius = 2.0
+			collision_shape.position.y = 6.25  # 2.5 * 2.5
+			interactable_collision.position.y = 6.25
+
+
+func _get_random_world_position() -> Vector3:
+	"""Returns a random position within the world bounds."""
+	var x: float = randf_range(-world_size.x / 2, world_size.x / 2)
+	var z: float = randf_range(-world_size.y / 2, world_size.y / 2)
+	return Vector3(x, 0, z)
+
+
+func _get_surface_position(world_pos: Vector3) -> Vector3:
+	"""Returns the surface position at a given world coordinate using raycast."""
+	# Cast ray downward from high above to find terrain surface
+	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	var max_height: float = biome_manager.MAX_MOUNTAIN_HEIGHT + 20.0
+	var from: Vector3 = Vector3(world_pos.x, max_height, world_pos.z)
+	var to: Vector3 = Vector3(world_pos.x, -50.0, world_pos.z)
+	
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, to)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	
+	var result: Dictionary = space_state.intersect_ray(query)
+	if result:
+		return result.position
+	else:
+		# Fallback to biome manager height calculation
+		var height: float = biome_manager.get_terrain_height_at_position(world_pos)
+		return Vector3(world_pos.x, height, world_pos.z)
+
+
+func get_terrain_height_at_position(world_pos: Vector3) -> float:
+	"""
+	Returns the terrain height at a given world position using the biome manager.
+	Useful for other objects that need to snap to terrain.
+	"""
+	if not biome_manager:
+		print("WorldGenerator: No biome manager available for height lookup")
+		return 0.0
+	
+	return biome_manager.get_terrain_height_at_position(world_pos)
+
+
+func _get_biome_grass_color(biome_type: BiomeManagerClass.BiomeType) -> Color:
+	"""Get the grass color for a specific biome type."""
+	match biome_type:
+		BiomeManagerClass.BiomeType.MOUNTAIN:
+			return Color(0.4, 0.4, 0.4)  # Grey rocky color
+		BiomeManagerClass.BiomeType.FOREST:
+			return Color(0.3, 0.7, 0.2)  # Rich green
+		BiomeManagerClass.BiomeType.AUTUMN:
+			return Color(0.8, 0.6, 0.2)  # Golden autumn color
+		BiomeManagerClass.BiomeType.SNOW:
+			return Color(0.9, 0.9, 1.0)  # Snow white with blue tint
+		_:
+			return Color(0.5, 0.5, 0.5)  # Default grey
+
+
+func _create_biome_aware_terrain_material() -> StandardMaterial3D:
+	"""Create a material that uses vertex colors to show biome variation."""
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	
+	# Enable vertex color usage
+	material.vertex_color_use_as_albedo = true
+	material.vertex_color_is_srgb = false
+	
+	# Set base material properties
+	material.roughness = 0.6
+	material.metallic = 0.0
+	material.specular = 0.4
+	
+	# Enable proper lighting and shadow reception
+	material.flags_unshaded = false
+	material.flags_receive_shadows = true
+	material.flags_cast_shadow = true
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	
+	return material 

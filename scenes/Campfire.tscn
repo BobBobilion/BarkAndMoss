@@ -1,0 +1,59 @@
+[gd_scene load_steps=5 format=3 uid="uid://tm8nuhejklh2"]
+
+[ext_resource type="Script" uid="uid://dyk7e8tjr1i60" path="res://scripts/Campfire.gd" id="1_campfire_script"]
+[ext_resource type="PackedScene" uid="uid://b2efg6rnl1yvi" path="res://assets/tools/Bonfire.glb" id="2_bonfire_model"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_base"]
+height = 0.5
+radius = 1.05518
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_interaction"]
+radius = 12.0977
+
+[node name="Campfire" type="StaticBody3D"]
+collision_mask = 0
+script = ExtResource("1_campfire_script")
+
+[node name="BonfireModel" parent="." instance=ExtResource("2_bonfire_model")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
+shape = SubResource("CylinderShape3D_base")
+
+[node name="CampfireLight" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
+light_color = Color(1, 0.7, 0.3, 1)
+light_energy = 4.086
+shadow_enabled = true
+omni_range = 8.0
+omni_attenuation = 0.8
+
+[node name="InteractionArea" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 2
+
+[node name="InteractionShape" type="CollisionShape3D" parent="InteractionArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("CylinderShape3D_interaction")
+
+[node name="SafeZone" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 0
+
+[node name="SafeZoneShape" type="CollisionShape3D" parent="SafeZone"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("CylinderShape3D_interaction")
+
+[node name="CookingTimer" type="Timer" parent="."]
+wait_time = 10.0
+one_shot = true
+
+[node name="UIPrompt" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 0)
+billboard = 1
+font_size = 24
+
+[connection signal="area_entered" from="InteractionArea" to="." method="_on_interaction_area_entered"]
+[connection signal="area_exited" from="InteractionArea" to="." method="_on_interaction_area_exited"]
+[connection signal="timeout" from="CookingTimer" to="." method="_on_cooking_timer_timeout"]

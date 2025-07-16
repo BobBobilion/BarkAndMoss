@@ -1,0 +1,51 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Godot-specific ignores
+*.tmp
+*.lock
+.import/
+export_presets.cfg
+.mono/
+data_*/
+mono_crash.*.json
+
+# Exported executables
+*.exe
+*.pck
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.apk
+*.ipa
+
+# Editor and system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# OS generated files
+desktop.ini

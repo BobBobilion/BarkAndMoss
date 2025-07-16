@@ -1,0 +1,32 @@
+[gd_scene load_steps=5 format=3 uid="uid://c3dw7mq0tqbu"]
+
+[ext_resource type="Script" uid="uid://cte0dfdp75thl" path="res://scripts/RabbitCorpse.gd" id="1_corpse_script"]
+[ext_resource type="Script" uid="uid://bbh1pyej32pbs" path="res://scripts/Interactable.gd" id="2_interactable_script"]
+[ext_resource type="PackedScene" uid="uid://bd78f0vsjrrju" path="res://assets/animals/Rabbit.glb" id="3_rabbit_model"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_corpse"]
+radius = 0.295584
+height = 1.02628
+
+[node name="RabbitCorpse" type="StaticBody3D"]
+collision_layer = 16
+collision_mask = 0
+script = ExtResource("1_corpse_script")
+
+[node name="RabbitCorpseModel" parent="." instance=ExtResource("3_rabbit_model")]
+transform = Transform3D(-1.74846e-10, 0, -0.004, 0, 0.004, 0, 0.004, 0, -1.74846e-10, 0, 0, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(0.571823, -0.505763, 0.645927, -0.703342, 0.103053, 0.703342, -0.422289, -0.856495, -0.296797, -0.308386, 0.110305, 0.0297662)
+shape = SubResource("CapsuleShape3D_corpse")
+
+[node name="Interactable" type="Area3D" parent="."]
+transform = Transform3D(0.861079, -0.505763, 0.0523994, 0, 0.103053, 0.994676, -0.50847, -0.856495, 0.0887368, -0.207234, 0.0896946, 0.201065)
+collision_layer = 2
+collision_mask = 0
+monitoring = false
+script = ExtResource("2_interactable_script")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Interactable"]
+transform = Transform3D(0.707107, 0, 0.707107, 0, 1, 0, -0.707107, 0, 0.707107, 0, 0.2, 0)
+shape = SubResource("CapsuleShape3D_corpse")
