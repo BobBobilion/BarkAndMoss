@@ -6,6 +6,8 @@ const BiomeManagerClass = preload("res://scripts/BiomeManager.gd")
 
 # --- Signals ---
 signal terrain_generation_complete
+signal world_generation_progress(step_name: String, progress: float)  # Progress from 0.0 to 1.0
+signal world_generation_step_complete(step_name: String)
 
 # --- Constants ---
 const TREE_SCENE_PATH: String = "res://scenes/Tree.tscn"
@@ -44,12 +46,19 @@ var rock_models_cache: Dictionary = {}  # BiomeType -> Array[Mesh]
 # --- Engine Callbacks ---
 
 func _ready() -> void:
-	"""Initializes the world generator, loads resources, and generates the world."""
+	"""Initializes the world generator and loads resources. Call start_generation() to begin."""
 	# Add to group for easy finding by other scripts
 	add_to_group("world_generator")
 	
 	_initialize_biome_manager()
 	_load_resources()
+	
+	print("WorldGenerator: Ready and waiting for start_generation() call")
+
+
+func start_generation() -> void:
+	"""Start the world generation process. Called externally (e.g., from LoadingScreen)."""
+	print("WorldGenerator: start_generation() called")
 	# Use call_deferred to ensure terrain generation happens after scene is fully ready
 	call_deferred("_generate_world")
 
@@ -104,12 +113,36 @@ func _load_biome_assets() -> void:
 
 func _generate_world() -> void:
 	"""Generates the complete world in the correct order."""
+	print("WorldGenerator: Starting world generation...")
+	
+	# Step 1: Generate terrain (30% of total work)
+	world_generation_progress.emit("Generating terrain...", 0.0)
 	await _generate_terrain()
+	world_generation_step_complete.emit("terrain")
+	world_generation_progress.emit("Terrain complete", 0.3)
+	
+	# Step 2: Generate forest (40% of total work)
+	world_generation_progress.emit("Placing trees...", 0.3)
 	_generate_forest()
+	world_generation_step_complete.emit("forest")
+	world_generation_progress.emit("Trees placed", 0.7)
+	
+	# Step 3: Generate rocks (20% of total work)
+	world_generation_progress.emit("Placing rocks...", 0.7)
 	_generate_rocks()
+	world_generation_step_complete.emit("rocks")
+	world_generation_progress.emit("Rocks placed", 0.9)
+	
+	# Step 4: Generate grass (10% of total work)
 	if generate_grass:
+		world_generation_progress.emit("Growing grass...", 0.9)
 		_generate_grass()
+		world_generation_step_complete.emit("grass")
+	
+	# Final completion
+	world_generation_progress.emit("World ready!", 1.0)
 	terrain_generation_complete.emit()
+	print("WorldGenerator: World generation complete!")
 
 
 func _generate_terrain() -> void:
