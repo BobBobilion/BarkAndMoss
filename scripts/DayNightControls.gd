@@ -16,11 +16,9 @@ var is_paused: bool = false
 
 func _ready() -> void:
 	"""Initialize the controls."""
-	# Find DayNightCycle in the scene
-	var main_scene = get_tree().get_root().get_node("Main")
-	if main_scene:
-		day_night_cycle = main_scene.get_node("DayNightCycle") as DayNightCycle
-		
+	# Find DayNightCycle in the scene tree - more robust approach
+	_find_day_night_cycle()
+	
 	if not day_night_cycle:
 		print("DayNightControls: Warning - Could not find DayNightCycle node")
 		return
@@ -39,6 +37,54 @@ func _ready() -> void:
 	day_night_cycle.night_started.connect(_on_night_started)
 	day_night_cycle.complete_darkness_started.connect(_on_darkness_started)
 	day_night_cycle.complete_darkness_ended.connect(_on_darkness_ended)
+
+
+func _find_day_night_cycle() -> void:
+	"""Find the DayNightCycle node in the scene tree."""
+	# Try multiple approaches to find the DayNightCycle node
+	
+	# Method 1: Search from the scene root
+	var scene_tree = get_tree()
+	if scene_tree:
+		var root = scene_tree.get_root()
+		if root:
+			day_night_cycle = _search_for_node_type(root, "DayNightCycle")
+			if day_night_cycle:
+				print("DayNightControls: Found DayNightCycle via root search")
+				return
+	
+	# Method 2: Look for it in common parent nodes
+	var current_scene = get_tree().current_scene
+	if current_scene:
+		day_night_cycle = _search_for_node_type(current_scene, "DayNightCycle")
+		if day_night_cycle:
+			print("DayNightControls: Found DayNightCycle in current scene")
+			return
+	
+	# Method 3: Try finding it by class name globally
+	var all_nodes = get_tree().get_nodes_in_group("day_night_cycle")
+	if all_nodes.size() > 0:
+		day_night_cycle = all_nodes[0] as DayNightCycle
+		if day_night_cycle:
+			print("DayNightControls: Found DayNightCycle via groups")
+			return
+	
+	print("DayNightControls: Could not locate DayNightCycle node")
+
+
+func _search_for_node_type(root: Node, type_name: String) -> DayNightCycle:
+	"""Recursively search for a node with the specified type."""
+	# Check if this node matches
+	if root.get_class() == type_name or (root.get_script() and root.get_script().get_global_name() == type_name):
+		return root as DayNightCycle
+	
+	# Check children recursively
+	for child in root.get_children():
+		var result = _search_for_node_type(child, type_name)
+		if result:
+			return result
+	
+	return null
 
 
 func _process(_delta: float) -> void:

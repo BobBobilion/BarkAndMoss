@@ -15,32 +15,46 @@ const SUN_SPHERE_COLOR: Color = Color(1.0, 0.8, 0.4)  # Bright yellow for sun sp
 
 # Moon properties  
 const MOON_COLOR: Color = Color(0.7, 0.8, 1.0)    # Cool blue light
-const MOON_ENERGY: float = 0.4                     # Reduced intensity to balance with sun lighting
+const MOON_ENERGY: float = 0.8                     # Increased from 0.4 to make night less dark
 const MOON_SHADOW_ENABLED: bool = false            # Moon doesn't cast shadows for performance
 const MOON_SPHERE_RADIUS: float = 2.0              # Visual size of moon sphere (smaller than sun)
 const MOON_SPHERE_COLOR: Color = Color(0.9, 0.9, 1.0)  # Pale blue-white for moon sphere
 
-# Sky and atmosphere colors
-const DAY_SKY_COLOR: Color = Color(0.3, 0.6, 1.0)        # Light blue sky
-const DAWN_DUSK_SKY_COLOR: Color = Color(1.0, 0.5, 0.3)  # Orange/pink sunset
-const NIGHT_SKY_COLOR: Color = Color(0.05, 0.1, 0.15)    # Dark blue night
+# --- Exportable Sky and Atmosphere Colors ---
+@export_group("Sky Colors")
+@export var day_sky_color: Color = Color(0.3, 0.6, 1.0)        # Light blue sky
+@export var dawn_dusk_sky_color: Color = Color(1.0, 0.5, 0.3)  # Orange/pink sunset
+@export var night_sky_color: Color = Color(0.05, 0.1, 0.15)    # Dark blue night
 
-const DAY_GROUND_COLOR: Color = Color(0.6, 0.7, 0.8)      # Light ground horizon
-const DAWN_DUSK_GROUND_COLOR: Color = Color(0.8, 0.4, 0.2) # Warm horizon
-const NIGHT_GROUND_COLOR: Color = Color(0.1, 0.15, 0.2)   # Dark ground
+@export_group("Ground Horizon Colors")
+@export var day_ground_color: Color = Color(0.6, 0.7, 0.8)      # Light ground horizon
+@export var dawn_dusk_ground_color: Color = Color(0.8, 0.4, 0.2) # Warm horizon
+@export var night_ground_color: Color = Color(0.1, 0.15, 0.2)   # Dark ground
 
-# Fog properties - reduced density for less foggy world
-const DAY_FOG_COLOR: Color = Color(0.7, 0.8, 0.9)
-const DAWN_DUSK_FOG_COLOR: Color = Color(0.9, 0.6, 0.4)
-const NIGHT_FOG_COLOR: Color = Color(0.1, 0.15, 0.2)
-const FOG_DEPTH_BEGIN: float = 100.0        # Increased from 50 - fog starts further away
-const FOG_DEPTH_END: float = 500.0          # Increased from 300 - fog extends further
-const FOG_DENSITY: float = 0.002            # Reduced from 0.01 - much less dense fog
+@export_group("Fog Colors")
+@export var day_fog_color: Color = Color(0.7, 0.8, 0.9)
+@export var dawn_dusk_fog_color: Color = Color(0.9, 0.6, 0.4)
+@export var night_fog_color: Color = Color(0.1, 0.15, 0.2)
 
-# Brightness settings
-const DAY_BRIGHTNESS: float = 1.0
-const TWILIGHT_BRIGHTNESS: float = 0.7
-const NIGHT_BRIGHTNESS: float = 0.4
+@export_group("Fog Settings")
+@export var fog_depth_begin: float = 100.0        # Distance where fog starts
+@export var fog_depth_end: float = 500.0          # Distance where fog reaches full density
+@export var fog_density: float = 0.002            # Base fog density
+
+@export_group("Brightness Settings")
+@export var day_brightness: float = 1.0
+@export var twilight_brightness: float = 0.8      # During dawn/dusk transitions
+@export var night_brightness: float = 0.7         # Night scene brightness
+
+@export_group("Ambient Light Settings")
+@export var day_ambient_energy: float = 0.3
+@export var twilight_ambient_energy: float = 0.35  # Enhanced during transitions
+@export var night_ambient_energy: float = 0.4     # Night ambient strength
+
+@export_group("Sun/Moon Positioning")
+@export var horizon_start_elevation: float = -0.5   # How far below horizon to start appearing (more negative = lower)
+@export var sphere_visibility_elevation: float = -0.3  # When spheres become visible
+@export var complete_darkness_elevation: float = -0.6  # When complete darkness occurs
 
 # --- Properties ---
 var sun_light: DirectionalLight3D
@@ -62,6 +76,9 @@ signal complete_darkness_ended
 func _ready() -> void:
 	"""Initialize the day/night cycle system."""
 	print("DayNightCycle: Initializing sun and moon system...")
+	
+	# Add to group for easy finding by other nodes
+	add_to_group("day_night_cycle")
 	
 	# Find WorldEnvironment in parent or siblings
 	_find_world_environment()
@@ -124,12 +141,16 @@ func _setup_environment() -> void:
 		
 	# Enable fog if not already enabled - starting disabled for less foggy world
 	environment.fog_enabled = false  # Changed to false - enable manually if desired
-	environment.fog_light_color = DAY_FOG_COLOR
+	environment.fog_light_color = day_fog_color
 	environment.fog_light_energy = 0.5  # Reduced from 1.0
 	environment.fog_sun_scatter = 0.2   # Reduced from 0.5
-	environment.fog_density = FOG_DENSITY
-	environment.fog_depth_begin = FOG_DEPTH_BEGIN
-	environment.fog_depth_end = FOG_DEPTH_END
+	environment.fog_density = fog_density
+	environment.fog_depth_begin = fog_depth_begin
+	environment.fog_depth_end = fog_depth_end
+	
+	# Set initial ambient light based on starting time
+	environment.ambient_light_color = day_sky_color
+	environment.ambient_light_energy = day_ambient_energy
 	
 	# Ensure we're using a sky for background
 	if environment.background_mode != Environment.BG_SKY:
@@ -296,23 +317,24 @@ func _adjust_light_intensity() -> void:
 	var sun_elevation: float = sin(sun_angle)
 	var moon_elevation: float = sin(moon_angle)
 	
-	# Convert elevation to height factor (0 to 1, where 1 is directly overhead)
-	var sun_height_factor: float = max(0.0, sun_elevation)
-	var moon_height_factor: float = max(0.0, moon_elevation)
+	# Convert elevation to height factor with smooth transitions below horizon
+	# Allow lights to be visible even when below horizon for natural rising/setting
+	var sun_height_factor: float = smoothstep(horizon_start_elevation, 1.0, sun_elevation)  # Start fading in at horizon_start_elevation
+	var moon_height_factor: float = smoothstep(horizon_start_elevation, 1.0, moon_elevation)  # Start fading in at horizon_start_elevation
 	
-	# Apply intensity based on height (lights fade out as they approach horizon)
+	# Apply intensity based on height with smoother curves
 	sun_light.light_energy = SUN_ENERGY * sun_height_factor
 	moon_light.light_energy = MOON_ENERGY * moon_height_factor
 	
-	# Enable/disable lights when they're below horizon for performance and complete darkness
-	var sun_is_up: bool = sun_height_factor > 0.01
-	var moon_is_up: bool = moon_height_factor > 0.01
+	# Enable/disable lights with lower thresholds so they appear below horizon
+	var sun_is_up: bool = sun_height_factor > 0.01  # Very low threshold for early appearance
+	var moon_is_up: bool = moon_height_factor > 0.01  # Very low threshold for early appearance
 	
 	sun_light.visible = sun_is_up
 	moon_light.visible = moon_is_up
 	
-	# Track complete darkness state and emit signals
-	var current_darkness_state: bool = not sun_is_up and not moon_is_up
+	# Track complete darkness state - only when both are well below horizon
+	var current_darkness_state: bool = sun_elevation < complete_darkness_elevation and moon_elevation < complete_darkness_elevation
 	
 	if current_darkness_state and not is_completely_dark:
 		is_completely_dark = true
@@ -321,22 +343,24 @@ func _adjust_light_intensity() -> void:
 		is_completely_dark = false
 		complete_darkness_ended.emit()
 	
-	# Control sphere visibility and brightness based on height
-	sun_sphere.visible = sun_is_up
-	moon_sphere.visible = moon_is_up
+	# Control sphere visibility with early appearance below horizon
+	sun_sphere.visible = sun_elevation > sphere_visibility_elevation  # Show sphere when approaching horizon
+	moon_sphere.visible = moon_elevation > sphere_visibility_elevation  # Show sphere when approaching horizon
 	
 	# Adjust sphere material brightness based on height for smooth transitions
 	if sun_sphere.visible and sun_sphere.material_override:
 		var sun_mat: StandardMaterial3D = sun_sphere.material_override as StandardMaterial3D
 		if sun_mat:
 			# Fade the emission intensity as sun approaches horizon
-			sun_mat.emission_energy = 1.5 * sun_height_factor
+			var sphere_brightness = max(0.1, sun_height_factor)  # Minimum brightness for visibility
+			sun_mat.emission_energy = 1.5 * sphere_brightness
 	
 	if moon_sphere.visible and moon_sphere.material_override:
 		var moon_mat: StandardMaterial3D = moon_sphere.material_override as StandardMaterial3D
 		if moon_mat:
 			# Fade the emission intensity as moon approaches horizon
-			moon_mat.emission_energy = 0.5 * moon_height_factor
+			var sphere_brightness = max(0.1, moon_height_factor)  # Minimum brightness for visibility
+			moon_mat.emission_energy = 0.5 * sphere_brightness
 
 
 func _update_sky_and_atmosphere() -> void:
@@ -349,63 +373,103 @@ func _update_sky_and_atmosphere() -> void:
 	var sun_height: float = sin(sun_angle)  # -1 to 1
 	var sun_height_normalized: float = (sun_height + 1.0) * 0.5  # 0 to 1
 	
-	# Determine current phase of day
-	var is_day: bool = sun_height > 0.3
-	var is_twilight: bool = sun_height > -0.3 and sun_height <= 0.3
-	var is_night: bool = sun_height <= -0.3
+	# Create smooth transitions based on sun height
+	var sun_transition = smoothstep(-0.4, 0.4, sun_height)  # Smooth curve from -0.4 to 0.4 sun height
 	
-	# Calculate blend factors
-	var day_factor: float = smoothstep(0.1, 0.5, sun_height)
-	var twilight_factor: float = 1.0 - abs(sun_height / 0.3) if is_twilight else 0.0
+	# Determine if we're in dawn/dusk transition periods
+	var is_dawn_dusk = abs(sun_height) < 0.4  # Transition zone when sun is near horizon
+	
+	# Calculate blend factors for fog density
 	var night_factor: float = smoothstep(-0.1, -0.5, sun_height)
 	
-	# Update background color (if using solid color background)
+	# Update background color with smooth continuous transitions (matching ambient light logic)
 	if environment.background_mode == Environment.BG_COLOR:
-		var sky_color: Color = DAY_SKY_COLOR
-		if is_twilight:
-			sky_color = DAY_SKY_COLOR.lerp(DAWN_DUSK_SKY_COLOR, twilight_factor)
-		elif is_night:
-			sky_color = NIGHT_SKY_COLOR
+		var sky_color: Color
+		
+		if is_dawn_dusk:
+			# During dawn/dusk, blend between day and night with special twilight effects
+			var twilight_boost = 1.0 - abs(sun_height / 0.4)  # 1.0 at horizon, 0.0 at edges
+			
+			if sun_height >= 0:
+				# Dawn/morning or evening - blend day with twilight colors
+				sky_color = day_sky_color.lerp(dawn_dusk_sky_color, twilight_boost * 0.8)
+			else:
+				# Dusk/night approach - blend twilight with night colors
+				sky_color = dawn_dusk_sky_color.lerp(night_sky_color, -sun_height / 0.4)
+		else:
+			# Pure day or pure night - simple interpolation
+			sky_color = night_sky_color.lerp(day_sky_color, sun_transition)
+		
 		environment.background_color = sky_color
 	
-	# Update ambient light
-	var ambient_color: Color = DAY_SKY_COLOR
-	var ambient_energy: float = 0.3
+	# Update ambient light with smooth continuous transitions
+	var ambient_color: Color
+	var ambient_energy: float
 	
-	if is_twilight:
-		ambient_color = DAY_SKY_COLOR.lerp(DAWN_DUSK_SKY_COLOR, twilight_factor)
-		ambient_energy = lerp(0.3, 0.2, twilight_factor)
-	elif is_night:
-		ambient_color = NIGHT_SKY_COLOR
-		ambient_energy = 0.15
+	if is_dawn_dusk:
+		# During dawn/dusk, blend between day and night with special twilight boost
+		var twilight_boost = 1.0 - abs(sun_height / 0.4)  # 1.0 at horizon, 0.0 at edges
 		
+		# Color transitions
+		if sun_height >= 0:
+			# Dawn/morning or evening - blend day with twilight colors
+			ambient_color = day_sky_color.lerp(dawn_dusk_sky_color, twilight_boost * 0.6)
+		else:
+			# Dusk/night approach - blend twilight with night colors
+			ambient_color = dawn_dusk_sky_color.lerp(night_sky_color, -sun_height / 0.4)
+		
+		# Energy transitions with twilight boost
+		var base_energy = lerp(night_ambient_energy, day_ambient_energy, sun_transition)
+		ambient_energy = base_energy + (twilight_ambient_energy - base_energy) * twilight_boost
+	else:
+		# Pure day or pure night - simple interpolation
+		ambient_color = night_sky_color.lerp(day_sky_color, sun_transition)
+		ambient_energy = lerp(night_ambient_energy, day_ambient_energy, sun_transition)
+	
 	environment.ambient_light_color = ambient_color
 	environment.ambient_light_energy = ambient_energy
 	
-	# Update fog
-	var fog_color: Color = DAY_FOG_COLOR
-	if is_twilight:
-		fog_color = DAY_FOG_COLOR.lerp(DAWN_DUSK_FOG_COLOR, twilight_factor)
-	elif is_night:
-		fog_color = NIGHT_FOG_COLOR
+	# Update fog with smooth continuous transitions
+	var fog_color: Color
+	
+	if is_dawn_dusk:
+		# During dawn/dusk, blend fog colors smoothly
+		var twilight_boost = 1.0 - abs(sun_height / 0.4)
+		
+		if sun_height >= 0:
+			# Dawn/morning or evening - blend day with twilight fog colors
+			fog_color = day_fog_color.lerp(dawn_dusk_fog_color, twilight_boost * 0.7)
+		else:
+			# Dusk/night approach - blend twilight with night fog colors
+			fog_color = dawn_dusk_fog_color.lerp(night_fog_color, -sun_height / 0.4)
+	else:
+		# Pure day or pure night - simple interpolation
+		fog_color = night_fog_color.lerp(day_fog_color, sun_transition)
 		
 	environment.fog_light_color = fog_color
-	environment.fog_density = FOG_DENSITY * (1.0 + night_factor * 0.2)  # Slightly denser fog at night (reduced from 0.5)
+	environment.fog_density = fog_density * (1.0 + night_factor * 0.2)  # Slightly denser fog at night
 	
-	# Update brightness/exposure
-	var brightness: float = DAY_BRIGHTNESS
-	if is_twilight:
-		brightness = lerp(DAY_BRIGHTNESS, TWILIGHT_BRIGHTNESS, twilight_factor)
-	elif is_night:
-		brightness = NIGHT_BRIGHTNESS
+	# Update brightness/exposure with smooth transitions
+	var brightness: float
+	
+	if is_dawn_dusk:
+		# During dawn/dusk, use special twilight brightness with smooth blending
+		var twilight_boost = 1.0 - abs(sun_height / 0.4)
+		var base_brightness = lerp(night_brightness, day_brightness, sun_transition)
+		brightness = base_brightness + (twilight_brightness - base_brightness) * twilight_boost
+	else:
+		# Smooth interpolation between day and night brightness
+		brightness = lerp(night_brightness, day_brightness, sun_transition)
 		
 	environment.adjustment_enabled = true
 	environment.adjustment_brightness = brightness
 	
-	# Update glow intensity based on time of day
+	# Update glow intensity based on time of day with smooth transitions
 	if environment.glow_enabled:
-		environment.glow_intensity = 0.8 if is_night else 0.4
-		environment.glow_bloom = 0.6 if is_night else 0.2
+		# Use sun_height to determine glow - negative values = night, positive = day
+		var night_glow_factor = smoothstep(0.2, -0.2, sun_height)  # 0 at day, 1 at night
+		environment.glow_intensity = lerp(0.4, 0.8, night_glow_factor)  # 0.4 for day, 0.8 for night
+		environment.glow_bloom = lerp(0.2, 0.6, night_glow_factor)     # 0.2 for day, 0.6 for night
 
 
 func _check_transitions() -> void:
