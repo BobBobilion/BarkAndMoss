@@ -23,6 +23,14 @@ const CRAFTING_RECIPES: Dictionary = {
 		"Wood": 1,
 		"Sinew": 1
 	}
+	# Future hide-based recipes can be added here:
+	# "Leather Armor": {
+	#     "Hide": 2,
+	#     "Sinew": 1
+	# },
+	# "Leather Pouch": {
+	#     "Hide": 1
+	# }
 }
 
 # --- Node References ---

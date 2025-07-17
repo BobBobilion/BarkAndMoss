@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://bv5n6m8uao2p4"]
 
-[ext_resource type="Script" path="res://scripts/Inventory.gd" id="1_inventory"]
+[ext_resource type="Script" uid="uid://5cxupjsohuy8" path="res://scripts/Inventory.gd" id="1_inventory"]
 [ext_resource type="Theme" uid="uid://cyoxrwsnvsuny" path="res://ui/bark_moss_theme.tres" id="2_theme"]
 
 [node name="Inventory" type="Control"]
@@ -8,6 +8,8 @@ layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 theme = ExtResource("2_theme")
 script = ExtResource("1_inventory")
 
@@ -16,6 +18,8 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 color = Color(0.137, 0.2, 0.165, 0.85)
 
 [node name="CenterContainer" type="CenterContainer" parent="."]
@@ -23,33 +27,39 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 248.0
+offset_top = -62.0
+offset_right = 248.0
+offset_bottom = -62.0
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="InventoryPanel" type="PanelContainer" parent="CenterContainer"]
-layout_mode = 2
 custom_minimum_size = Vector2(400, 450)
+layout_mode = 2
 
 [node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/InventoryPanel"]
 layout_mode = 2
 
 [node name="Spacer0" type="Control" parent="CenterContainer/InventoryPanel/VBoxContainer"]
-layout_mode = 2
 custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
 
 [node name="Title" type="Label" parent="CenterContainer/InventoryPanel/VBoxContainer"]
 custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
-theme_override_font_sizes/font_size = 28
 theme_override_colors/font_color = Color(0.918, 0.878, 0.835, 1)
 theme_override_colors/font_shadow_color = Color(0.137, 0.2, 0.165, 1)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 28
 text = "Inventory"
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="Spacer1" type="Control" parent="CenterContainer/InventoryPanel/VBoxContainer"]
-layout_mode = 2
 custom_minimum_size = Vector2(0, 15)
+layout_mode = 2
 
 [node name="GridContainer" type="GridContainer" parent="CenterContainer/InventoryPanel/VBoxContainer"]
 layout_mode = 2
@@ -58,18 +68,19 @@ size_flags_vertical = 4
 columns = 3
 
 [node name="Spacer2" type="Control" parent="CenterContainer/InventoryPanel/VBoxContainer"]
-layout_mode = 2
 custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
 
 [node name="Tooltip" type="PanelContainer" parent="."]
+visible = false
 layout_mode = 0
 offset_right = 250.0
 offset_bottom = 80.0
-visible = false
 
 [node name="TooltipLabel" type="Label" parent="Tooltip"]
+custom_minimum_size = Vector2(240, 20)
 layout_mode = 2
-theme_override_font_sizes/font_size = 14
 theme_override_colors/font_color = Color(0.918, 0.878, 0.835, 1)
+theme_override_font_sizes/font_size = 14
 text = "Item tooltip"
-autowrap_mode = 3 
+autowrap_mode = 3

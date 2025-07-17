@@ -13,6 +13,10 @@ const CROSSHAIR_COLOR_DEFAULT: Color = Color.WHITE
 const CROSSHAIR_BORDER_DEFAULT: Color = Color.BLACK
 const CROSSHAIR_COLOR_INTERACT: Color = Color.GREEN
 const CROSSHAIR_BORDER_INTERACT: Color = Color.DARK_GREEN
+const CROSSHAIR_COLOR_BOW_LOADING: Color = Color.RED      # Red while bow is charging but not ready
+const CROSSHAIR_BORDER_BOW_LOADING: Color = Color.DARK_RED
+const CROSSHAIR_COLOR_BOW_READY: Color = Color.GREEN      # Green when bow is ready to fire
+const CROSSHAIR_BORDER_BOW_READY: Color = Color.DARK_GREEN
 const CROSSHAIR_CORNER_RADIUS: int = 3
 const CROSSHAIR_BORDER_WIDTH: int = 1
 
@@ -25,6 +29,7 @@ const CROSSHAIR_BORDER_WIDTH: int = 1
 # --- State ---
 var player: CharacterBody3D
 var current_interactable: Node = null
+var should_show_crosshair: bool = false  # Track if crosshair should be visible based on equipment
 
 
 # --- Engine Callbacks ---
@@ -32,14 +37,28 @@ var current_interactable: Node = null
 func _ready() -> void:
 	print("HUD: Initializing...")
 	add_to_group("hud")
+	
+	# Ensure HUD renders on top of other UI elements
+	z_index = 100
+	visible = true
+	modulate = Color.WHITE
+	
 	_setup_crosshair()
 	
 	# Debug: Check hotbar visibility and positioning
 	if hotbar:
 		print("HUD: Hotbar found - Position: ", hotbar.position, " Size: ", hotbar.size, " Visible: ", hotbar.visible)
-		if hotbar.has_node("HBoxContainer"):
-			var container = hotbar.get_node("HBoxContainer")
-			print("HUD: HBoxContainer - Position: ", container.position, " Size: ", container.size, " Children: ", container.get_child_count())
+		print("HUD: Hotbar script attached: ", hotbar.get_script() != null)
+		
+		# Check the correct node path for HBoxContainer
+		if hotbar.has_node("HotbarBackground/HBoxContainer"):
+			var container = hotbar.get_node("HotbarBackground/HBoxContainer")
+			print("HUD: HBoxContainer found - Position: ", container.position, " Size: ", container.size, " Children: ", container.get_child_count())
+		else:
+			print("HUD: Error - HBoxContainer not found at expected path!")
+			print("HUD: Hotbar children: ")
+			for child in hotbar.get_children():
+				print("  - ", child.name, " (", child.get_class(), ")")
 	else:
 		print("HUD: Error - Hotbar node not found!")
 	
@@ -141,6 +160,10 @@ func _clear_current_interactable() -> void:
 
 func _update_crosshair(can_interact: bool) -> void:
 	"""Updates the crosshair color to indicate interactability."""
+	# Only update crosshair if it should be visible
+	if not should_show_crosshair or not crosshair.visible:
+		return
+		
 	var style: StyleBoxFlat = crosshair.get_theme_stylebox("panel") as StyleBoxFlat
 	if can_interact:
 		style.bg_color = CROSSHAIR_COLOR_INTERACT
@@ -152,6 +175,10 @@ func _update_crosshair(can_interact: bool) -> void:
 
 func _show_interaction_prompt(prompt_text: String) -> void:
 	"""Shows the interaction prompt with the given text."""
+	# Only show interaction prompt if crosshair should be visible
+	if not should_show_crosshair:
+		return
+		
 	interaction_prompt.text = prompt_text
 	interaction_prompt.visible = true
 
@@ -159,3 +186,51 @@ func _show_interaction_prompt(prompt_text: String) -> void:
 func _hide_interaction_prompt() -> void:
 	"""Hides the interaction prompt."""
 	interaction_prompt.visible = false
+
+
+# --- Public Methods ---
+
+func update_crosshair_visibility(equipped_item: String) -> void:
+	"""Updates crosshair visibility based on the currently equipped item."""
+	# Only show crosshair when holding a bow
+	should_show_crosshair = (equipped_item == "Bow")
+	
+	# Update the crosshair visibility
+	if crosshair:
+		crosshair.visible = should_show_crosshair
+		
+	# Also hide interaction prompt if crosshair is hidden
+	if not should_show_crosshair and interaction_prompt:
+		_hide_interaction_prompt()
+		
+	print("HUD: Crosshair visibility updated - equipped: ", equipped_item, " visible: ", should_show_crosshair)
+
+func update_bow_charge_crosshair(is_charging: bool, is_ready: bool) -> void:
+	"""Updates crosshair color based on bow charge state."""
+	if not should_show_crosshair or not crosshair.visible:
+		return
+		
+	var style: StyleBoxFlat = crosshair.get_theme_stylebox("panel") as StyleBoxFlat
+	
+	if is_charging:
+		if is_ready:
+			# Bow is ready to fire - green crosshair
+			style.bg_color = CROSSHAIR_COLOR_BOW_READY
+			style.border_color = CROSSHAIR_BORDER_BOW_READY
+		else:
+			# Bow is charging but not ready - red crosshair
+			style.bg_color = CROSSHAIR_COLOR_BOW_LOADING
+			style.border_color = CROSSHAIR_BORDER_BOW_LOADING
+	else:
+		# Not charging - return to default white
+		style.bg_color = CROSSHAIR_COLOR_DEFAULT
+		style.border_color = CROSSHAIR_BORDER_DEFAULT
+
+func reset_crosshair_to_default() -> void:
+	"""Resets crosshair to default white color."""
+	if not should_show_crosshair or not crosshair.visible:
+		return
+		
+	var style: StyleBoxFlat = crosshair.get_theme_stylebox("panel") as StyleBoxFlat
+	style.bg_color = CROSSHAIR_COLOR_DEFAULT
+	style.border_color = CROSSHAIR_BORDER_DEFAULT

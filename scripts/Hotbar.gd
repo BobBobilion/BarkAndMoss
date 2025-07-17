@@ -6,18 +6,20 @@ signal selection_changed(slot_index: int, item_name: String)
 
 # --- Constants ---
 const SLOT_COUNT: int = 5
-const STARTER_ITEM: String = "Hatchet"
+const STARTER_ITEM: String = "Axe"
 const EMPTY_SLOT: String = ""
 
-# Style Constants - Rustic Bark & Moss Theme
-const FONT_SIZE_ITEM: int = 14
-const FONT_SIZE_SLOT_NUMBER: int = 12
-const COLOR_SLOT_NORMAL: Color = Color(0.8, 0.75, 0.7, 0.9)
-const COLOR_SLOT_SELECTED: Color = Color(0.98, 0.94, 0.89, 1)
-const COLOR_BORDER: Color = Color(0.545, 0.357, 0.169, 1)
-const COLOR_SLOT_NUMBER: Color = Color(0.918, 0.878, 0.835, 1)
-const COLOR_TEXT: Color = Color(0.204, 0.306, 0.255, 1)
-const COLOR_TEXT_SHADOW: Color = Color(0.918, 0.878, 0.835, 0.3)
+# Using shared style constants from GameConstants.UI
+const ICON_SIZE: int = GameConstants.UI.SLOT_ICON_SIZE
+const FONT_SIZE_SLOT_NUMBER: int = GameConstants.UI.FONT_SIZE_SLOT_NUMBER
+const FONT_SIZE_TOOLTIP: int = GameConstants.UI.FONT_SIZE_TOOLTIP
+const COLOR_SLOT_NORMAL: Color = GameConstants.UI.COLOR_SLOT_NORMAL
+const COLOR_SLOT_SELECTED: Color = GameConstants.UI.COLOR_SLOT_SELECTED
+const COLOR_BORDER: Color = GameConstants.UI.COLOR_SLOT_BORDER
+const COLOR_SLOT_NUMBER: Color = GameConstants.UI.COLOR_SLOT_NUMBER
+const COLOR_BACKGROUND: Color = GameConstants.UI.COLOR_BACKGROUND
+const COLOR_TEXT: Color = GameConstants.UI.COLOR_TEXT
+const COLOR_TEXT_SHADOW: Color = GameConstants.UI.COLOR_TEXT_SHADOW
 
 
 # --- Properties ---
@@ -29,28 +31,61 @@ var items: Array[String] = []
 
 @onready var slot_container: HBoxContainer = $HotbarBackground/HBoxContainer
 
+# Add tooltip functionality (similar to inventory)
+var tooltip: PanelContainer
+var tooltip_label: Label
+
 
 func _ready() -> void:
 	print("Hotbar: Initializing...")
+	print("Hotbar: slot_container path check: ", has_node("HotbarBackground/HBoxContainer"))
+	
+	# Manually get the slot_container if @onready failed
+	if not slot_container:
+		print("Hotbar: @onready slot_container failed, trying manual reference...")
+		if has_node("HotbarBackground/HBoxContainer"):
+			slot_container = get_node("HotbarBackground/HBoxContainer")
+			print("Hotbar: Manual slot_container reference successful")
+		else:
+			print("Hotbar: Error - Cannot find HBoxContainer! Checking node structure...")
+			print("Hotbar: Available children:")
+			for child in get_children():
+				print("  - ", child.name, " (", child.get_class(), ")")
+				if child.has_method("get_children"):
+					for subchild in child.get_children():
+						print("    - ", subchild.name, " (", subchild.get_class(), ")")
+			return
+	
 	_initialize_items()
 	_create_slots()
+	_create_tooltip()
+	
+	# Ensure hotbar is visible and properly styled
+	visible = true
+	modulate = Color.WHITE  # Ensure it's not transparent
+	
 	select_slot(0) # Select the first slot by default
 	print("Hotbar: Ready! Created ", slots.size(), " slots with items: ", items)
+	print("Hotbar: Final visibility: ", visible, " modulate: ", modulate)
+	print("Hotbar: Slot container children: ", slot_container.get_child_count() if slot_container else "None")
 
 
 func _input(event: InputEvent) -> void:
 	# Handle number key selection
 	for i in range(SLOT_COUNT):
 		if event.is_action_pressed("slot_" + str(i + 1)):
+			print("Hotbar: Slot ", i + 1, " key pressed!")
 			select_slot(i)
 			return
 	
 	# Handle scroll wheel
 	if event.is_action_pressed("scroll_up"):
+		print("Hotbar: Scroll up detected!")
 		# Using % for proper wrapping with negative numbers
 		var new_slot = (selected_slot - 1 + SLOT_COUNT) % SLOT_COUNT
 		select_slot(new_slot)
 	elif event.is_action_pressed("scroll_down"):
+		print("Hotbar: Scroll down detected!")
 		var new_slot = (selected_slot + 1) % SLOT_COUNT
 		select_slot(new_slot)
 
@@ -65,6 +100,23 @@ func _initialize_items() -> void:
 func _create_slots() -> void:
 	"""Creates the visual slot elements for the hotbar with rustic Bark & Moss styling."""
 	print("Hotbar: Creating ", SLOT_COUNT, " slots...")
+	
+	# First ensure the background is visible and styled
+	var background = get_node("HotbarBackground")
+	if background:
+		background.visible = true
+		background.modulate = Color.WHITE
+		
+		# Add a background style to the PanelContainer
+		var bg_style := StyleBoxFlat.new()
+		bg_style.bg_color = Color(0.2, 0.2, 0.2, 0.8)  # Semi-transparent dark background
+		bg_style.border_color = COLOR_BORDER
+		bg_style.set_border_width_all(2)
+		bg_style.set_corner_radius_all(8)
+		background.add_theme_stylebox_override("panel", bg_style)
+		
+		print("Hotbar: Background set to visible with styling")
+	
 	for i in range(SLOT_COUNT):
 		var slot := Panel.new()
 		slot.custom_minimum_size = slot_size
@@ -81,18 +133,26 @@ func _create_slots() -> void:
 		style.shadow_offset = Vector2(1, 2)
 		slot.add_theme_stylebox_override("panel", style)
 		
-		# Add item label with rustic styling
-		var label := Label.new()
-		label.text = ""
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.autowrap_mode = TextServer.AUTOWRAP_WORD
-		label.add_theme_font_size_override("font_size", FONT_SIZE_ITEM)
-		label.add_theme_color_override("font_color", COLOR_TEXT)
-		label.add_theme_color_override("font_shadow_color", COLOR_TEXT_SHADOW)
-		label.add_theme_constant_override("shadow_offset_x", 1)
-		label.add_theme_constant_override("shadow_offset_y", 1)
-		slot.add_child(label)
+		# Add TextureRect for item icon that fills the entire slot with rounded corners
+		var texture_rect := TextureRect.new()
+		texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE  # Allow texture to expand/shrink to fill
+		texture_rect.stretch_mode = TextureRect.STRETCH_SCALE  # Scale texture to fill entire rect, making it square
+		
+		# Make it fill the entire slot area minus the border
+		var border_width = 2
+		texture_rect.position = Vector2(border_width, border_width)
+		texture_rect.size = Vector2(slot_size.x - border_width * 2, slot_size.y - border_width * 2)
+		
+		# Add rounded corners to match the slot style - clip the texture
+		var texture_style := StyleBoxFlat.new()
+		texture_style.bg_color = Color.TRANSPARENT  # Keep transparent background
+		texture_style.set_corner_radius_all(4)  # Slightly smaller radius than slot (6 - border = 4)
+		texture_rect.add_theme_stylebox_override("normal", texture_style)
+		
+		# Set clip contents to true so the rounded corners actually clip the image
+		texture_rect.clip_contents = true
+		
+		slot.add_child(texture_rect)
 		
 		# Add slot number with rustic styling
 		var number_label := Label.new()
@@ -105,8 +165,13 @@ func _create_slots() -> void:
 		number_label.add_theme_constant_override("shadow_offset_y", 1)
 		slot.add_child(number_label)
 		
+		# Add mouse event handlers for tooltip functionality
+		slot.mouse_entered.connect(_on_slot_mouse_entered.bind(i))
+		slot.mouse_exited.connect(_on_slot_mouse_exited)
+		
 		slot_container.add_child(slot)
 		slots.append(slot)
+		print("Hotbar: Created slot ", i, " with size ", slot.custom_minimum_size)
 	
 	print("Hotbar: Successfully created ", slots.size(), " slot panels")
 	_update_hotbar_visuals()
@@ -127,15 +192,15 @@ func _update_hotbar_visuals() -> void:
 	"""Updates the visual representation of the hotbar slots and items."""
 	for i in range(slots.size()):
 		var slot: Panel = slots[i]
-		var label: Label = slot.get_child(0) as Label
+		var texture_rect: TextureRect = slot.get_child(0) as TextureRect
 		var style: StyleBoxFlat = slot.get_theme_stylebox("panel") as StyleBoxFlat
 		
-		# Show item names, but only if the slot is not empty
+		# Show item icons using the centralized icon manager, or clear if slot is empty
 		var item: String = items[i]
 		if item != EMPTY_SLOT:
-			label.text = item
+			texture_rect.texture = GameConstants.ItemIconManager.get_item_icon(item)
 		else:
-			label.text = ""
+			texture_rect.texture = null
 		
 		# Update selection highlight with enhanced rustic styling
 		if i == selected_slot:
@@ -179,4 +244,70 @@ func get_item_at_slot(slot_index: int) -> String:
 	"""Returns the name of the item at a specific slot index."""
 	if slot_index >= 0 and slot_index < items.size():
 		return items[slot_index]
-	return EMPTY_SLOT 
+	return EMPTY_SLOT
+
+
+# --- Tooltip System ---
+
+func _create_tooltip() -> void:
+	"""Creates the tooltip for displaying item names."""
+	tooltip = PanelContainer.new()
+	tooltip.name = "HotbarTooltip"
+	tooltip.visible = false
+	tooltip.z_index = 1000  # Ensure it appears on top
+	tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	# Style the tooltip background
+	var tooltip_style := StyleBoxFlat.new()
+	tooltip_style.bg_color = COLOR_BACKGROUND
+	tooltip_style.border_color = COLOR_BORDER
+	tooltip_style.set_border_width_all(1)
+	tooltip_style.set_corner_radius_all(4)
+	tooltip.add_theme_stylebox_override("panel", tooltip_style)
+	
+	# Create the label
+	tooltip_label = Label.new()
+	tooltip_label.add_theme_font_size_override("font_size", FONT_SIZE_TOOLTIP)
+	tooltip_label.add_theme_color_override("font_color", COLOR_TEXT)
+	tooltip_label.add_theme_color_override("font_shadow_color", COLOR_TEXT_SHADOW)
+	tooltip_label.add_theme_constant_override("shadow_offset_x", 1)
+	tooltip_label.add_theme_constant_override("shadow_offset_y", 1)
+	
+	tooltip.add_child(tooltip_label)
+	add_child(tooltip)
+
+
+func _on_slot_mouse_entered(slot_index: int) -> void:
+	"""Shows the item tooltip when the mouse enters a slot."""
+	var item: String = items[slot_index]
+	if item != EMPTY_SLOT:
+		# Get description from GameConstants
+		var description: String = GameConstants.ITEM_DESCRIPTIONS.get(item, item)
+		tooltip_label.text = description
+		
+		# Position tooltip above the slot
+		var slot: Panel = slots[slot_index]
+		var slot_global_pos: Vector2 = slot.global_position
+		tooltip.position = Vector2(slot_global_pos.x, slot_global_pos.y - tooltip.size.y - 10)
+		
+		# Clamp tooltip to screen
+		_clamp_tooltip_to_screen()
+		tooltip.visible = true
+
+
+func _on_slot_mouse_exited() -> void:
+	"""Hides the tooltip when the mouse leaves a slot."""
+	tooltip.visible = false
+
+
+func _clamp_tooltip_to_screen() -> void:
+	"""Ensures the tooltip stays within the viewport boundaries."""
+	var viewport_rect: Rect2 = get_viewport_rect()
+	var tooltip_rect: Rect2 = tooltip.get_global_rect()
+
+	if tooltip_rect.end.x > viewport_rect.end.x:
+		tooltip.global_position.x = viewport_rect.end.x - tooltip_rect.size.x
+	if tooltip_rect.position.x < 0:
+		tooltip.global_position.x = 0
+	if tooltip_rect.position.y < 0:
+		tooltip.global_position.y = tooltip_rect.size.y + 10 

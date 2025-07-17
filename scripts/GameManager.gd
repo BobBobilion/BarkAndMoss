@@ -15,6 +15,11 @@ func _ready() -> void:
 	Called when the node is added to the scene.
 	Sets up connections and waits for terrain to be ready before spawning players.
 	"""
+	print("=== GAMEMANAGER READY STARTED ===")
+	print("GameManager: Scene path: ", get_tree().current_scene.scene_file_path if get_tree().current_scene else "None")
+	print("GameManager: Scene name: ", get_tree().current_scene.name if get_tree().current_scene else "None")
+	print("GameManager: My parent: ", get_parent().name if get_parent() else "None")
+	
 	# Display current world scaling information
 	GameConstants.print_world_info()
 	
@@ -27,9 +32,12 @@ func _ready() -> void:
 	# Wait for terrain generation to complete before spawning players
 	if world_generator:
 		world_generator.terrain_generation_complete.connect(_on_terrain_ready)
+		print("GameManager: Connected to terrain generation complete signal")
 	else:
 		printerr("Could not find WorldGenerator! Players will spawn at default height.")
 		_spawn_all_players()
+	
+	print("=== GAMEMANAGER READY FINISHED ===")
 
 
 func _on_terrain_ready() -> void:
@@ -45,41 +53,84 @@ func _exit_tree() -> void:
 		PauseManager.force_cleanup()
 
 
+func _add_deferred_test_ui() -> void:
+	"""Add test UI after the scene is fully set up."""
+	print("GameManager: _add_deferred_test_ui called")
+	print("GameManager: Current scene at deferred time: ", get_tree().current_scene.name if get_tree().current_scene else "None")
+	
+	# Add another test UI with different positioning
+	var deferred_ui = Control.new()
+	deferred_ui.name = "DeferredTestUI"
+	deferred_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	
+	var deferred_label = Label.new()
+	deferred_label.text = "DEFERRED UI - Added after scene setup!"
+	deferred_label.position = Vector2(50, 150)
+	deferred_label.add_theme_font_size_override("font_size", 20)
+	deferred_label.add_theme_color_override("font_color", Color.YELLOW)
+	deferred_ui.add_child(deferred_label)
+	
+	var deferred_rect = ColorRect.new()
+	deferred_rect.color = Color.GREEN
+	deferred_rect.size = Vector2(250, 75)
+	deferred_rect.position = Vector2(400, 150)
+	deferred_ui.add_child(deferred_rect)
+	
+	if get_tree().current_scene:
+		get_tree().current_scene.add_child(deferred_ui)
+		print("GameManager: Added deferred UI to current scene")
+	else:
+		print("GameManager: No current scene for deferred UI!")
+
+
 func _spawn_all_players() -> void:
 	"""
 	Spawns all players that have connected and chosen a role.
 	Only called after terrain is ready.
 	"""
-	print("GameManager: Starting player spawn process...")
+	print("=== GAMEMANAGER: STARTING PLAYER SPAWN ===")
+	print("GameManager: NetworkManager.players: ", NetworkManager.players)
+	print("GameManager: NetworkManager.players.size(): ", NetworkManager.players.size())
+	
 	# When the main game scene loads, spawn all players.
 	# The player data (including roles) is stored in our NetworkManager singleton.
 	for id in NetworkManager.players:
 		var player_data: Dictionary = NetworkManager.players[id]
+		print("GameManager: Processing player ID ", id, " with data: ", player_data)
+		
 		var player_scene: PackedScene = null
 		
 		if player_data.role == "human":
 			player_scene = NetworkManager.human_scene
+			print("GameManager: Loading human scene for player ", id)
 		elif player_data.role == "dog":
 			player_scene = NetworkManager.dog_scene
+			print("GameManager: Loading dog scene for player ", id)
 		else:
-			printerr("Player %d has no role!" % id)
+			printerr("GameManager: Player %d has no role! Role is: %s" % [id, player_data.role])
 			continue
 
 		if player_scene:
+			print("GameManager: Instantiating player scene...")
 			var player: Node = player_scene.instantiate()
 			player.name = "Player_" + str(id)
+			print("GameManager: Player instantiated with name: ", player.name)
 			
 			# This is the most important part: give control to the correct player.
 			player.set_multiplayer_authority(id)
+			print("GameManager: Set multiplayer authority to: ", id)
 			
 			add_child(player)
+			print("GameManager: Added player to scene tree")
 			
 			# Calculate spawn position near the campfire
 			var spawn_position: Vector3 = _get_safe_spawn_position(id)
 			player.global_position = spawn_position
 			print("GameManager: Spawned player %d (%s) at position %s" % [id, player_data.role, spawn_position])
+		else:
+			printerr("GameManager: Could not load player scene for role: ", player_data.role)
 	
-	print("GameManager: All players spawned successfully!")
+	print("=== GAMEMANAGER: PLAYER SPAWN COMPLETE ===")
 
 
 func _get_safe_spawn_position(player_id: int) -> Vector3:

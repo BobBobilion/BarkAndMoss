@@ -39,7 +39,7 @@ custom_minimum_size = Vector2(0, 30)
 [node name="Title" type="Label" parent="CenterContainer/MenuPanel/VBoxContainer"]
 custom_minimum_size = Vector2(0, 80)
 layout_mode = 2
-theme_override_font_sizes/font_size = 38
+theme_override_font_sizes/font_size = 46
 theme_override_colors/font_color = Color(0.918, 0.878, 0.835, 1)
 theme_override_colors/font_shadow_color = Color(0.137, 0.2, 0.165, 1)
 theme_override_constants/shadow_offset_x = 3
@@ -54,8 +54,8 @@ custom_minimum_size = Vector2(0, 40)
 
 [node name="ResumeButton" type="Button" parent="CenterContainer/MenuPanel/VBoxContainer"]
 layout_mode = 2
-custom_minimum_size = Vector2(350, 55)
-theme_override_colors/font_color = Color(0.3, 0.4, 0.35, 1)
+custom_minimum_size = Vector2(350, 60)
+theme_override_font_sizes/font_size = 20
 theme_override_colors/font_shadow_color = Color(0.918, 0.878, 0.835, 0.8)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
@@ -67,8 +67,8 @@ custom_minimum_size = Vector2(0, 15)
 
 [node name="SettingsButton" type="Button" parent="CenterContainer/MenuPanel/VBoxContainer"]
 layout_mode = 2
-custom_minimum_size = Vector2(350, 55)
-theme_override_colors/font_color = Color(0.3, 0.4, 0.35, 1)
+custom_minimum_size = Vector2(350, 60)
+theme_override_font_sizes/font_size = 20
 theme_override_colors/font_shadow_color = Color(0.918, 0.878, 0.835, 0.8)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
@@ -80,8 +80,8 @@ custom_minimum_size = Vector2(0, 15)
 
 [node name="QuitToMenuButton" type="Button" parent="CenterContainer/MenuPanel/VBoxContainer"]
 layout_mode = 2
-custom_minimum_size = Vector2(350, 55)
-theme_override_colors/font_color = Color(0.3, 0.4, 0.35, 1)
+custom_minimum_size = Vector2(350, 60)
+theme_override_font_sizes/font_size = 20
 theme_override_colors/font_shadow_color = Color(0.918, 0.878, 0.835, 0.8)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
@@ -93,8 +93,8 @@ custom_minimum_size = Vector2(0, 15)
 
 [node name="QuitGameButton" type="Button" parent="CenterContainer/MenuPanel/VBoxContainer"]
 layout_mode = 2
-custom_minimum_size = Vector2(350, 55)
-theme_override_colors/font_color = Color(0.3, 0.4, 0.35, 1)
+custom_minimum_size = Vector2(350, 60)
+theme_override_font_sizes/font_size = 20
 theme_override_colors/font_shadow_color = Color(0.918, 0.878, 0.835, 0.8)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
@@ -112,51 +112,109 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -200.0
-offset_top = -150.0
-offset_right = 200.0
-offset_bottom = 150.0
+offset_left = -320.0
+offset_top = -220.0
+offset_right = 320.0
+offset_bottom = 220.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="SettingsModal"]
+[node name="MarginContainer" type="MarginContainer" parent="SettingsModal"]
+layout_mode = 2
+theme_override_constants/margin_left = 45
+theme_override_constants/margin_top = 35
+theme_override_constants/margin_right = 45
+theme_override_constants/margin_bottom = 35
+
+[node name="VBoxContainer" type="VBoxContainer" parent="SettingsModal/MarginContainer"]
 layout_mode = 2
 
-[node name="Title" type="Label" parent="SettingsModal/VBoxContainer"]
+[node name="Title" type="Label" parent="SettingsModal/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 52
 theme_override_colors/font_color = Color(0.918, 0.878, 0.835, 1)
+theme_override_colors/font_shadow_color = Color(0.137, 0.2, 0.165, 1)
+theme_override_constants/shadow_offset_x = 3
+theme_override_constants/shadow_offset_y = 3
 text = "Settings"
 horizontal_alignment = 1
 
-[node name="Spacer" type="Control" parent="SettingsModal/VBoxContainer"]
+[node name="Spacer" type="Control" parent="SettingsModal/MarginContainer/VBoxContainer"]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 20)
+custom_minimum_size = Vector2(0, 40)
 
-[node name="VolumeLabel" type="Label" parent="SettingsModal/VBoxContainer"]
+[node name="VolumeLabel" type="Label" parent="SettingsModal/MarginContainer/VBoxContainer"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 0
+theme_override_font_sizes/font_size = 24
 text = "Master Volume"
 
-[node name="VolumeSlider" type="HSlider" parent="SettingsModal/VBoxContainer"]
+[node name="VolumeSlider" type="HSlider" parent="SettingsModal/MarginContainer/VBoxContainer"]
 layout_mode = 2
+custom_minimum_size = Vector2(0, 50)
 max_value = 100.0
 value = 75.0
 
-[node name="FullscreenCheckbox" type="CheckBox" parent="SettingsModal/VBoxContainer"]
-layout_mode = 2
-text = "Fullscreen"
-
-[node name="Spacer2" type="Control" parent="SettingsModal/VBoxContainer"]
+[node name="Spacer4" type="Control" parent="SettingsModal/MarginContainer/VBoxContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 20)
 
-[node name="HBoxContainer" type="HBoxContainer" parent="SettingsModal/VBoxContainer"]
+[node name="SubVolumeContainer" type="MarginContainer" parent="SettingsModal/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 35
+
+[node name="VBoxContainer" type="VBoxContainer" parent="SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer"]
 layout_mode = 2
 
-[node name="CloseButton" type="Button" parent="SettingsModal/VBoxContainer/HBoxContainer"]
+[node name="MusicLabel" type="Label" parent="SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 0
+theme_override_font_sizes/font_size = 22
+text = "Music Volume"
+
+[node name="MusicSlider" type="HSlider" parent="SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 40)
+max_value = 100.0
+value = 75.0
+
+[node name="Spacer5" type="Control" parent="SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 15)
+
+[node name="SFXLabel" type="Label" parent="SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 0
+theme_override_font_sizes/font_size = 22
+text = "SFX Volume"
+
+[node name="SFXSlider" type="HSlider" parent="SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 40)
+max_value = 100.0
+value = 75.0
+
+[node name="Spacer2" type="Control" parent="SettingsModal/MarginContainer/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 40)
+
+[node name="HBoxContainer" type="HBoxContainer" parent="SettingsModal/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="CloseButton" type="Button" parent="SettingsModal/MarginContainer/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.3, 0.4, 0.35, 1)
+custom_minimum_size = Vector2(0, 55)
+theme_override_font_sizes/font_size = 24
 theme_override_colors/font_shadow_color = Color(0.918, 0.878, 0.835, 0.8)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
@@ -177,4 +235,4 @@ Any unsaved progress will be lost."
 [connection signal="pressed" from="CenterContainer/MenuPanel/VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="CenterContainer/MenuPanel/VBoxContainer/QuitToMenuButton" to="." method="_on_quit_to_menu_pressed"]
 [connection signal="pressed" from="CenterContainer/MenuPanel/VBoxContainer/QuitGameButton" to="." method="_on_quit_game_pressed"]
-[connection signal="pressed" from="SettingsModal/VBoxContainer/HBoxContainer/CloseButton" to="." method="_on_settings_close_pressed"] 
+[connection signal="pressed" from="SettingsModal/MarginContainer/VBoxContainer/HBoxContainer/CloseButton" to="." method="_on_settings_close_pressed"] 

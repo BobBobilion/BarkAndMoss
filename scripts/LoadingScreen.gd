@@ -150,28 +150,51 @@ func _finish_loading() -> void:
 func _transition_to_main_scene() -> void:
 	"""Transition to the main game scene (which is already loaded and generated)."""
 	print("LoadingScreen: Transitioning to generated world...")
+	print("LoadingScreen: main_scene_instance exists: ", main_scene_instance != null)
+	print("LoadingScreen: main_scene_instance parent: ", main_scene_instance.get_parent().name if main_scene_instance and main_scene_instance.get_parent() else "None")
 	
 	if not main_scene_instance:
 		printerr("LoadingScreen: No main scene instance available!")
 		return
 	
+	# Check if GameManager exists and has our test UI
+	var game_manager = main_scene_instance.get_node_or_null("GameManager")
+	if game_manager:
+		print("LoadingScreen: GameManager found in main_scene_instance")
+		var test_ui = main_scene_instance.get_node_or_null("TestUI")
+		print("LoadingScreen: TestUI exists in main_scene_instance: ", test_ui != null)
+	else:
+		print("LoadingScreen: GameManager NOT found in main_scene_instance!")
+	
 	# Remove the main scene from its current parent
 	if main_scene_instance.get_parent():
+		print("LoadingScreen: Removing main_scene_instance from current parent...")
 		main_scene_instance.get_parent().remove_child(main_scene_instance)
 	
 	# Get the current scene tree root
 	var scene_tree: SceneTree = get_tree()
 	var root: Node = scene_tree.root
 	
+	print("LoadingScreen: Current scene before transition: ", scene_tree.current_scene.name if scene_tree.current_scene else "None")
+	
 	# Remove the current scene (loading screen) from root
 	var current_scene: Node = scene_tree.current_scene
 	if current_scene:
+		print("LoadingScreen: Removing loading screen from root...")
 		root.remove_child(current_scene)
 		current_scene.queue_free()
 	
 	# Add the main scene to root and set it as current
+	print("LoadingScreen: Adding main_scene_instance to root...")
 	root.add_child(main_scene_instance)
 	scene_tree.current_scene = main_scene_instance
+	
+	print("LoadingScreen: New current scene: ", scene_tree.current_scene.name if scene_tree.current_scene else "None")
+	print("LoadingScreen: Final scene children count: ", scene_tree.current_scene.get_child_count() if scene_tree.current_scene else 0)
+	
+	# Check if our test UI survived the transition
+	var final_test_ui = scene_tree.current_scene.get_node_or_null("TestUI")
+	print("LoadingScreen: TestUI exists in final scene: ", final_test_ui != null)
 	
 	print("LoadingScreen: Transition complete!")
 

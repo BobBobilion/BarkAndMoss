@@ -1,40 +1,87 @@
-# GameConstants.gd
-# Centralized constants for the Bark & Moss game
-# This file contains all shared constants to improve maintainability and consistency
+# GameConstants.gd - Centralized game constants for Bark & Moss
+#
+# This file contains all the important constants used throughout the game.
+# Modify values here to adjust game balance, spawning, networking, etc.
 
 class_name GameConstants
-extends RefCounted
 
 # =============================================================================
-# SCENE PATHS
+# NETWORKING CONSTANTS
 # =============================================================================
 
-const SCENES := {
-	"MAIN_MENU": "res://scenes/MainMenu.tscn",
-	"LOBBY": "res://scenes/Lobby.tscn",
-	"MAIN_GAME": "res://scenes/Main.tscn",
-	"PLAYER": "res://scenes/Player.tscn",
-	"DOG": "res://scenes/Dog.tscn",
-	"TREE": "res://scenes/Tree.tscn",
-	"RABBIT": "res://scenes/Rabbit.tscn",
-	"BIRD": "res://scenes/Bird.tscn",
-	"DEER": "res://scenes/Deer.tscn",
-	"RABBIT_CORPSE": "res://scenes/RabbitCorpse.tscn",
-	"BIRD_CORPSE": "res://scenes/BirdCorpse.tscn",
-	"DEER_CORPSE": "res://scenes/DeerCorpse.tscn",
-	"ARROW": "res://scenes/Arrow.tscn"
+# NETWORK SETTINGS
+const DEFAULT_PORT: int = 8000
+const MAX_CLIENTS: int = 4
+
+const PLAYER_SPAWN_DISTANCE: float = 10.0  # Distance players spawn from origin
+const SYNC_INTERVAL: float = 1.0 / 30.0    # 30 times per second
+
+# Protocol constants
+const CONNECTION_TIMEOUT: float = 10.0
+const HEARTBEAT_INTERVAL: float = 2.0
+
+# Backward compatibility: NETWORK dictionary
+const NETWORK := {
+	"DEFAULT_PORT": DEFAULT_PORT,
+	"MAX_PLAYERS": MAX_CLIENTS,
+	"SERVER_ID": 1,
+	"TICK_RATE": 30,
+	"CONNECTION_TIMEOUT": CONNECTION_TIMEOUT
 }
 
 # =============================================================================
-# NETWORK SETTINGS
+# ANIMAL AI CONSTANTS
 # =============================================================================
 
-const NETWORK := {
-	"DEFAULT_PORT": 8080,
-	"MAX_PLAYERS": 2,
-	"SERVER_ID": 1,
-	"TICK_RATE": 30,
-	"CONNECTION_TIMEOUT": 10.0
+# Shared constants for all animals
+const ANIMAL_AI := {
+	"DETECTION_RADIUS": 15.0,
+	"FLEE_DISTANCE": 20.0,
+	"SAFE_DISTANCE": 30.0,
+	"WANDER_RADIUS": 25.0,
+	"STATE_CHANGE_COOLDOWN": 2.0,
+	"STUCK_THRESHOLD": 0.5,     # How long to be stuck before trying a new direction
+	"STUCK_CHECK_INTERVAL": 1.0, # How often to check if stuck
+	"DIRECTION_CHANGE_INTERVAL": 3.0, # How often to change direction while wandering
+	"OBSTACLE_AVOIDANCE_RANGE": 3.0,  # Distance to check for obstacles ahead
+	"AVOIDANCE_TURN_ANGLE": 45.0,     # Degrees to turn when avoiding obstacles
+}
+
+# Specific animal stats
+const RABBIT := {
+	"HEALTH": 25,
+	"SPEED": 3.5,
+	"ACCELERATION": 12.0,
+	"JUMP_STRENGTH": 4.0,
+	"SIZE_SCALE": Vector3(0.8, 0.8, 0.8)
+}
+
+const DEER := {
+	"HEALTH": 75,
+	"SPEED": 4.0,
+	"ACCELERATION": 8.0,
+	"JUMP_STRENGTH": 6.0,
+	"SIZE_SCALE": Vector3(1.2, 1.2, 1.2)
+}
+
+const BIRD := {
+	"HEALTH": 15,
+	"SPEED": 5.0,
+	"ACCELERATION": 15.0,
+	"FLY_HEIGHT_MIN": 3.0,
+	"FLY_HEIGHT_MAX": 8.0,
+	"SIZE_SCALE": Vector3(0.6, 0.6, 0.6)
+}
+
+const DOG := {
+	"HEALTH": 100,
+	"SPEED": 5.0,
+	"ACCELERATION": 10.0,
+	"JUMP_STRENGTH": 5.0,
+	"STAMINA": 100.0,
+	"ENERGY_DRAIN": 20.0,      # Energy drained per second while sprinting
+	"ENERGY_REGEN": 15.0,      # Energy regenerated per second while not sprinting
+	"SIZE_SCALE": Vector3(1.0, 1.0, 1.0)
 }
 
 # =============================================================================
@@ -42,85 +89,27 @@ const NETWORK := {
 # =============================================================================
 
 const PLAYER := {
-	"WALK_SPEED": 3.0,
-	"RUN_SPEED": 6.0,
+	"HEALTH": 100,
+	"SPEED": 5.0,
 	"JUMP_VELOCITY": 4.5,
-	"MOUSE_SENSITIVITY": 0.002,
-	"CAMERA_PITCH_MIN": -1.5,
-	"CAMERA_PITCH_MAX": 1.5,
-	"CAMERA_COLLISION_BIAS": 0.2,
-	"BASE_CAMERA_DISTANCE": 3.0,
-	"MAX_CAMERA_DISTANCE": 8.0
+	"INTERACTION_DISTANCE": 5.0,
+	"STAMINA": 100.0,
+	"ENERGY_DRAIN": 25.0,      # Energy drained per second while sprinting
+	"ENERGY_REGEN": 20.0,      # Energy regenerated per second while not sprinting
 }
 
 # =============================================================================
-# DOG CONSTANTS
+# CRAFTING CONSTANTS
 # =============================================================================
 
-const DOG := {
-	"RUN_SPEED": 8.0,
-	"JUMP_VELOCITY": 5.0,
-	"BITE_RANGE": 2.0,
-	"BITE_HITBOX_SIZE": 1.5,
-	"BITE_COOLDOWN": 0.5,
-	"BARK_COOLDOWN": 1.0,
-	"BARK_RANGE": 10.0
-}
-
-# =============================================================================
-# WEAPON CONSTANTS
-# =============================================================================
-
-const BOW := {
-	"CHARGE_TIME": 2.0,
-	"MIN_POWER": 0.3,
-	"MAX_POWER": 1.0,
-	"ZOOM_FOV": 45.0,
-	"NORMAL_FOV": 90.0,
-	"ZOOM_SPEED": 5.0
-}
-
-const ARROW := {
-	"SPEED": 20.0,
-	"LIFETIME": 10.0,
-	"DAMAGE": 100.0,
-	"GRAVITY_SCALE": 0.5
-}
-
-# =============================================================================
-# ANIMAL CONSTANTS
-# =============================================================================
-
-const RABBIT := {
-	"WANDER_SPEED": 2.0,
-	"FLEE_SPEED": 4.0,
-	"WANDER_RADIUS": 10.0,
-	"FLEE_DISTANCE": 8.0,
-	"DIRECTION_CHANGE_TIME": 3.0,
-	"FLEE_DETECTION_RANGE": 6.0,
-	"MAX_HEALTH": 1.0
-}
-
-const BIRD := {
-	"FLY_SPEED": 3.0,
-	"FLEE_SPEED": 6.0,
-	"HOVER_HEIGHT": 4.0,
-	"PATROL_RADIUS": 15.0,
-	"FLEE_DISTANCE": 12.0,
-	"DIRECTION_CHANGE_TIME": 4.0,
-	"BARK_DETECTION_RANGE": 10.0,
-	"HEIGHT_VARIANCE": 2.0,
-	"MAX_HEALTH": 1.0
-}
-
-const DEER := {
-	"WALK_SPEED": 2.5,
-	"RUN_SPEED": 7.0,
-	"GRAZE_RADIUS": 8.0,
-	"FLEE_DISTANCE": 15.0,
-	"DETECTION_RANGE": 12.0,
-	"DIRECTION_CHANGE_TIME": 5.0,
-	"MAX_HEALTH": 2.0
+const CRAFTING := {
+	"AXE_DURABILITY": 100,
+	"BOW_DURABILITY": 80,
+	"ARROW_DAMAGE": 35,
+	"AXE_DAMAGE": 25,
+	"TREE_CHOP_TIME": 3.0,       # Seconds to chop down a tree
+	"TREE_HEALTH": 3,            # Number of hits to chop down a tree
+	"CAMPFIRE_COOK_TIME": 5.0,   # Seconds to cook an item
 }
 
 # =============================================================================
@@ -130,11 +119,11 @@ const DEER := {
 # Master scale multiplier for the entire game world
 # 
 # HOW TO USE:
-# Change WORLD_SCALE_MULTIPLIER to adjust the entire game size:
+# Change world_scale_multiplier to adjust the entire game size:
 # - 1.0  = Small world (100×100, 50 trees, 8 animals)
-# - 5.0  = Medium world (500×500, 1,250 trees, 40 animals) 
-# - 10.0 = Large world (1000×1000, 5,000 trees, 80 animals)
-# - 20.0 = Huge world (2000×2000, 20,000 trees, 160 animals)
+# - 3.0  = Medium world (300×300, 450 trees, 24 animals) 
+# - 5.0  = Large world (500×500, 1,250 trees, 40 animals)
+# - 10.0 = Huge world (1000×1000, 5,000 trees, 80 animals)
 #
 # SCALING BEHAVIOR:
 # - World Size: Linear scaling (multiplier × base size)
@@ -144,73 +133,108 @@ const DEER := {
 # - Spawn distances: Automatically adjusted
 #
 # Use GameConstants.print_world_info() to see current values
-const WORLD_SCALE_MULTIPLIER: float = 5.0
+
+# Static fallback multiplier (used if dynamic value not set)
+const DEFAULT_WORLD_SCALE_MULTIPLIER: float = 1.0
+
+# Dynamic world scale multiplier (can be changed at runtime)
+static var world_scale_multiplier: float = DEFAULT_WORLD_SCALE_MULTIPLIER
 
 # =============================================================================
-# WORLD GENERATION
+# WORLD GENERATION (Dynamic)
 # =============================================================================
 
-const WORLD := {
-	"TERRAIN_RESOLUTION": 256,  # Increased for larger world
-	"HILL_HEIGHT": 8.0,
-	"HILL_FREQUENCY": 0.02,
-	"BASE_WORLD_SIZE": Vector2(100, 100),  # Original world size
-	"WORLD_SIZE": Vector2(100, 100) * WORLD_SCALE_MULTIPLIER,  # Scaled world size
-	"TREE_SPACING": 5.0,  # Increased spacing for larger world
-	"BASE_TREE_COUNT": 50,  # Original tree count
-	"TREE_COUNT": int(50 * WORLD_SCALE_MULTIPLIER * WORLD_SCALE_MULTIPLIER),  # Scaled by area (multiplier squared)
-	"BASE_ROCK_COUNT": 20,  # Base rock count for original world
-	"ROCK_COUNT": int(20 * WORLD_SCALE_MULTIPLIER * WORLD_SCALE_MULTIPLIER),  # Scaled by area
-	"BASE_CLOUD_COUNT": 25,  # Base cloud count (increased for better sky coverage)
-	"CLOUD_COUNT": int(25 * WORLD_SCALE_MULTIPLIER)  # Clouds scale linearly, not by area
-}
+# Function to get current world constants based on dynamic multiplier
+static func get_world_constants() -> Dictionary:
+	return {
+		"TERRAIN_RESOLUTION": 256,  # Increased for larger world
+		"HILL_HEIGHT": 8.0,
+		"HILL_FREQUENCY": 0.02,
+		"BASE_WORLD_SIZE": Vector2(100, 100),  # Original world size
+		"WORLD_SIZE": Vector2(100, 100) * world_scale_multiplier,  # Scaled world size
+		"TREE_SPACING": 5.0,  # Increased spacing for larger world
+		"BASE_TREE_COUNT": 50,  # Original tree count
+		"TREE_COUNT": int(50 * world_scale_multiplier * world_scale_multiplier),  # Scaled by area (multiplier squared)
+		"BASE_ROCK_COUNT": 20,  # Base rock count for original world
+		"ROCK_COUNT": int(20 * world_scale_multiplier * world_scale_multiplier),  # Scaled by area
+		"BASE_CLOUD_COUNT": 25,  # Base cloud count (increased for better sky coverage)
+		"CLOUD_COUNT": int(25 * world_scale_multiplier)  # Clouds scale linearly, not by area
+	}
+
+# Backward compatibility: Static WORLD constant (uses current multiplier)
+static var WORLD: Dictionary:
+	get:
+		return get_world_constants()
+
+# Function to update world scale multiplier from settings
+static func set_world_scale_multiplier(new_multiplier: float) -> void:
+	"""Set the world scale multiplier. This affects all world generation."""
+	world_scale_multiplier = new_multiplier
+	print("GameConstants: World scale multiplier set to ", new_multiplier, "x")
+	print_world_info()
+
+# Function to get current world scale multiplier
+static func get_world_scale_multiplier() -> float:
+	"""Get the current world scale multiplier."""
+	return world_scale_multiplier
 
 # =============================================================================
 # SPAWNING SYSTEM
 # =============================================================================
 
-const SPAWN := {
-	# Proximity-based spawning distances
-	"DISTANCE_MIN": 20.0,  # Minimum distance from player to spawn animals
-	"DISTANCE_MAX": 60.0,  # Maximum distance from player to spawn animals  
-	"DESPAWN_RADIUS": 72.0,  # 120% of max distance - animals despawn beyond this
-	
-	# Animal limits per proximity area (around each player)
-	"MAX_ANIMALS_PER_AREA": 12,  # Maximum animals within proximity area per player
-	"BASE_MAX_ANIMALS": 8,  # Original animal count (legacy)
-	"MAX_ANIMALS": int(8 * WORLD_SCALE_MULTIPLIER),  # Scaled animal count (legacy)
-	
-	# Spawn timing and checks
-	"CHECK_INTERVAL": 3.0,  # How often to check for spawning (reduced for better responsiveness)
-	"DESPAWN_CHECK_INTERVAL": 2.0,  # How often to check for despawning
-	
-	# World positioning
-	"TERRAIN_HEIGHT_OFFSET": 1.0,
-	"PLAYER_SPAWN_OFFSET": 2.0,
-	"SPAWN_HEIGHT_CLEARANCE": 5.0,
-	
-	# Individual animal type counts per proximity area
-	"RABBIT_COUNT_PER_AREA": 4,  # Max rabbits per player proximity area
-	"BIRD_COUNT_PER_AREA": 4,    # Max birds per player proximity area
-	"DEER_COUNT_PER_AREA": 3,    # Max deer per player proximity area
-	
-	# Legacy individual animal type counts (scaled globally)
-	"RABBIT_COUNT": int(3 * WORLD_SCALE_MULTIPLIER),
-	"BIRD_COUNT": int(3 * WORLD_SCALE_MULTIPLIER),
-	"DEER_COUNT": int(2 * WORLD_SCALE_MULTIPLIER)
+const SPAWNING := {
+	"MAX_RESPAWN_ATTEMPTS": 50,
+	"MIN_SPAWN_DISTANCE_FROM_PLAYER": 20.0,
+	"MAX_SPAWN_DISTANCE_FROM_PLAYER": 80.0,
+	"SPAWN_HEIGHT_OFFSET": 1.0,
+	"SAFE_SPAWN_RADIUS": 5.0,      # Area around spawn point that must be clear
 }
 
+# Backward compatibility: SPAWN dictionary for AnimalSpawner
+const SPAWN := {
+	"DISTANCE_MIN": 20.0,
+	"DISTANCE_MAX": 60.0,
+	"DESPAWN_RADIUS": 72.0,
+	"MAX_ANIMALS_PER_AREA": 12,
+	"CHECK_INTERVAL": 3.0,
+	"DESPAWN_CHECK_INTERVAL": 2.0,
+	"TERRAIN_HEIGHT_OFFSET": 1.0,
+	"RABBIT_COUNT_PER_AREA": 4,
+	"BIRD_COUNT_PER_AREA": 4,
+	"DEER_COUNT_PER_AREA": 3
+}
+
+# Animal spawn counts that scale with world size
+static func get_animal_spawn_counts() -> Dictionary:
+	return {
+		"BASE_RABBIT_COUNT": 8,
+		"RABBIT_COUNT": int(8 * world_scale_multiplier),  # Rabbits scale linearly with world size
+		"BASE_DEER_COUNT": 4,
+		"DEER_COUNT": int(4 * world_scale_multiplier),    # Deer scale linearly with world size
+		"BASE_BIRD_COUNT": 6,
+		"BIRD_COUNT": int(6 * world_scale_multiplier),    # Birds scale linearly with world size
+		"TOTAL_ANIMALS": int((8 + 4 + 6) * world_scale_multiplier)
+	}
+
+# Backward compatibility
+static var ANIMALS: Dictionary:
+	get:
+		return get_animal_spawn_counts()
+
 # =============================================================================
-# CAMPFIRE SYSTEM
+# BIOME SYSTEM
 # =============================================================================
 
-const CAMPFIRE := {
-	"COOK_TIME": 10.0,
-	"RAW_MEAT_HUNGER_RESTORE": 60.0,
-	"BASE_LIGHT_RANGE": 8.0,
-	"MAX_LIGHT_ENERGY": 1.5,
-	"MIN_LIGHT_ENERGY": 0.3,
-	"MAX_CHOPS": 3
+const BIOMES := {
+	"FOREST_THRESHOLD": 0.3,    # Noise value above which forest spawns
+	"MEADOW_THRESHOLD": -0.2,   # Noise value below which meadows spawn
+	"HILL_THRESHOLD": 0.6,      # Noise value above which hills spawn
+	"WATER_THRESHOLD": -0.5,    # Noise value below which water spawns (if implemented)
+	
+	"TREE_DENSITY_FOREST": 0.8,     # Chance of tree in forest areas
+	"TREE_DENSITY_MEADOW": 0.1,     # Chance of tree in meadow areas
+	"ROCK_DENSITY_HILLS": 0.6,      # Chance of rock in hilly areas
+	"GRASS_DENSITY_MEADOW": 0.9,    # Chance of grass in meadow areas
 }
 
 # =============================================================================
@@ -222,7 +246,20 @@ const UI := {
 	"INVENTORY_GRID_COLUMNS": 3,
 	"INVENTORY_GRID_ROWS": 4,
 	"SLOT_SIZE": Vector2(64, 64),
-	"ANIMATION_BLEND_TIME": 0.2
+	"ANIMATION_BLEND_TIME": 0.2,
+	
+	# Shared UI Styling Constants - Rustic Bark & Moss Theme
+	"SLOT_ICON_SIZE": 48,
+	"SLOT_SPACING": Vector2(8, 8),
+	"COLOR_SLOT_NORMAL": Color(0.8, 0.75, 0.7, 0.9),
+	"COLOR_SLOT_SELECTED": Color(0.98, 0.94, 0.89, 1),
+	"COLOR_SLOT_BORDER": Color(0.545, 0.357, 0.169, 1),
+	"COLOR_BACKGROUND": Color(0.137, 0.2, 0.165, 0.85),
+	"COLOR_TEXT": Color(0.918, 0.878, 0.835, 1),
+	"COLOR_TEXT_SHADOW": Color(0.137, 0.2, 0.165, 1),
+	"COLOR_SLOT_NUMBER": Color(0.918, 0.878, 0.835, 1),
+	"FONT_SIZE_TOOLTIP": 14,
+	"FONT_SIZE_SLOT_NUMBER": 12
 }
 
 # =============================================================================
@@ -262,115 +299,317 @@ const ROLES := {
 # =============================================================================
 
 const ITEMS := {
-	"HATCHET": "Hatchet",
+	"AXE": "Axe",
 	"BOW": "Bow",
 	"WOOD": "Wood",
 	"SINEW": "Sinew",
 	"RAW_MEAT": "Raw Meat",
 	"COOKED_MEAT": "Cooked Meat",
+	"HIDE": "Hide",
 	"EMPTY_SLOT": ""
 }
+
+# =============================================================================
+# ITEM SYSTEM
+# =============================================================================
+
+const ITEM_ICONS := {
+	"Axe": "res://assets/ui/icons/axe.png",
+	"Bow": "res://assets/ui/icons/bow.png",
+	"Wood": "res://assets/ui/icons/wood.png",
+	"Sinew": "res://assets/ui/icons/sinew.png",
+	"Raw Meat": "res://assets/ui/icons/raw_meat.png",
+	"Cooked Meat": "res://assets/ui/icons/cooked_meat.png",
+	"Hide": "res://assets/ui/icons/hide.png",
+	"Arrow": "res://assets/ui/icons/arrow.png"
+}
+
+const ITEM_DESCRIPTIONS := {
+	"Axe": "A trusty wooden axe. Perfect for chopping trees and clearing a path.",
+	"Bow": "A simple but effective hunting bow. Great for taking down prey from a distance.",
+	"Wood": "Freshly cut timber. Useful for crafting and building.",
+	"Sinew": "Tough animal tendon. Essential for crafting more advanced tools.",
+	"Raw Meat": "A bit too chewy to eat. If only I had a way to cook it...",
+	"Cooked Meat": "A hearty meal that'll keep me going. Restores hunger when consumed.",
+	"Hide": "Tough animal hide from a deer. Essential material for crafting leather goods and armor.",
+	"Arrow": "Sharp projectile for the bow. Handle with care."
+}
+
+# Icon generation colors (fallback for when image files don't exist)
+const ITEM_FALLBACK_COLORS := {
+	"Axe": Color(0.6, 0.4, 0.2),          # Brown wooden handle  
+	"Bow": Color(0.4, 0.25, 0.1),         # Dark brown wood
+	"Wood": Color(0.8, 0.6, 0.3),         # Light brown timber
+	"Sinew": Color(0.9, 0.9, 0.8),        # Off-white tendon
+	"Raw Meat": Color(0.8, 0.3, 0.3),     # Red raw meat
+	"Cooked Meat": Color(0.5, 0.3, 0.1),  # Dark brown cooked
+	"Hide": Color(0.7, 0.5, 0.3),         # Tan/brown leather hide
+	"Arrow": Color(0.7, 0.7, 0.7)         # Gray metal/wood
+}
+
+# =============================================================================
+# ITEM ICON MANAGER (Singleton-like functionality)
+# =============================================================================
+
+class ItemIconManager:
+	static var _icon_cache: Dictionary = {}
+	static var _fallback_icon_size: int = 64
+	
+	static func get_item_icon(item_name: String) -> Texture2D:
+		"""Gets an icon for the specified item, using cache when possible."""
+		# Check cache first
+		if _icon_cache.has(item_name):
+			return _icon_cache[item_name]
+		
+		var icon_texture: Texture2D = null
+		
+		# Try to load from file first
+		if ITEM_ICONS.has(item_name):
+			var icon_path: String = ITEM_ICONS[item_name]
+			if ResourceLoader.exists(icon_path):
+				icon_texture = load(icon_path)
+				print("ItemIconManager: Loaded icon from file: ", icon_path)
+		
+		# Fall back to procedural generation if file doesn't exist
+		if not icon_texture:
+			icon_texture = _generate_fallback_icon(item_name)
+			print("ItemIconManager: Generated fallback icon for: ", item_name)
+		
+		# Cache the result
+		_icon_cache[item_name] = icon_texture
+		return icon_texture
+	
+	static func _generate_fallback_icon(item_name: String) -> ImageTexture:
+		"""Generates a simple procedural icon as fallback."""
+		var image = Image.create(_fallback_icon_size, _fallback_icon_size, false, Image.FORMAT_RGBA8)
+		var base_color = ITEM_FALLBACK_COLORS.get(item_name, Color.GRAY)
+		
+		# Fill with transparent background
+		image.fill(Color.TRANSPARENT)
+		
+		# Create a simple rounded rectangle with the item color
+		var margin = 8
+		var corner_radius = 6
+		
+		for x in range(margin, _fallback_icon_size - margin):
+			for y in range(margin, _fallback_icon_size - margin):
+				# Simple rounded corners by checking distance from corners
+				var in_corner_area = false
+				
+				# Top-left corner
+				if x < margin + corner_radius and y < margin + corner_radius:
+					var dist = Vector2(x - (margin + corner_radius), y - (margin + corner_radius)).length()
+					in_corner_area = dist > corner_radius
+				# Top-right corner  
+				elif x > _fallback_icon_size - margin - corner_radius and y < margin + corner_radius:
+					var dist = Vector2(x - (_fallback_icon_size - margin - corner_radius), y - (margin + corner_radius)).length()
+					in_corner_area = dist > corner_radius
+				# Bottom-left corner
+				elif x < margin + corner_radius and y > _fallback_icon_size - margin - corner_radius:
+					var dist = Vector2(x - (margin + corner_radius), y - (_fallback_icon_size - margin - corner_radius)).length()
+					in_corner_area = dist > corner_radius
+				# Bottom-right corner
+				elif x > _fallback_icon_size - margin - corner_radius and y > _fallback_icon_size - margin - corner_radius:
+					var dist = Vector2(x - (_fallback_icon_size - margin - corner_radius), y - (_fallback_icon_size - margin - corner_radius)).length()
+					in_corner_area = dist > corner_radius
+				
+				if not in_corner_area:
+					# Add some variation based on item type
+					var color_variation = base_color
+					match item_name:
+						"Axe":
+							# Add wood grain effect
+							if (x + y) % 4 == 0:
+								color_variation = base_color.darkened(0.1)
+						"Bow":
+							# Add curved line effect
+							if abs(x - _fallback_icon_size / 2) < 3:
+								color_variation = base_color.darkened(0.2)
+						"Wood":
+							# Add grain lines
+							if x % 6 == 0:
+								color_variation = base_color.darkened(0.15)
+						"Raw Meat", "Cooked Meat":
+							# Add marbling effect
+							if (x * y) % 7 == 0:
+								color_variation = base_color.lightened(0.1)
+						"Hide":
+							# Add leather texture pattern
+							if (x % 5 == 0 and y % 3 == 0) or (x % 3 == 0 and y % 5 == 0):
+								color_variation = base_color.darkened(0.12)
+					
+					image.set_pixel(x, y, color_variation)
+		
+		var texture = ImageTexture.new()
+		texture.set_image(image)
+		return texture
+	
+	static func clear_cache() -> void:
+		"""Clears the icon cache (useful for hot-reloading icons)."""
+		_icon_cache.clear()
+		print("ItemIconManager: Cache cleared")
 
 # =============================================================================
 # ANIMATION NAMES
 # =============================================================================
 
 const ANIMATIONS := {
-	"PLAYER": {
-		"IDLE": "CharacterArmature|Idle_Neutral",
-		"WALK": "CharacterArmature|Walk",
-		"RUN": "CharacterArmature|Run",
-		"JUMP": "CharacterArmature|Roll",
-		"CHOP": "CharacterArmature|Sword_Slash",
-		"INTERACT": "CharacterArmature|Interact",
-		"HIT_RECEIVE": "CharacterArmature|HitRecieve",
-		"DEATH": "CharacterArmature|Death"
-	},
-	"DOG": {
-		"IDLE": "DogArmature|Idle",
-		"WALK": "DogArmature|Walk",
-		"GALLOP": "DogArmature|Gallop",
-		"JUMP": "DogArmature|Gallop_Jump",
-		"ATTACK": "DogArmature|Attack",
-		"EATING": "DogArmature|Eating",
-		"DEATH": "DogArmature|Death"
-	}
+	"IDLE": "idle",
+	"WALK": "walking",
+	"RUN": "running",
+	"JUMP": "jumping",
+	"PUNCH_LEFT": "punch_left",
+	"PUNCH_RIGHT": "punch_right",
+	"CHOP": "chopping",
+	"BOW_IDLE": "bow_idle",
+	"BOW_DRAW": "bow_draw",
+	"BOW_HOLD": "bow_hold",
+	"BOW_RELEASE": "bow_release"
 }
 
 # =============================================================================
-# THEME COLORS (for UI consistency)
+# DEBUG AND UTILITY FUNCTIONS
 # =============================================================================
 
-const COLORS := {
-	"BACKGROUND_DARK": Color(0.137, 0.2, 0.165, 0.85),
-	"BUTTON_FONT": Color(0.3, 0.4, 0.35, 1),
-	"BUTTON_FONT_HOVER": Color(0.137, 0.2, 0.165, 1),
-	"BUTTON_FONT_PRESSED": Color(0.545, 0.357, 0.169, 1),
-	"LIGHT_CREAM": Color(0.918, 0.878, 0.835, 1),
-	"RUSTIC_BROWN": Color(0.545, 0.357, 0.169, 1),
-	"SLOT_NORMAL": Color(0.8, 0.75, 0.7, 0.9),
-	"SLOT_SELECTED": Color(0.98, 0.94, 0.89, 1),
-	"TEXT_SHADOW": Color(0.137, 0.2, 0.165, 1)
-}
-
-# =============================================================================
-# WORLD SCALING UTILITIES
-# =============================================================================
-
-## Get the current world scale multiplier for debugging/display
-static func get_world_scale() -> float:
-	return WORLD_SCALE_MULTIPLIER
-
-## Get scaled world information for debugging
-static func get_world_info() -> Dictionary:
-	return {
-		"scale_multiplier": WORLD_SCALE_MULTIPLIER,
-		"world_size": WORLD.WORLD_SIZE,
-		"tree_count": WORLD.TREE_COUNT,
-		"rock_count": WORLD.ROCK_COUNT,
-		"cloud_count": WORLD.CLOUD_COUNT,
-		"max_animals": SPAWN.MAX_ANIMALS,
-		"animal_breakdown": {
-			"rabbits": SPAWN.RABBIT_COUNT,
-			"birds": SPAWN.BIRD_COUNT,
-			"deer": SPAWN.DEER_COUNT
-		}
-	}
-
-## Print world scaling information to console
+# Print current world information (useful for debugging)
 static func print_world_info() -> void:
-	var info = get_world_info()
-	print("=== WORLD SCALE INFO ===")
-	print("Scale Multiplier: ", info.scale_multiplier, "x")
-	print("World Size: ", info.world_size)
-	print("Trees: ", info.tree_count)
-	print("Rocks: ", info.rock_count) 
-	print("Clouds: ", info.cloud_count)
-	print("Max Animals: ", info.max_animals)
-	print("  - Rabbits: ", info.animal_breakdown.rabbits)
-	print("  - Birds: ", info.animal_breakdown.birds)
-	print("  - Deer: ", info.animal_breakdown.deer)
-	print("========================")
+	"""Print detailed information about current world scaling."""
+	var world_info = get_world_constants()
+	var animal_info = get_animal_spawn_counts()
+	
+	print("=== CURRENT WORLD SETTINGS ===")
+	print("Scale Multiplier: ", world_scale_multiplier, "x")
+	print("World Size: ", world_info.WORLD_SIZE)
+	print("Trees: ", world_info.TREE_COUNT, " (", world_info.BASE_TREE_COUNT, " base)")
+	print("Rocks: ", world_info.ROCK_COUNT, " (", world_info.BASE_ROCK_COUNT, " base)")  
+	print("Clouds: ", world_info.CLOUD_COUNT, " (", world_info.BASE_CLOUD_COUNT, " base)")
+	print("Animals: ", animal_info.TOTAL_ANIMALS, " total")
+	print("  - Rabbits: ", animal_info.RABBIT_COUNT)
+	print("  - Deer: ", animal_info.DEER_COUNT)
+	print("  - Birds: ", animal_info.BIRD_COUNT)
+	print("===============================")
+
+# Initialize the world scale multiplier from settings on startup
+static func _static_init() -> void:
+	"""Initialize static variables on startup."""
+	# Try to load world scale multiplier from settings
+	var config = ConfigFile.new()
+	var err = config.load("user://settings.cfg")
+	
+	if err == OK:
+		world_scale_multiplier = config.get_value("world", "size_multiplier", DEFAULT_WORLD_SCALE_MULTIPLIER)
+	else:
+		world_scale_multiplier = DEFAULT_WORLD_SCALE_MULTIPLIER
+	
+	print("GameConstants: Initialized with world scale multiplier: ", world_scale_multiplier, "x")
+
 
 # =============================================================================
-# UTILITY FUNCTIONS
+# SHARED SETTINGS MANAGEMENT SYSTEM
 # =============================================================================
 
-## Gets a nested dictionary value safely with a default fallback
-static func get_nested_value(dict: Dictionary, keys: Array, default_value = null):
-	var current = dict
-	for key in keys:
-		if current.has(key):
-			current = current[key]
+class SettingsManager:
+	"""Shared settings management for consistent behavior across menus."""
+	
+	static func load_settings() -> Dictionary:
+		"""Load all settings from config file."""
+		var config = ConfigFile.new()
+		var err = config.load("user://settings.cfg")
+		
+		var settings = {
+			"master_volume": 75.0,
+			"music_volume": 75.0,
+			"sfx_volume": 75.0,
+			"fullscreen": false,
+			"world_size_multiplier": GameConstants.get_world_scale_multiplier()
+		}
+		
+		if err == OK:
+			settings.master_volume = config.get_value("audio", "master_volume", 75.0)
+			settings.music_volume = config.get_value("audio", "music_volume", 75.0)
+			settings.sfx_volume = config.get_value("audio", "sfx_volume", 75.0)
+			settings.fullscreen = config.get_value("display", "fullscreen", false)
+			settings.world_size_multiplier = config.get_value("world", "size_multiplier", DEFAULT_WORLD_SCALE_MULTIPLIER)
+		
+		return settings
+	
+	static func save_settings(volume: float, fullscreen: bool, world_size_multiplier: float = -1) -> void:
+		"""Save all settings to config file."""
+		var config = ConfigFile.new()
+		
+		# Save volume and fullscreen
+		config.set_value("audio", "master_volume", volume)
+		config.set_value("display", "fullscreen", fullscreen)
+		
+		# Save world size if provided, otherwise keep current
+		if world_size_multiplier > 0:
+			config.set_value("world", "size_multiplier", world_size_multiplier)
+			GameConstants.set_world_scale_multiplier(world_size_multiplier)
 		else:
-			return default_value
-	return current
-
-## Validates if a scene path exists and can be loaded
-static func validate_scene_path(scene_path: String) -> bool:
-	return ResourceLoader.exists(scene_path)
-
-## Gets the appropriate animation name with fallback
-static func get_animation_name(character_type: String, animation_name: String) -> String:
-	var anims = get_nested_value(ANIMATIONS, [character_type.to_upper()], {})
-	return anims.get(animation_name.to_upper(), "") 
+			config.set_value("world", "size_multiplier", GameConstants.get_world_scale_multiplier())
+		
+		# Save to file
+		config.save("user://settings.cfg")
+	
+	static func apply_master_volume_setting(_value: float) -> void:
+		"""Apply master volume setting (for storage, not direct audio)."""
+		# Master volume is applied through multiplication in the UI handlers
+		pass
+	
+	static func apply_music_volume_setting(_value: float) -> void:
+		"""Apply music volume setting (for storage, not direct audio)."""
+		# Music volume is applied through multiplication in the UI handlers
+		pass
+	
+	static func apply_sfx_volume_setting(_value: float) -> void:
+		"""Apply SFX volume setting (for storage, not direct audio)."""
+		# SFX volume is applied through multiplication in the UI handlers
+		pass
+	
+	static func apply_effective_music_volume(effective_value: float) -> void:
+		"""Apply the calculated effective music volume to the Music audio bus."""
+		var volume_db: float = linear_to_db(effective_value / 100.0)
+		var music_bus_index = AudioServer.get_bus_index("Music")
+		if music_bus_index != -1:
+			AudioServer.set_bus_volume_db(music_bus_index, volume_db)
+		else:
+			# Fallback to Master bus if Music bus doesn't exist
+			AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), volume_db)
+	
+	static func apply_effective_sfx_volume(effective_value: float) -> void:
+		"""Apply the calculated effective SFX volume to the SFX audio bus."""
+		var volume_db: float = linear_to_db(effective_value / 100.0)
+		var sfx_bus_index = AudioServer.get_bus_index("SFX")
+		if sfx_bus_index != -1:
+			AudioServer.set_bus_volume_db(sfx_bus_index, volume_db)
+		else:
+			# Fallback to Master bus if SFX bus doesn't exist
+			AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), volume_db)
+	
+	static func apply_volume_setting(value: float) -> void:
+		"""Legacy method for backward compatibility."""
+		apply_effective_music_volume(value)
+		apply_effective_sfx_volume(value)
+	
+	static func save_volume_settings(master_volume: float, music_volume: float, sfx_volume: float, fullscreen: bool) -> void:
+		"""Save all volume settings and fullscreen to config file."""
+		var config = ConfigFile.new()
+		
+		# Save all volume settings
+		config.set_value("audio", "master_volume", master_volume)
+		config.set_value("audio", "music_volume", music_volume)
+		config.set_value("audio", "sfx_volume", sfx_volume)
+		config.set_value("display", "fullscreen", fullscreen)
+		
+		# Save current world size
+		config.set_value("world", "size_multiplier", GameConstants.get_world_scale_multiplier())
+		
+		# Save to file
+		config.save("user://settings.cfg")
+	
+	static func apply_fullscreen_setting(enabled: bool) -> void:
+		"""Apply fullscreen setting to display system."""
+		if enabled:
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		else:
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED) 

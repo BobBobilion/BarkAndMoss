@@ -15,16 +15,19 @@ const ROCK_SCENE_PATH: String = "res://scenes/Rock.tscn"  # We'll create this sc
 const GRASS_SCENE_PATH: String = "res://scenes/Grass.tscn"  # Grass clumps for forest biome
 
 # Terrain generation constants - Using centralized scaling system
-const TERRAIN_RESOLUTION: int = GameConstants.WORLD.TERRAIN_RESOLUTION
 const TERRAIN_CHUNKS: int = 4        # Divide terrain into chunks for better performance
 
 # --- Properties ---
-@export var tree_count: int = GameConstants.WORLD.TREE_COUNT
-@export var rock_count: int = GameConstants.WORLD.ROCK_COUNT
+# Dynamic values that depend on current world scale (set in _ready)
+var terrain_resolution: int
+var tree_count: int
+var rock_count: int
+var world_size: Vector2
+var tree_spacing: float
+
+# Static exported properties for inspector (these get overridden at runtime)
 @export var grass_count: int = 2000  # Number of grass clumps to spawn
 @export var generate_grass: bool = true # Master switch for grass generation
-@export var world_size: Vector2 = GameConstants.WORLD.WORLD_SIZE
-@export var tree_spacing: float = GameConstants.WORLD.TREE_SPACING
 @export var grass_spacing: float = 1.0  # Minimum distance between grass clumps
 
 var tree_scene: PackedScene
@@ -50,10 +53,20 @@ func _ready() -> void:
 	# Add to group for easy finding by other scripts
 	add_to_group("world_generator")
 	
+	# Initialize dynamic values from current GameConstants
+	terrain_resolution = GameConstants.WORLD.TERRAIN_RESOLUTION
+	tree_count = GameConstants.WORLD.TREE_COUNT
+	rock_count = GameConstants.WORLD.ROCK_COUNT
+	world_size = GameConstants.WORLD.WORLD_SIZE
+	tree_spacing = GameConstants.WORLD.TREE_SPACING
+	
 	_initialize_biome_manager()
 	_load_resources()
 	
 	print("WorldGenerator: Ready and waiting for start_generation() call")
+	print("WorldGenerator: Using terrain resolution: ", terrain_resolution)
+	print("WorldGenerator: World size: ", world_size)
+	print("WorldGenerator: Tree count: ", tree_count)
 
 
 func start_generation() -> void:
@@ -159,7 +172,7 @@ func _generate_terrain() -> void:
 	var terrain_material: StandardMaterial3D = _create_biome_aware_terrain_material()
 	terrain_mesh.material_override = terrain_material
 	
-	# Ensure the mesh can cast and receive shadows properly
+	# Ensure the mesh can cast shadows properly (shadow reception is automatic)
 	terrain_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	
 	add_child(terrain_mesh)
@@ -181,11 +194,11 @@ func _create_biome_terrain_mesh() -> ArrayMesh:
 	terrain_vertices = PackedFloat32Array()
 	
 	# Generate vertices with height from biome manager
-	for z in range(TERRAIN_RESOLUTION + 1):
-		for x in range(TERRAIN_RESOLUTION + 1):
+	for z in range(terrain_resolution + 1):
+		for x in range(terrain_resolution + 1):
 			# Convert grid coordinates to world coordinates
-			var world_x: float = (float(x) / TERRAIN_RESOLUTION - 0.5) * world_size.x
-			var world_z: float = (float(z) / TERRAIN_RESOLUTION - 0.5) * world_size.y
+			var world_x: float = (float(x) / terrain_resolution - 0.5) * world_size.x
+			var world_z: float = (float(z) / terrain_resolution - 0.5) * world_size.y
 			
 			# Use biome manager for height calculation
 			var height: float = biome_manager.get_terrain_height_at_position(Vector3(world_x, 0, world_z))
@@ -198,7 +211,7 @@ func _create_biome_terrain_mesh() -> ArrayMesh:
 			terrain_vertices.append(height)
 			
 			# Calculate UV coordinates
-			var uv: Vector2 = Vector2(float(x) / TERRAIN_RESOLUTION, float(z) / TERRAIN_RESOLUTION)
+			var uv: Vector2 = Vector2(float(x) / terrain_resolution, float(z) / terrain_resolution)
 			uvs.append(uv)
 			
 			# Get biome-specific color for this vertex
@@ -207,11 +220,11 @@ func _create_biome_terrain_mesh() -> ArrayMesh:
 			colors.append(biome_color)
 	
 	# Generate indices for triangles
-	for z in range(TERRAIN_RESOLUTION):
-		for x in range(TERRAIN_RESOLUTION):
-			var top_left: int = z * (TERRAIN_RESOLUTION + 1) + x
+	for z in range(terrain_resolution):
+		for x in range(terrain_resolution):
+			var top_left: int = z * (terrain_resolution + 1) + x
 			var top_right: int = top_left + 1
-			var bottom_left: int = (z + 1) * (TERRAIN_RESOLUTION + 1) + x
+			var bottom_left: int = (z + 1) * (terrain_resolution + 1) + x
 			var bottom_right: int = bottom_left + 1
 			
 			# First triangle (top-left, top-right, bottom-left) - counter-clockwise when viewed from above
@@ -733,12 +746,9 @@ func _create_biome_aware_terrain_material() -> StandardMaterial3D:
 	# Set base material properties
 	material.roughness = 0.6
 	material.metallic = 0.0
-	material.specular = 0.4
 	
-	# Enable proper lighting and shadow reception
+	# Enable proper lighting (shadow properties set on mesh instance)
 	material.flags_unshaded = false
-	material.flags_receive_shadows = true
-	material.flags_cast_shadow = true
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	
 	return material 

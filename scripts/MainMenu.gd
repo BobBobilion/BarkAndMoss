@@ -8,6 +8,9 @@ const LOBBY_SCENE_PATH: String = "res://scenes/Lobby.tscn"
 const MAIN_SCENE_PATH: String = "res://scenes/Main.tscn"
 const LOADING_SCENE_PATH: String = "res://scenes/LoadingScreen.tscn"
 
+# World size multiplier options that can be cycled through
+const WORLD_SIZE_OPTIONS: Array[float] = [1.0, 3.0, 5.0, 10.0]
+
 # --- Node References ---
 # Main menu buttons
 @onready var play_button: Button = $VBoxContainer/PlayButton
@@ -26,18 +29,27 @@ const LOADING_SCENE_PATH: String = "res://scenes/LoadingScreen.tscn"
 @onready var play_character_button: Button = $CharacterSelectModal/VBoxContainer/PlayButton
 @onready var character_back_button: Button = $CharacterSelectModal/VBoxContainer/BackButton
 
+# World size elements
+@onready var world_size_button: Button = $CharacterSelectModal/VBoxContainer/WorldSizeContainer/WorldSizeButton
+@onready var world_size_description: Label = $CharacterSelectModal/VBoxContainer/WorldSizeContainer/WorldSizeDescription
+
 # Join modal elements
 @onready var ip_input: LineEdit = $JoinModal/VBoxContainer/IPInput
 @onready var cancel_button: Button = $JoinModal/VBoxContainer/HBoxContainer/CancelButton
 @onready var connect_button: Button = $JoinModal/VBoxContainer/HBoxContainer/ConnectButton
 
 # Settings modal elements
-@onready var volume_slider: HSlider = $SettingsModal/VBoxContainer/VolumeSlider
-@onready var fullscreen_checkbox: CheckBox = $SettingsModal/VBoxContainer/FullscreenCheckbox
-@onready var close_button: Button = $SettingsModal/VBoxContainer/HBoxContainer/CloseButton
+@onready var volume_slider: HSlider = $SettingsModal/MarginContainer/VBoxContainer/VolumeSlider
+@onready var volume_label: Label = $SettingsModal/MarginContainer/VBoxContainer/VolumeLabel
+@onready var music_slider: HSlider = $SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer/MusicSlider
+@onready var music_label: Label = $SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer/MusicLabel
+@onready var sfx_slider: HSlider = $SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer/SFXSlider
+@onready var sfx_label: Label = $SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer/SFXLabel
+@onready var close_button: Button = $SettingsModal/MarginContainer/VBoxContainer/HBoxContainer/CloseButton
 
 # --- State Variables ---
 var selected_character: String = ""  # "bark" or "moss"
+var current_world_size_index: int = 2  # Default to 5x (index 2 in WORLD_SIZE_OPTIONS)
 
 
 # --- Engine Callbacks ---
@@ -62,7 +74,8 @@ func _ready() -> void:
 	
 	# Connect settings signals (not defined in .tscn)
 	volume_slider.value_changed.connect(_on_volume_changed)
-	fullscreen_checkbox.toggled.connect(_on_fullscreen_toggled)
+	music_slider.value_changed.connect(_on_music_volume_changed)
+	sfx_slider.value_changed.connect(_on_sfx_volume_changed)
 	
 	# Load saved settings
 	_load_settings()
@@ -100,7 +113,6 @@ func _on_join_pressed() -> void:
 	Handles the join button press. Shows the join game modal.
 	"""
 	join_modal.show()
-	ip_input.grab_focus()
 
 
 func _on_settings_pressed() -> void:
@@ -112,98 +124,197 @@ func _on_settings_pressed() -> void:
 
 func _on_exit_pressed() -> void:
 	"""
-	Handles the exit button press. Quits the application.
+	Handles the exit button press. Quits the game.
 	"""
-	print("Exiting game...")
 	get_tree().quit()
 
 
-# --- Character Selection Modal Handlers ---
+# --- Character Selection Handlers ---
 
 func _on_bark_panel_clicked(event: InputEvent) -> void:
 	"""
-	Handles clicking on the Bark character panel to select it.
+	Handles mouse clicks on the Bark character panel.
 	"""
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		print("Selected Bark (dog) character...")
+	if event is InputEventMouseButton and event.is_pressed() and event.button_index == MOUSE_BUTTON_LEFT:
 		selected_character = "bark"
 		_update_character_selection_ui()
 
 
 func _on_moss_panel_clicked(event: InputEvent) -> void:
 	"""
-	Handles clicking on the Moss character panel to select it.
+	Handles mouse clicks on the Moss character panel.
 	"""
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		print("Selected Moss (human) character...")
+	if event is InputEventMouseButton and event.is_pressed() and event.button_index == MOUSE_BUTTON_LEFT:
 		selected_character = "moss"
 		_update_character_selection_ui()
 
 
 func _on_play_character_pressed() -> void:
 	"""
-	Handles the Play button press. Starts the game with the selected character.
+	Handles the play button in the character selection modal. Starts hosting a game
+	with the selected character.
 	"""
-	if selected_character == "bark":
-		print("Starting game as Bark (dog)...")
-		NetworkManager.host_game()
-		# Wait a frame for the host setup to complete, then assign dog role
-		await get_tree().process_frame
-		NetworkManager.claim_role("dog")
-		_transition_to_loading_screen("bark")
-	elif selected_character == "moss":
-		print("Starting game as Moss (human)...")
-		NetworkManager.host_game()
-		# Wait a frame for the host setup to complete, then assign human role
-		await get_tree().process_frame
-		NetworkManager.claim_role("human")
-		_transition_to_loading_screen("moss")
+	if selected_character.is_empty():
+		return
+	
+	print("Starting game with character: ", selected_character)
+	
+	# Apply the world size setting before starting the game
+	var world_size_multiplier = WORLD_SIZE_OPTIONS[current_world_size_index]
+	GameConstants.set_world_scale_multiplier(world_size_multiplier)
+	print("MainMenu: Starting game with world size: ", world_size_multiplier, "x")
+	
+	# Set up networking
+	NetworkManager.host_game()
+	
+	# Claim the chosen role
+	var role: String = "human" if selected_character == "moss" else "dog"
+	NetworkManager.claim_role(role)
+	
+	# Start the game
+	_transition_to_loading_screen(role)
+
+
+# --- World Size Handlers ---
+
+func _on_world_size_pressed() -> void:
+	"""Handle world size button press - cycles through size options."""
+	print("MainMenu: World size button pressed")
+	
+	# Cycle to the next world size option
+	current_world_size_index = (current_world_size_index + 1) % WORLD_SIZE_OPTIONS.size()
+	
+	# Update the button text and description
+	_update_world_size_display()
+	
+	# Show info about the change
+	print("MainMenu: World size changed to ", WORLD_SIZE_OPTIONS[current_world_size_index], "x")
+
+
+func _update_world_size_display() -> void:
+	"""Update the world size button text and description to show current selection."""
+	var current_size: float = WORLD_SIZE_OPTIONS[current_world_size_index]
+	
+	# Format the text to show the multiplier
+	if current_size == 1.0:
+		world_size_button.text = "1x (Small)"
+		world_size_description.text = "Compact world perfect for quick exploration and cozy survival."
+	elif current_size == 3.0:
+		world_size_button.text = "3x (Medium)"
+		world_size_description.text = "Balanced world size with plenty of resources and room to roam."
+	elif current_size == 5.0:
+		world_size_button.text = "5x (Large)"
+		world_size_description.text = "Expansive world with abundant wildlife and vast wilderness to explore."
+	elif current_size == 10.0:
+		world_size_button.text = "10x (Huge)"
+		world_size_description.text = "Massive world for epic adventures and endless exploration."
+	else:
+		world_size_button.text = str(current_size) + "x"
+		world_size_description.text = "Custom world size with scaled resources and terrain."
 
 
 func _update_character_selection_ui() -> void:
 	"""
-	Updates the visual state of the character selection UI based on the selected character.
+	Updates the character selection UI based on the currently selected character.
 	"""
-	# Create visual styles for selected and normal states
-	var normal_style = StyleBoxFlat.new()
-	normal_style.bg_color = Color(0.918, 0.878, 0.835, 0.9)  # Normal panel background
-	normal_style.border_color = Color(0.545, 0.357, 0.169, 1)  # Border color
-	normal_style.set_border_width_all(2)
-	normal_style.set_corner_radius_all(8)
+	# Reset all panels to normal state first
+	_animate_panel_hover(bark_panel, false)
+	_animate_panel_hover(moss_panel, false)
 	
-	var selected_style = StyleBoxFlat.new()
-	selected_style.bg_color = Color(0.85, 0.95, 0.85, 0.9)  # Pastel light green background
-	selected_style.border_color = Color(0.545, 0.357, 0.169, 1)  # Same brown border as unselected
-	selected_style.set_border_width_all(4)
-	selected_style.set_corner_radius_all(8)
-	selected_style.shadow_color = Color(0.6, 0.8, 0.6, 0.6)  # Light green shadow
-	selected_style.shadow_size = 6
+	# Constants for selection styling
+	const SELECTED_COLOR: Color = Color(0.85, 0.95, 0.85, 1)  # Light pastel leaf green background
+	const NORMAL_COLOR: Color = Color(0.8, 0.75, 0.7, 1)  # Default panel color
+	const BORDER_COLOR: Color = Color(0.204, 0.306, 0.255, 1)
 	
-	# Apply styles based on selection
+	# Highlight the selected character panel
 	if selected_character == "bark":
-		bark_panel.add_theme_stylebox_override("panel", selected_style)
-		moss_panel.add_theme_stylebox_override("panel", normal_style)
-		# Reset hover effects on selected panel
-		bark_panel.scale = Vector2(1.0, 1.0)
+		bark_panel.scale = Vector2(1.05, 1.05)
 		bark_panel.modulate = Color(1.0, 1.0, 1.0, 1.0)
+		_set_panel_background_color(bark_panel, SELECTED_COLOR)
+		_set_panel_text_colors(bark_panel, true)  # Dark text for selected
+		
+		moss_panel.scale = Vector2(1.0, 1.0)
+		moss_panel.modulate = Color(1.0, 1.0, 1.0, 1.0)
+		_set_panel_background_color(moss_panel, NORMAL_COLOR)
+		_set_panel_text_colors(moss_panel, false)  # Normal text colors
 	elif selected_character == "moss":
-		bark_panel.add_theme_stylebox_override("panel", normal_style)
-		moss_panel.add_theme_stylebox_override("panel", selected_style)
-		# Reset hover effects on selected panel
-		moss_panel.scale = Vector2(1.0, 1.0)
+		moss_panel.scale = Vector2(1.05, 1.05)
 		moss_panel.modulate = Color(1.0, 1.0, 1.0, 1.0)
-	else:
-		# No selection - both panels normal
-		bark_panel.add_theme_stylebox_override("panel", normal_style)
-		moss_panel.add_theme_stylebox_override("panel", normal_style)
-		# Reset hover effects on both panels
+		_set_panel_background_color(moss_panel, SELECTED_COLOR)
+		_set_panel_text_colors(moss_panel, true)  # Dark text for selected
+		
 		bark_panel.scale = Vector2(1.0, 1.0)
 		bark_panel.modulate = Color(1.0, 1.0, 1.0, 1.0)
+		_set_panel_background_color(bark_panel, NORMAL_COLOR)
+		_set_panel_text_colors(bark_panel, false)  # Normal text colors
+	else:
+		# No character selected
+		bark_panel.scale = Vector2(1.0, 1.0)
+		bark_panel.modulate = Color(1.0, 1.0, 1.0, 1.0)
+		_set_panel_background_color(bark_panel, NORMAL_COLOR)
+		_set_panel_text_colors(bark_panel, false)  # Normal text colors
+		
 		moss_panel.scale = Vector2(1.0, 1.0)
 		moss_panel.modulate = Color(1.0, 1.0, 1.0, 1.0)
+		_set_panel_background_color(moss_panel, NORMAL_COLOR)
+		_set_panel_text_colors(moss_panel, false)  # Normal text colors
 	
 	# Enable/disable the play button based on whether a character is selected
 	play_character_button.disabled = selected_character.is_empty()
+
+
+func _set_panel_background_color(panel: PanelContainer, bg_color: Color) -> void:
+	"""
+	Sets the background color of a character selection panel.
+	"""
+	var style_box := StyleBoxFlat.new()
+	style_box.bg_color = bg_color
+	style_box.border_color = Color(0.204, 0.306, 0.255, 1)
+	style_box.set_border_width_all(3)
+	style_box.set_corner_radius_all(12)
+	style_box.shadow_color = Color(0.137, 0.2, 0.165, 0.6)
+	style_box.shadow_size = 8
+	style_box.shadow_offset = Vector2(2, 4)
+	
+	panel.add_theme_stylebox_override("panel", style_box)
+
+
+func _set_panel_text_colors(panel: PanelContainer, is_selected: bool) -> void:
+	"""
+	Sets the text colors for all labels in a character panel based on selection state.
+	"""
+	const SELECTED_NAME_COLOR: Color = Color(0.1, 0.1, 0.1, 1)        # Dark gray/black for names
+	const SELECTED_DESC_COLOR: Color = Color(0.2, 0.2, 0.2, 1)        # Slightly lighter for descriptions
+	const NORMAL_NAME_COLOR: Color = Color(0.098, 0.145, 0.118, 1)    # Original green
+	const NORMAL_DESC_COLOR: Color = Color(0.204, 0.306, 0.255, 1)    # Original darker green
+	
+	var vbox = panel.get_node("VBoxContainer")
+	if not vbox:
+		return
+	
+	# Update character name label
+	var name_label = vbox.get_node("CharacterName")
+	if name_label and name_label is Label:
+		if is_selected:
+			name_label.add_theme_color_override("font_color", SELECTED_NAME_COLOR)
+		else:
+			name_label.add_theme_color_override("font_color", NORMAL_NAME_COLOR)
+	
+	# Update character type label
+	var type_label = vbox.get_node("CharacterType")
+	if type_label and type_label is Label:
+		if is_selected:
+			type_label.add_theme_color_override("font_color", SELECTED_DESC_COLOR)
+		else:
+			type_label.add_theme_color_override("font_color", NORMAL_DESC_COLOR)
+	
+	# Update description label
+	var desc_label = vbox.get_node("Description")
+	if desc_label and desc_label is Label:
+		if is_selected:
+			desc_label.add_theme_color_override("font_color", SELECTED_DESC_COLOR)
+		else:
+			desc_label.add_theme_color_override("font_color", NORMAL_DESC_COLOR)
 
 
 func _animate_panel_hover(panel: PanelContainer, is_hovering: bool) -> void:
@@ -306,20 +417,62 @@ func _on_settings_close_pressed() -> void:
 
 func _on_volume_changed(value: float) -> void:
 	"""
-	Handles volume slider changes. Updates the master volume.
+	Handles master volume slider changes. Updates the effective volumes for music and SFX.
 	"""
-	var volume_db: float = linear_to_db(value / 100.0)
-	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), volume_db)
+	GameConstants.SettingsManager.apply_master_volume_setting(value)
+	# Update the label text with percentage
+	_update_volume_label_text()
+	# Update effective volumes by applying the master multiplier
+	_update_effective_volumes()
 
 
-func _on_fullscreen_toggled(toggled_on: bool) -> void:
+func _on_music_volume_changed(value: float) -> void:
 	"""
-	Handles fullscreen checkbox toggle. Switches between fullscreen and windowed mode.
+	Handles music volume slider changes. Updates effective music volume.
 	"""
-	if toggled_on:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-	else:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	GameConstants.SettingsManager.apply_music_volume_setting(value)
+	# Update the label text with percentage
+	_update_volume_label_text()
+	_update_effective_volumes()
+
+
+func _on_sfx_volume_changed(value: float) -> void:
+	"""
+	Handles SFX volume slider changes. Updates effective SFX volume.
+	"""
+	GameConstants.SettingsManager.apply_sfx_volume_setting(value)
+	# Update the label text with percentage
+	_update_volume_label_text()
+	_update_effective_volumes()
+
+
+func _update_volume_label_text() -> void:
+	"""
+	Updates the volume label text to show percentages in front of the text.
+	"""
+	volume_label.text = str(int(volume_slider.value)) + "% Master Volume"
+	music_label.text = str(int(music_slider.value)) + "% Music Volume"
+	sfx_label.text = str(int(sfx_slider.value)) + "% SFX Volume"
+
+
+func _update_effective_volumes() -> void:
+	"""
+	Updates the effective volumes using master * specific multipliers.
+	"""
+	var master_volume = volume_slider.value
+	var music_volume = music_slider.value
+	var sfx_volume = sfx_slider.value
+	
+	# Calculate effective volumes (master * specific)
+	var effective_music = (master_volume / 100.0) * (music_volume / 100.0) * 100.0
+	var effective_sfx = (master_volume / 100.0) * (sfx_volume / 100.0) * 100.0
+	
+	# Apply the effective volumes to audio buses
+	GameConstants.SettingsManager.apply_effective_music_volume(effective_music)
+	GameConstants.SettingsManager.apply_effective_sfx_volume(effective_sfx)
+
+
+
 
 
 # --- Settings Management ---
@@ -328,40 +481,46 @@ func _load_settings() -> void:
 	"""
 	Loads saved settings from the config file and applies them.
 	"""
-	var config = ConfigFile.new()
-	var err = config.load("user://settings.cfg")
+	var settings = GameConstants.SettingsManager.load_settings()
 	
-	if err != OK:
-		# Use default settings if no config file exists
-		volume_slider.value = 75.0
-		fullscreen_checkbox.button_pressed = false
-		return
+	# Apply volume settings
+	volume_slider.value = settings.get("master_volume", 75.0)
+	music_slider.value = settings.get("music_volume", 75.0)
+	sfx_slider.value = settings.get("sfx_volume", 75.0)
 	
-	# Load volume setting
-	var volume = config.get_value("audio", "master_volume", 75.0)
-	volume_slider.value = volume
-	_on_volume_changed(volume)
+	# Update volume label text with percentages
+	_update_volume_label_text()
 	
-	# Load fullscreen setting
-	var fullscreen = config.get_value("display", "fullscreen", false)
-	fullscreen_checkbox.button_pressed = fullscreen
-	_on_fullscreen_toggled(fullscreen)
+	GameConstants.SettingsManager.apply_master_volume_setting(volume_slider.value)
+	GameConstants.SettingsManager.apply_music_volume_setting(music_slider.value)
+	GameConstants.SettingsManager.apply_sfx_volume_setting(sfx_slider.value)
+	_update_effective_volumes()
+	
+	# Load world size setting specifically for character selection
+	var world_size_multiplier = settings.get("world_size_multiplier", 5.0)
+	
+	# Find the index that matches the saved world size
+	for i in range(WORLD_SIZE_OPTIONS.size()):
+		if abs(WORLD_SIZE_OPTIONS[i] - world_size_multiplier) < 0.1:  # Allow for small floating point differences
+			current_world_size_index = i
+			break
+	
+	_update_world_size_display()
 
 
 func _save_settings() -> void:
 	"""
 	Saves current settings to the config file.
 	"""
-	var config = ConfigFile.new()
+	# Save all volume settings through shared system
+	GameConstants.SettingsManager.save_volume_settings(
+		volume_slider.value,
+		music_slider.value,
+		sfx_slider.value,
+		false  # No fullscreen setting anymore
+	)
 	
-	# Save volume setting
-	config.set_value("audio", "master_volume", volume_slider.value)
-	
-	# Save fullscreen setting
-	config.set_value("display", "fullscreen", fullscreen_checkbox.button_pressed)
-	
-	# Save to file
-	config.save("user://settings.cfg")
+	print("MainMenu: Settings saved")
 
 
 func _transition_to_loading_screen(character_role: String) -> void:

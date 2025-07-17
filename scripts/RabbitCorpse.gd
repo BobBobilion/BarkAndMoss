@@ -37,7 +37,7 @@ func _on_interacted(player: Node3D) -> void:
 	if is_grabbed:
 		return
 	
-	# Check if it's a human player with a hatchet (for processing)
+	# Check if it's a human player with an axe (for processing)
 	if player.is_in_group("human_player"):
 		_process_corpse(player)
 	# Check if it's a dog player (for grabbing)
@@ -46,9 +46,9 @@ func _on_interacted(player: Node3D) -> void:
 
 
 func _process_corpse(human_player: Node3D) -> void:
-	"""Process the corpse to get meat and sinew (human with hatchet)."""
-	# Check if the human has a hatchet equipped  
-	if human_player.has_method("get_equipped_item") and human_player.get_equipped_item() == "Hatchet":
+	"""Process the corpse to get meat and sinew (human with axe)."""
+	# Check if the human has an axe equipped  
+	if human_player.has_method("get_equipped_item") and human_player.get_equipped_item() == "Axe":
 		print("Processing rabbit corpse for meat and sinew")
 		
 		# Play processing animation
@@ -68,7 +68,7 @@ func _process_corpse(human_player: Node3D) -> void:
 		else:
 			print("Inventory full - could not process corpse")
 	else:
-		print("Need a hatchet to process the corpse")
+		print("Need an axe to process the corpse")
 
 
 func _grab_corpse(dog_player: Node3D) -> void:

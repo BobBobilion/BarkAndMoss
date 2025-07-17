@@ -37,7 +37,7 @@ func _on_interacted(player: Node3D) -> void:
 	if is_grabbed:
 		return
 	
-	# Check if it's a human player with a hatchet (for processing)
+	# Check if it's a human player with an axe (for processing)
 	if player.is_in_group("human_player"):
 		_process_corpse(player)
 	# Check if it's a dog player (for grabbing)
@@ -46,19 +46,21 @@ func _on_interacted(player: Node3D) -> void:
 
 
 func _process_corpse(player: Node3D) -> void:
-	"""Process the deer corpse into raw meat (human with hatchet)."""
-	# Check if the human has a hatchet equipped  
-	if player.has_method("get_equipped_item") and player.get_equipped_item() == "Hatchet":
-		print("Processing deer corpse for meat")
+	"""Process the deer corpse into raw meat and hide (human with axe)."""
+	# Check if the human has an axe equipped
+	if player.has_method("get_equipped_item") and player.get_equipped_item() == "Axe":
+		print("Processing deer corpse for meat and hide")
 		
 		# Play processing animation
 		if player.has_method("start_chopping_animation"):
 			player.start_chopping_animation()
 		
-		# Add multiple raw meat to player's inventory (deer gives more meat)
+		# Add raw meat and hide to player's inventory (deer gives both)
 		var meat_count: int = 2  # Deer gives 2 raw meat
+		var hide_count: int = 1  # Deer gives 1 hide
 		var success: bool = true
 		
+		# Add raw meat
 		for i in range(meat_count):
 			if player.has_method("add_item_to_inventory"):
 				success = player.add_item_to_inventory("Raw Meat") and success
@@ -66,14 +68,20 @@ func _process_corpse(player: Node3D) -> void:
 				success = false
 				break
 		
+		# Add hide
+		if success and player.has_method("add_item_to_inventory"):
+			success = player.add_item_to_inventory("Hide") and success
+		else:
+			success = false
+		
 		if success:
-			print("Deer processed: gained %d Raw Meat" % meat_count)
+			print("Deer processed: gained %d Raw Meat and %d Hide" % [meat_count, hide_count])
 			# Remove the corpse after processing
 			queue_free()
 		else:
 			print("Inventory full - could not process corpse")
 	else:
-		print("Need a hatchet to process the corpse")
+		print("Need an axe to process the corpse")
 
 
 func _grab_corpse(dog_player: Node3D) -> void:

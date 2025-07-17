@@ -120,13 +120,11 @@ layout_mode = 2
 [node name="CancelButton" type="Button" parent="JoinModal/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.098, 0.145, 0.118, 1)
 text = "Cancel"
 
 [node name="ConnectButton" type="Button" parent="JoinModal/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.098, 0.145, 0.118, 1)
 text = "Connect"
 
 [node name="CharacterSelectModal" type="PanelContainer" parent="."]
@@ -138,9 +136,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -250.0
-offset_top = -200.0
+offset_top = -250.0
 offset_right = 250.0
-offset_bottom = 200.0
+offset_bottom = 250.0
 grow_horizontal = 2
 grow_vertical = 2
 
@@ -267,11 +265,49 @@ layout_mode = 2
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
 
+[node name="WorldSizeContainer" type="VBoxContainer" parent="CharacterSelectModal/VBoxContainer"]
+layout_mode = 2
+
+[node name="WorldSizeLabel" type="Label" parent="CharacterSelectModal/VBoxContainer/WorldSizeContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.098, 0.145, 0.118, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 0
+theme_override_font_sizes/font_size = 18
+text = "World Size"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="CharacterSelectModal/VBoxContainer/WorldSizeContainer"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+
+[node name="WorldSizeButton" type="Button" parent="CharacterSelectModal/VBoxContainer/WorldSizeContainer"]
+custom_minimum_size = Vector2(200, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 16
+text = "5x (Large)"
+
+[node name="WorldSizeDescription" type="Label" parent="CharacterSelectModal/VBoxContainer/WorldSizeContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.204, 0.306, 0.255, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 0
+theme_override_font_sizes/font_size = 12
+text = "Larger worlds have more trees, animals, and resources to explore."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Spacer6" type="Control" parent="CharacterSelectModal/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
 [node name="PlayButton" type="Button" parent="CharacterSelectModal/VBoxContainer"]
 custom_minimum_size = Vector2(200, 50)
 layout_mode = 2
 size_flags_horizontal = 4
-theme_override_colors/font_color = Color(0.098, 0.145, 0.118, 1)
 disabled = true
 text = "Play"
 
@@ -283,7 +319,6 @@ layout_mode = 2
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 size_flags_horizontal = 4
-theme_override_colors/font_color = Color(0.098, 0.145, 0.118, 1)
 text = "Back"
 
 [node name="Spacer5" type="Control" parent="CharacterSelectModal/VBoxContainer"]
@@ -298,48 +333,106 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -200.0
-offset_top = -150.0
-offset_right = 200.0
-offset_bottom = 150.0
+offset_left = -300.0
+offset_top = -200.0
+offset_right = 300.0
+offset_bottom = 200.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="SettingsModal"]
+[node name="MarginContainer" type="MarginContainer" parent="SettingsModal"]
+layout_mode = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 30
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 30
+
+[node name="VBoxContainer" type="VBoxContainer" parent="SettingsModal/MarginContainer"]
 layout_mode = 2
 
-[node name="Title" type="Label" parent="SettingsModal/VBoxContainer"]
+[node name="Title" type="Label" parent="SettingsModal/MarginContainer/VBoxContainer"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.918, 0.878, 0.835, 1)
+theme_override_colors/font_shadow_color = Color(0.137, 0.2, 0.165, 1)
+theme_override_constants/shadow_offset_x = 3
+theme_override_constants/shadow_offset_y = 3
+theme_override_font_sizes/font_size = 48
 text = "Settings"
 horizontal_alignment = 1
 
-[node name="Spacer" type="Control" parent="SettingsModal/VBoxContainer"]
-custom_minimum_size = Vector2(0, 20)
+[node name="Spacer" type="Control" parent="SettingsModal/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 35)
 layout_mode = 2
 
-[node name="VolumeLabel" type="Label" parent="SettingsModal/VBoxContainer"]
+[node name="VolumeLabel" type="Label" parent="SettingsModal/MarginContainer/VBoxContainer"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 0
+theme_override_font_sizes/font_size = 22
 text = "Master Volume"
 
-[node name="VolumeSlider" type="HSlider" parent="SettingsModal/VBoxContainer"]
+[node name="VolumeSlider" type="HSlider" parent="SettingsModal/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 45)
 layout_mode = 2
 value = 75.0
 
-[node name="FullscreenCheckbox" type="CheckBox" parent="SettingsModal/VBoxContainer"]
-layout_mode = 2
-text = "Fullscreen"
-
-[node name="Spacer2" type="Control" parent="SettingsModal/VBoxContainer"]
-custom_minimum_size = Vector2(0, 20)
+[node name="Spacer4" type="Control" parent="SettingsModal/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 15)
 layout_mode = 2
 
-[node name="HBoxContainer" type="HBoxContainer" parent="SettingsModal/VBoxContainer"]
+[node name="SubVolumeContainer" type="MarginContainer" parent="SettingsModal/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 30
+
+[node name="VBoxContainer" type="VBoxContainer" parent="SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer"]
 layout_mode = 2
 
-[node name="CloseButton" type="Button" parent="SettingsModal/VBoxContainer/HBoxContainer"]
+[node name="MusicLabel" type="Label" parent="SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 0
+theme_override_font_sizes/font_size = 20
+text = "Music Volume"
+
+[node name="MusicSlider" type="HSlider" parent="SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 35)
+layout_mode = 2
+value = 75.0
+
+[node name="Spacer5" type="Control" parent="SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+
+[node name="SFXLabel" type="Label" parent="SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 0
+theme_override_font_sizes/font_size = 20
+text = "SFX Volume"
+
+[node name="SFXSlider" type="HSlider" parent="SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 35)
+layout_mode = 2
+value = 75.0
+
+[node name="Spacer2" type="Control" parent="SettingsModal/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 35)
+layout_mode = 2
+
+[node name="HBoxContainer" type="HBoxContainer" parent="SettingsModal/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="CloseButton" type="Button" parent="SettingsModal/MarginContainer/VBoxContainer/HBoxContainer"]
+custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.3, 0.4, 0.35, 1)
+theme_override_font_sizes/font_size = 22
 text = "Close"
 
 [connection signal="pressed" from="VBoxContainer/PlayButton" to="." method="_on_play_pressed"]
@@ -350,6 +443,7 @@ text = "Close"
 [connection signal="pressed" from="JoinModal/VBoxContainer/HBoxContainer/ConnectButton" to="." method="_on_connect_pressed"]
 [connection signal="gui_input" from="CharacterSelectModal/VBoxContainer/CharacterContainer/BarkPanel" to="." method="_on_bark_panel_clicked"]
 [connection signal="gui_input" from="CharacterSelectModal/VBoxContainer/CharacterContainer/MossPanel" to="." method="_on_moss_panel_clicked"]
+[connection signal="pressed" from="CharacterSelectModal/VBoxContainer/WorldSizeContainer/WorldSizeButton" to="." method="_on_world_size_pressed"]
 [connection signal="pressed" from="CharacterSelectModal/VBoxContainer/PlayButton" to="." method="_on_play_character_pressed"]
 [connection signal="pressed" from="CharacterSelectModal/VBoxContainer/BackButton" to="." method="_on_character_back_pressed"]
-[connection signal="pressed" from="SettingsModal/VBoxContainer/HBoxContainer/CloseButton" to="." method="_on_settings_close_pressed"]
+[connection signal="pressed" from="SettingsModal/MarginContainer/VBoxContainer/HBoxContainer/CloseButton" to="." method="_on_settings_close_pressed"]

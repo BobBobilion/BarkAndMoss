@@ -22,6 +22,12 @@ var pending_interaction_target: Node = null
 var chop_timer: Timer
 
 func _ready() -> void:
+	print("=== PLAYER READY STARTED ===")
+	print("Player: Node name: ", name)
+	print("Player: Scene file path: ", get_tree().current_scene.scene_file_path if get_tree().current_scene else "None")
+	print("Player: Multiplayer authority: ", is_multiplayer_authority())
+	print("Player: Has multiplayer peer: ", multiplayer.has_multiplayer_peer())
+	
 	# Wire up controller dependencies - using new camera hierarchy
 	var camera_node: Camera3D = $CameraRootOffset/HorizontalPivot/VerticalPivot/SpringArm3D/Camera3D
 	var horizontal_pivot: Node3D = $CameraRootOffset/HorizontalPivot
@@ -33,22 +39,29 @@ func _ready() -> void:
 	equipment_controller.setup(self, $AdventurerModel, camera_node)
 
 	var is_local_player: bool = is_multiplayer_authority() or not multiplayer.has_multiplayer_peer()
+	print("Player: Is local player: ", is_local_player)
 	
 	if is_local_player:
+		print("Player: Setting up as local player...")
 		camera_node.make_current()
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+		print("Player: About to call add_hud()")
 		call_deferred("add_hud")
 		if PauseManager:
 			PauseManager.register_player(self)
+		print("Player: Local player setup complete")
 	else:
+		print("Player: Setting up as remote player...")
 		camera_node.enabled = false
 
 	add_to_group("human_player")
+	print("Player: Added to human_player group")
 	
 	# Connect signals between controllers
 	equipment_controller.action_started.connect(func(): is_performing_action = true)
 	equipment_controller.action_finished.connect(func(): is_performing_action = false)
 	equipment_controller.aiming_status_changed.connect(camera_controller.set_aiming)
+	print("=== PLAYER READY FINISHED ===")
 
 func _physics_process(delta: float) -> void:
 	if not is_multiplayer_authority() and multiplayer.has_multiplayer_peer():
@@ -134,28 +147,60 @@ func _on_action_animation_finished() -> void:
 		chop_timer = null
 
 func add_hud() -> void:
+	print("Player: Starting HUD creation...")
 	var hud_scene: PackedScene = preload("res://scenes/HUD.tscn")
 	hud_instance = hud_scene.instantiate()
-	get_tree().current_scene.add_child.call_deferred(hud_instance)
+	print("Player: HUD instantiated, adding to scene tree...")
+	
+	# Create a persistent UI layer that won't be affected by scene changes
+	var viewport = get_viewport()
+	
+	# Look for existing UI layer or create one
+	var ui_layer = viewport.get_node_or_null("UILayer")
+	if not ui_layer:
+		print("Player: Creating UILayer for persistent UI")
+		ui_layer = CanvasLayer.new()
+		ui_layer.name = "UILayer"
+		ui_layer.layer = 10  # Render on top
+		viewport.add_child(ui_layer)
+	else:
+		print("Player: Found existing UILayer")
+	
+	# Add HUD to the persistent UI layer
+	ui_layer.add_child(hud_instance)
+	print("Player: HUD added to UILayer")
+	print("Player: HUD parent: ", hud_instance.get_parent().name if hud_instance.get_parent() else "None")
 
 	# Pass HUD instance to equipment controller
 	equipment_controller.set_hud(hud_instance)
+	print("Player: HUD instance passed to equipment controller")
 
+	# Use call_deferred to ensure the scene tree is ready
+	call_deferred("_connect_hotbar_signals")
+	call_deferred("_add_test_items")
+
+func _connect_hotbar_signals() -> void:
+	"""Connect hotbar signals after the HUD is added to the scene tree."""
+	print("Player: Connecting hotbar signals...")
 	if is_instance_valid(hud_instance) and hud_instance.has_node("Hotbar"):
 		var hotbar = hud_instance.get_node("Hotbar")
 		if hotbar and not hotbar.is_connected("selection_changed", equipment_controller.on_hotbar_selection_changed):
 			hotbar.connect("selection_changed", equipment_controller.on_hotbar_selection_changed)
-
-	call_deferred("_add_test_items")
+			print("Player: Hotbar signals connected successfully")
+		else:
+			print("Player: Error - Could not connect hotbar signals")
+	else:
+		print("Player: Error - HUD instance invalid or hotbar not found")
 
 func _add_test_items() -> void:
 	if not OS.is_debug_build(): return
 	if is_instance_valid(hud_instance) and hud_instance.has_node("Inventory"):
 		var inventory: Node = hud_instance.get_node("Inventory")
 		if inventory.has_method("add_item"):
-			inventory.add_item("Hatchet")
+			inventory.add_item("Axe")
 			inventory.add_item("Wood")
 			inventory.add_item("Raw Meat")
+			inventory.add_item("Hide")
 			inventory.add_item("Bow")
 
 func add_item_to_inventory(item_name: String) -> bool:

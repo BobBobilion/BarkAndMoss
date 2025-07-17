@@ -9,21 +9,21 @@ signal item_used(item_name: String)
 signal item_equipped(item_name: String)
 
 # --- Constants ---
-const GRID_COLUMNS: int = 3
-const GRID_ROWS: int = 4
-const SLOT_SIZE: Vector2 = Vector2(64, 64)
-const SLOT_SPACING: Vector2 = Vector2(8, 8)
+const GRID_COLUMNS: int = GameConstants.UI.INVENTORY_GRID_COLUMNS
+const GRID_ROWS: int = GameConstants.UI.INVENTORY_GRID_ROWS
+const SLOT_SIZE: Vector2 = GameConstants.UI.SLOT_SIZE
+const SLOT_SPACING: Vector2 = GameConstants.UI.SLOT_SPACING
 const EMPTY_SLOT: String = ""
+const ICON_SIZE: int = GameConstants.UI.SLOT_ICON_SIZE
 
-# Style Constants - Rustic Bark & Moss Theme
-const FONT_SIZE_ITEM: int = 12
-const FONT_SIZE_TOOLTIP: int = 14
-const COLOR_BACKGROUND: Color = Color(0.137, 0.2, 0.165, 0.85)
-const COLOR_SLOT_NORMAL: Color = Color(0.8, 0.75, 0.7, 0.9)
-const COLOR_SLOT_SELECTED: Color = Color(0.98, 0.94, 0.89, 1)
-const COLOR_SLOT_BORDER: Color = Color(0.545, 0.357, 0.169, 1)
-const COLOR_TEXT: Color = Color(0.918, 0.878, 0.835, 1)
-const COLOR_TEXT_SHADOW: Color = Color(0.137, 0.2, 0.165, 1)
+# Using shared style constants from GameConstants.UI
+const FONT_SIZE_TOOLTIP: int = GameConstants.UI.FONT_SIZE_TOOLTIP
+const COLOR_BACKGROUND: Color = GameConstants.UI.COLOR_BACKGROUND
+const COLOR_SLOT_NORMAL: Color = GameConstants.UI.COLOR_SLOT_NORMAL
+const COLOR_SLOT_SELECTED: Color = GameConstants.UI.COLOR_SLOT_SELECTED
+const COLOR_SLOT_BORDER: Color = GameConstants.UI.COLOR_SLOT_BORDER
+const COLOR_TEXT: Color = GameConstants.UI.COLOR_TEXT
+const COLOR_TEXT_SHADOW: Color = GameConstants.UI.COLOR_TEXT_SHADOW
 
 # --- Node References ---
 @onready var background: ColorRect = $Background
@@ -39,15 +39,14 @@ var is_open: bool = false
 var player: CharacterBody3D
 
 # --- Item Definitions ---
-var item_descriptions: Dictionary = {
-	"Hatchet": "A trusty wooden axe. Perfect for chopping trees and clearing a path.",
-	"Bow": "A simple but effective hunting bow. Great for taking down prey from a distance.",
-	"Wood": "Freshly cut timber. Useful for crafting and building.",
-	"Sinew": "Tough animal tendon. Essential for crafting more advanced tools.",
-	"Raw Meat": "A bit too chewy to eat. If only I had a way to cook it...",
-	"Cooked Meat": "A hearty meal that'll keep me going. Restores hunger when consumed.",
-	EMPTY_SLOT: "An empty slot. Ready to hold treasures."
-}
+# Using centralized item descriptions from GameConstants
+func get_item_description(item_name: String) -> String:
+	# Handle empty slot case without modifying the original dictionary
+	if item_name == EMPTY_SLOT:
+		return "An empty slot. Ready to hold treasures."
+	
+	# Get description from centralized constants
+	return GameConstants.ITEM_DESCRIPTIONS.get(item_name, "Unknown item.")
 
 
 # --- Engine Callbacks ---
@@ -71,8 +70,10 @@ func _input(event: InputEvent) -> void:
 	
 	# Handle inventory toggle (hold Tab)
 	if event.is_action_pressed("inventory"):
+		print("Inventory: Tab pressed - opening inventory")
 		open_inventory()
 	elif event.is_action_released("inventory"):
+		print("Inventory: Tab released - closing inventory")
 		close_inventory()
 
 
@@ -146,6 +147,9 @@ func _setup_ui() -> void:
 	tooltip_label.add_theme_color_override("font_color", COLOR_TEXT)
 
 
+
+
+
 func _create_inventory_grid() -> void:
 	"""Creates and configures all the inventory slot controls."""
 	for child in grid_container.get_children():
@@ -159,7 +163,7 @@ func _create_inventory_grid() -> void:
 
 
 func _create_inventory_slot(index: int) -> Panel:
-	"""Creates a single inventory slot panel with rustic Bark & Moss styling."""
+	"""Creates a single inventory slot panel with TextureRect for item icons."""
 	var slot := Panel.new()
 	slot.custom_minimum_size = SLOT_SIZE
 	slot.name = "Slot" + str(index)
@@ -175,16 +179,26 @@ func _create_inventory_slot(index: int) -> Panel:
 	style.shadow_offset = Vector2(1, 2)
 	slot.add_theme_stylebox_override("panel", style)
 	
-	var label := Label.new()
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_font_size_override("font_size", FONT_SIZE_ITEM)
-	label.add_theme_color_override("font_color", COLOR_TEXT)
-	label.add_theme_color_override("font_shadow_color", COLOR_TEXT_SHADOW)
-	label.add_theme_constant_override("shadow_offset_x", 1)
-	label.add_theme_constant_override("shadow_offset_y", 1)
-	slot.add_child(label)
+	# Add TextureRect for item icon that fills the entire slot with rounded corners
+	var texture_rect := TextureRect.new()
+	texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE  # Allow texture to expand/shrink to fill
+	texture_rect.stretch_mode = TextureRect.STRETCH_SCALE  # Scale texture to fill entire rect, making it square
+	
+	# Make it fill the entire slot area minus the border
+	var border_width = 2
+	texture_rect.position = Vector2(border_width, border_width)
+	texture_rect.size = Vector2(SLOT_SIZE.x - border_width * 2, SLOT_SIZE.y - border_width * 2)
+	
+	# Add rounded corners to match the slot style - clip the texture
+	var texture_style := StyleBoxFlat.new()
+	texture_style.bg_color = Color.TRANSPARENT  # Keep transparent background
+	texture_style.set_corner_radius_all(4)  # Slightly smaller radius than slot (6 - border = 4)
+	texture_rect.add_theme_stylebox_override("normal", texture_style)
+	
+	# Set clip contents to true so the rounded corners actually clip the image
+	texture_rect.clip_contents = true
+	
+	slot.add_child(texture_rect)
 	
 	slot.mouse_filter = MOUSE_FILTER_PASS
 	slot.mouse_entered.connect(_on_slot_mouse_entered.bind(index))
@@ -222,13 +236,14 @@ func _update_inventory_display() -> void:
 	"""Refreshes the visual state of each slot to match the inventory data."""
 	for i in range(slot_controls.size()):
 		var slot: Control = slot_controls[i]
-		var label: Label = slot.get_child(0) as Label
-		# Show item names, but only if the slot is not empty
+		var texture_rect: TextureRect = slot.get_child(0) as TextureRect
+		
+		# Set item icon texture using the centralized icon manager, or clear if slot is empty
 		var item: String = inventory_items[i]
 		if item != EMPTY_SLOT:
-			label.text = item
+			texture_rect.texture = GameConstants.ItemIconManager.get_item_icon(item)
 		else:
-			label.text = ""
+			texture_rect.texture = null
 
 
 # --- Private Methods (Event Handlers) ---
@@ -239,7 +254,7 @@ func _on_slot_mouse_entered(slot_index: int) -> void:
 		return
 	
 	var item: String = inventory_items[slot_index]
-	var description: String = item_descriptions.get(item, "")
+	var description: String = get_item_description(item)
 	
 	if not description.is_empty():
 		tooltip_label.text = description

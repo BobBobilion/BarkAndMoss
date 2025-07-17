@@ -74,6 +74,8 @@ shadow_offset = Vector2(2, 4)
 
 [resource]
 Button/colors/font_color = Color(0.098, 0.145, 0.118, 1)
+Button/colors/font_disabled_color = Color(0.098, 0.145, 0.118, 0.5)
+Button/colors/font_focus_color = Color(0.137, 0.2, 0.165, 1)
 Button/colors/font_hover_color = Color(0.137, 0.2, 0.165, 1)
 Button/colors/font_pressed_color = Color(0.545, 0.357, 0.169, 1)
 Button/colors/font_shadow_color = Color(0.918, 0.878, 0.835, 0.8)
@@ -86,6 +88,10 @@ Button/styles/hover = SubResource("StyleBoxFlat_2")
 Button/styles/normal = SubResource("StyleBoxFlat_1")
 Button/styles/pressed = SubResource("StyleBoxFlat_3")
 CheckBox/colors/font_color = Color(0.204, 0.306, 0.255, 1)
+CheckBox/colors/font_disabled_color = Color(0.204, 0.306, 0.255, 0.5)
+CheckBox/colors/font_focus_color = Color(0.918, 0.878, 0.835, 1)
+CheckBox/colors/font_hover_color = Color(0.918, 0.878, 0.835, 1)
+CheckBox/colors/font_pressed_color = Color(0.545, 0.357, 0.169, 1)
 CheckBox/font_sizes/font_size = 16
 ConfirmationDialog/constants/button_margin = 16
 HSlider/colors/grabber_highlight = Color(0.545, 0.357, 0.169, 1)

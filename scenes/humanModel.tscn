@@ -15,13 +15,13 @@ bone_idx = 41
 [node name="Axe" parent="RootNode/CharacterArmature/Skeleton3D/BoneAttachmentRight" index="0" instance=ExtResource("2_508eb")]
 transform = Transform3D(-0.000219863, -0.000964093, -0.000148955, -0.000965568, 0.000236833, -0.000107657, 0.000139069, 0.000120156, -0.000982967, -0.000828952, 0.0013764, -2.20677e-05)
 
+[node name="Bow" parent="RootNode/CharacterArmature/Skeleton3D/BoneAttachmentRight" index="1" instance=ExtResource("3_508eb")]
+transform = Transform3D(-0.00121335, -0.00271975, -0.000361674, -0.00273036, 0.00115798, 0.000451949, -0.000270123, 0.000511955, -0.00294364, -0.000282127, 0.000189573, -0.000464028)
+
 [node name="BoneAttachmentLeft" type="BoneAttachment3D" parent="RootNode/CharacterArmature/Skeleton3D" index="6"]
 transform = Transform3D(-0.0964159, 0.134478, 0.986215, -0.977647, -0.19879, -0.0684716, 0.186842, -0.970772, 0.150639, 0.00265033, -0.000412639, 0.00992598)
 bone_name = "Index1.L"
 bone_idx = 13
-
-[node name="Bow" parent="RootNode/CharacterArmature/Skeleton3D/BoneAttachmentLeft" index="0" instance=ExtResource("3_508eb")]
-transform = Transform3D(0.000627764, 0.00293355, 1.51256e-05, -0.00292166, 0.000626597, -0.000267046, -0.000264291, 4.115e-05, 0.00298806, -0.000224352, 0.000449062, -0.000331408)
 
 [node name="BoneAttachment3D" type="BoneAttachment3D" parent="RootNode/CharacterArmature/Skeleton3D" index="7"]
 transform = Transform3D(0.999987, -0.0024739, -0.00435395, -0.00460985, -0.115103, -0.993343, 0.00195627, 0.993351, -0.115113, 4.41544e-05, -0.000658819, 0.0134678)

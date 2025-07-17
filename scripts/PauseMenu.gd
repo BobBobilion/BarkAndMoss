@@ -15,9 +15,13 @@ const MAIN_MENU_SCENE_PATH: String = "res://scenes/MainMenu.tscn"
 
 # Settings modal elements
 @onready var settings_modal: PanelContainer = $SettingsModal
-@onready var volume_slider: HSlider = $SettingsModal/VBoxContainer/VolumeSlider
-@onready var fullscreen_checkbox: CheckBox = $SettingsModal/VBoxContainer/FullscreenCheckbox
-@onready var settings_close_button: Button = $SettingsModal/VBoxContainer/HBoxContainer/CloseButton
+@onready var volume_slider: HSlider = $SettingsModal/MarginContainer/VBoxContainer/VolumeSlider
+@onready var volume_label: Label = $SettingsModal/MarginContainer/VBoxContainer/VolumeLabel
+@onready var music_slider: HSlider = $SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer/MusicSlider
+@onready var music_label: Label = $SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer/MusicLabel
+@onready var sfx_slider: HSlider = $SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer/SFXSlider
+@onready var sfx_label: Label = $SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer/SFXLabel
+@onready var settings_close_button: Button = $SettingsModal/MarginContainer/VBoxContainer/HBoxContainer/CloseButton
 
 # Confirmation dialog
 @onready var confirmation_dialog: ConfirmationDialog = $ConfirmationDialog
@@ -47,7 +51,8 @@ func _ready() -> void:
 	
 	# Connect settings modal signals (close button already connected in scene file)
 	volume_slider.value_changed.connect(_on_volume_changed)
-	fullscreen_checkbox.toggled.connect(_on_fullscreen_toggled)
+	music_slider.value_changed.connect(_on_music_volume_changed)
+	sfx_slider.value_changed.connect(_on_sfx_volume_changed)
 	
 	# Connect confirmation dialog
 	confirmation_dialog.confirmed.connect(_on_confirmation_confirmed)
@@ -167,17 +172,55 @@ func _on_settings_close_pressed() -> void:
 
 
 func _on_volume_changed(value: float) -> void:
-	"""Handle volume slider changes."""
-	var volume_db: float = linear_to_db(value / 100.0)
-	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), volume_db)
+	"""Handle master volume slider changes. Updates the effective volumes for music and SFX."""
+	GameConstants.SettingsManager.apply_master_volume_setting(value)
+	# Update the label text with percentage
+	_update_volume_label_text()
+	# Update effective volumes by applying the master multiplier
+	_update_effective_volumes()
 
 
-func _on_fullscreen_toggled(toggled_on: bool) -> void:
-	"""Handle fullscreen checkbox toggle."""
-	if toggled_on:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-	else:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+func _on_music_volume_changed(value: float) -> void:
+	"""Handle music volume slider changes. Updates effective music volume."""
+	GameConstants.SettingsManager.apply_music_volume_setting(value)
+	# Update the label text with percentage
+	_update_volume_label_text()
+	_update_effective_volumes()
+
+
+func _on_sfx_volume_changed(value: float) -> void:
+	"""Handle SFX volume slider changes. Updates effective SFX volume."""
+	GameConstants.SettingsManager.apply_sfx_volume_setting(value)
+	# Update the label text with percentage
+	_update_volume_label_text()
+	_update_effective_volumes()
+
+
+func _update_effective_volumes() -> void:
+	"""Updates the effective volumes using master * specific multipliers."""
+	var master_volume = volume_slider.value
+	var music_volume = music_slider.value
+	var sfx_volume = sfx_slider.value
+	
+	# Calculate effective volumes (master * specific)
+	var effective_music = (master_volume / 100.0) * (music_volume / 100.0) * 100.0
+	var effective_sfx = (master_volume / 100.0) * (sfx_volume / 100.0) * 100.0
+	
+	# Apply the effective volumes to audio buses
+	GameConstants.SettingsManager.apply_effective_music_volume(effective_music)
+	GameConstants.SettingsManager.apply_effective_sfx_volume(effective_sfx)
+
+
+func _update_volume_label_text() -> void:
+	"""
+	Updates the volume label text to show percentages in front of the text.
+	"""
+	volume_label.text = str(int(volume_slider.value)) + "% Master Volume"
+	music_label.text = str(int(music_slider.value)) + "% Music Volume"
+	sfx_label.text = str(int(sfx_slider.value)) + "% SFX Volume"
+
+
+
 
 
 # --- Confirmation Dialog Handler ---
@@ -228,38 +271,32 @@ func _quit_game() -> void:
 
 func _load_settings() -> void:
 	"""Load saved settings from the config file and apply them."""
-	var config = ConfigFile.new()
-	var err = config.load("user://settings.cfg")
+	var settings = GameConstants.SettingsManager.load_settings()
 	
-	if err != OK:
-		# Use default settings if no config file exists
-		volume_slider.value = 75.0
-		fullscreen_checkbox.button_pressed = false
-		return
+	# Apply volume settings
+	volume_slider.value = settings.get("master_volume", 75.0)
+	music_slider.value = settings.get("music_volume", 75.0)
+	sfx_slider.value = settings.get("sfx_volume", 75.0)
 	
-	# Load volume setting
-	var volume = config.get_value("audio", "master_volume", 75.0)
-	volume_slider.value = volume
-	_on_volume_changed(volume)
+	# Update volume label text with percentages
+	_update_volume_label_text()
 	
-	# Load fullscreen setting
-	var fullscreen = config.get_value("display", "fullscreen", false)
-	fullscreen_checkbox.button_pressed = fullscreen
-	_on_fullscreen_toggled(fullscreen)
+	GameConstants.SettingsManager.apply_master_volume_setting(volume_slider.value)
+	GameConstants.SettingsManager.apply_music_volume_setting(music_slider.value)
+	GameConstants.SettingsManager.apply_sfx_volume_setting(sfx_slider.value)
+	_update_effective_volumes()
 
 
 func _save_settings() -> void:
 	"""Save current settings to the config file."""
-	var config = ConfigFile.new()
+	GameConstants.SettingsManager.save_volume_settings(
+		volume_slider.value,
+		music_slider.value,
+		sfx_slider.value,
+		false  # No fullscreen setting anymore
+	)
 	
-	# Save volume setting
-	config.set_value("audio", "master_volume", volume_slider.value)
-	
-	# Save fullscreen setting
-	config.set_value("display", "fullscreen", fullscreen_checkbox.button_pressed)
-	
-	# Save to file
-	config.save("user://settings.cfg")
+	print("PauseMenu: Settings saved")
 
 
 # --- Utility Methods ---
