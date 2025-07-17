@@ -3,7 +3,7 @@ extends CharacterBody3D
 
 # --- Constants ---
 const WANDER_SPEED: float = 2.0
-const FLEE_SPEED: float = 4.0
+const FLEE_SPEED: float = 5.0
 const WANDER_RADIUS: float = 10.0
 const FLEE_DISTANCE: float = 8.0
 const DIRECTION_CHANGE_TIME: float = 3.0

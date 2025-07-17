@@ -6,6 +6,7 @@ extends Control
 const DEFAULT_IP: String = "127.0.0.1"
 const LOBBY_SCENE_PATH: String = "res://scenes/Lobby.tscn"
 const MAIN_SCENE_PATH: String = "res://scenes/Main.tscn"
+const LOADING_SCENE_PATH: String = "res://scenes/LoadingScreen.tscn"
 
 # --- Node References ---
 # Main menu buttons
@@ -149,14 +150,14 @@ func _on_play_character_pressed() -> void:
 		# Wait a frame for the host setup to complete, then assign dog role
 		await get_tree().process_frame
 		NetworkManager.claim_role("dog")
-		get_tree().change_scene_to_file(MAIN_SCENE_PATH)
+		_transition_to_loading_screen("bark")
 	elif selected_character == "moss":
 		print("Starting game as Moss (human)...")
 		NetworkManager.host_game()
 		# Wait a frame for the host setup to complete, then assign human role
 		await get_tree().process_frame
 		NetworkManager.claim_role("human")
-		get_tree().change_scene_to_file(MAIN_SCENE_PATH)
+		_transition_to_loading_screen("moss")
 
 
 func _update_character_selection_ui() -> void:
@@ -361,3 +362,13 @@ func _save_settings() -> void:
 	
 	# Save to file
 	config.save("user://settings.cfg")
+
+
+func _transition_to_loading_screen(character_role: String) -> void:
+	"""Transition to the loading screen with character role information."""
+	print("MainMenu: Transitioning to loading screen for role: %s" % character_role)
+	
+	# Change to loading screen - the LoadingScreen will get character role from NetworkManager
+	var error: Error = get_tree().change_scene_to_file(LOADING_SCENE_PATH)
+	if error != OK:
+		printerr("MainMenu: Failed to change scene to LoadingScreen.tscn (error: %d)" % error)

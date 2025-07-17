@@ -1,0 +1,76 @@
+[gd_scene load_steps=4 format=3 uid="uid://c3d4e5f6g7h8i"]
+
+[ext_resource type="Script" path="res://scripts/LoadingScreen.gd" id="1_loading_script"]
+[ext_resource type="Theme" uid="uid://cyoxrwsnvsuny" path="res://ui/bark_moss_theme.tres" id="2_theme"]
+[ext_resource type="Texture2D" uid="uid://c4f27ih6b0kcd" path="res://assets/coverart4-3(2).png" id="3_coverart"]
+
+[node name="LoadingScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_loading_script")
+
+[node name="Background" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3_coverart")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="LoadingContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -300.0
+offset_top = -150.0
+offset_right = 300.0
+offset_bottom = -50.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="LoadingLabel" type="Label" parent="LoadingContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.918, 0.878, 0.835, 1)
+theme_override_colors/font_shadow_color = Color(0.137, 0.2, 0.165, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 28
+text = "Loading World..."
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ProgressBarContainer" type="MarginContainer" parent="LoadingContainer"]
+layout_mode = 2
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_bottom = 10
+
+[node name="ProgressBar" type="ProgressBar" parent="LoadingContainer/ProgressBarContainer"]
+layout_mode = 2
+theme_override_colors/fill = Color(0.4, 0.7, 0.2, 1)
+theme_override_colors/background = Color(0.137, 0.2, 0.165, 0.8)
+theme_override_constants/bar_height = 8
+max_value = 100.0
+value = 0.0
+show_percentage = false
+
+[node name="ProgressLabel" type="Label" parent="LoadingContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.918, 0.878, 0.835, 0.8)
+theme_override_colors/font_shadow_color = Color(0.137, 0.2, 0.165, 1)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 18
+text = "Generating terrain..."
+horizontal_alignment = 1
+vertical_alignment = 1 
