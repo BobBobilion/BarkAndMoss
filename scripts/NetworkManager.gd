@@ -5,8 +5,6 @@ extends Node
 # --- Signals ---
 signal player_list_changed
 signal connection_failed(reason: String)
-signal player_connected(player_id: int)
-signal player_disconnected(player_id: int)
 
 # --- Properties ---
 var players: Dictionary = {}
@@ -71,7 +69,7 @@ func disconnect_from_game() -> void:
 
 # --- Signal Handlers ---
 
-func _on_peer_connected(id: int) -> void:
+func _on_peer_connected(_id: int) -> void:
 	"""Handles a new peer connecting to the server."""
 	# This runs on the SERVER when a new client connects.
 	# We wait for the client to register itself via RPC.

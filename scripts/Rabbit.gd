@@ -41,7 +41,7 @@ func _ready() -> void:
 	"""Initialize the rabbit with proper collision layers and AI setup."""
 	# Set up collision layers - rabbits are on animal layer
 	collision_layer = 8     # Animal layer
-	collision_mask = 1      # Collide with terrain only (layer 1)
+	collision_mask = 11     # Terrain (1) + Environment (2) + Animals (8) = 11
 	
 	# Add to animals group for identification
 	add_to_group("animals")
@@ -56,8 +56,6 @@ func _ready() -> void:
 	
 	# Initialize wandering
 	_choose_new_wander_target()
-	
-	print("Rabbit spawned at: ", global_position)
 
 
 func _physics_process(delta: float) -> void:
@@ -172,7 +170,6 @@ func _on_detection_area_body_entered(body: Node3D) -> void:
 	if body.is_in_group("human_player") or body.is_in_group("dog_player"):
 		current_state = State.FLEEING
 		flee_target = body
-		print("Rabbit detected threat: ", body.name)
 
 
 func _on_detection_area_body_exited(body: Node3D) -> void:
@@ -199,7 +196,6 @@ func die() -> void:
 	if current_state == State.DEAD:
 		return
 	
-	print("Rabbit died at: ", global_position)
 	current_state = State.DEAD
 	
 	# Spawn a corpse at this location
@@ -216,10 +212,6 @@ func _spawn_corpse() -> void:
 		var corpse: Node3D = corpse_scene.instantiate()
 		get_tree().current_scene.add_child(corpse)
 		corpse.global_position = global_position
-		print("Spawned rabbit corpse")
-	else:
-		# Fallback: just print a message for now
-		print("Would spawn rabbit corpse here (corpse scene not found)")
 
 
 func get_state_name() -> String:

@@ -38,28 +38,23 @@ func get_interaction_prompt() -> String:
 	"""Returns the interaction prompt text for this tree."""
 	if is_chopped:
 		return ""
-	return "Chop Tree (Requires Hatchet)"
+	return "Chop Tree"
 
 
-func _on_interacted(player: Node) -> void:
-	"""Handles the interaction event when a player chops the stump."""
+func take_damage(damage_amount: int):
 	if is_chopped:
 		return
 
-	# Check if the interacting node is a player and if they have a hatchet equipped
-	# We use duck-typing here (has_method) to avoid the parser error with the "Player" type.
-	if player.has_method("get_equipped_item") and player.get_equipped_item() == "Hatchet":
-		# Trigger chopping animation on the player
-		if player.has_method("start_chopping_animation"):
-			player.start_chopping_animation()
-		
-		chop_count += 1
-		print("Tree chopped ", chop_count, "/", MAX_CHOPS, " times")
-		
-		if chop_count >= MAX_CHOPS:
-			_chop_tree()
-	else:
-		print("Need a hatchet to chop this tree!")
+	chop_count += damage_amount
+	print("Tree chopped ", chop_count, "/", MAX_CHOPS, " times")
+	
+	if chop_count >= MAX_CHOPS:
+		_chop_tree()
+
+func _on_interacted(player: Node) -> void:
+	"""Handles the interaction event when a player chops the stump."""
+	# This is now deprecated in favor of take_damage, but we'll keep it for now.
+	pass
 
 
 # --- Private Methods ---

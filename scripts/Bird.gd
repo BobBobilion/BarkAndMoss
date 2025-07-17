@@ -66,7 +66,7 @@ func _ready() -> void:
 	"""Initialize the bird with proper collision layers and flying AI setup."""
 	# Set up collision layers - birds are on animal layer
 	collision_layer = 8     # Animal layer
-	collision_mask = 1      # Collide with terrain only (layer 1) for height reference
+	collision_mask = 11     # Terrain (1) + Environment (2) + Animals (8) = 11
 	
 	# Add to animals group for identification
 	add_to_group("animals")
@@ -225,7 +225,6 @@ func respond_to_bark(bark_source: Node3D) -> void:
 	
 	var distance: float = global_position.distance_to(bark_source.global_position)
 	if distance <= BARK_DETECTION_RANGE:
-		print("Bird heard bark from: ", bark_source.name, " at distance: ", distance)
 		current_state = State.FLEEING
 		flee_target = bark_source
 
@@ -246,7 +245,6 @@ func die() -> void:
 	if current_state == State.DEAD:
 		return
 	
-	print("Bird died at: ", global_position)
 	current_state = State.DEAD
 	
 	# Spawn a corpse at this location
@@ -273,10 +271,6 @@ func _spawn_corpse() -> void:
 		var corpse: Node3D = corpse_scene.instantiate()
 		get_tree().current_scene.add_child(corpse)
 		corpse.global_position = corpse_position
-		print("Spawned bird corpse at ground level")
-	else:
-		# Fallback: create a simple marker for now
-		print("Would spawn bird corpse at: ", corpse_position)
 
 
 func get_state_name() -> String:

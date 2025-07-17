@@ -1,13 +1,25 @@
-[gd_scene load_steps=10 format=3 uid="uid://c1vj4p3yqxfmg"]
+[gd_scene load_steps=14 format=3 uid="uid://c1vj4p3yqxfmg"]
 
 [ext_resource type="Script" uid="uid://dn0vup5n4q5w7" path="res://scripts/Player.gd" id="1_2vfxu"]
-[ext_resource type="PackedScene" uid="uid://c17lp7p4hejf3" path="res://assets/animals/Adventurer.glb" id="2_adventurer_model"]
-[ext_resource type="PackedScene" uid="uid://j322bjcr4eke" path="res://assets/tools/Hatchet.glb" id="3_hatchet_model"]
-[ext_resource type="PackedScene" uid="uid://copxsxvfo42jw" path="res://assets/tools/Bow.glb" id="4_bow_model"]
+[ext_resource type="Script" uid="uid://bkucsmsw3yhmn" path="res://scripts/components/movement_controller.gd" id="2_ctrl_move"]
+[ext_resource type="PackedScene" uid="uid://q2jpbar8t2tu" path="res://scenes/humanModel.tscn" id="2_mdl7e"]
+[ext_resource type="Script" uid="uid://djf43yv06hy36" path="res://scripts/components/camera_controller.gd" id="3_ctrl_cam"]
+[ext_resource type="Script" uid="uid://dkw758wyg4uh4" path="res://scripts/components/animation_controller.gd" id="4_ctrl_anim"]
+[ext_resource type="Script" uid="uid://btnued7y4mrnk" path="res://scripts/components/interaction_controller.gd" id="5_ctrl_interact"]
+[ext_resource type="Script" uid="uid://x83smaarchb4" path="res://scripts/components/equipment_controller.gd" id="6_ctrl_equip"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_2y4vw"]
-radius = 0.379114
-height = 1.56489
+radius = 0.130681
+height = 0.307977
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_mdl7e"]
+size = Vector3(0.557861, 0.546661, 0.253967)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_qu4a1"]
+size = Vector3(0.437408, 0.313644, 0.196411)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_70d11"]
+size = Vector3(0.417267, 0.708984, 0.275833)
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1a2b3"]
 properties/0/path = NodePath(".:position")
@@ -23,37 +35,48 @@ properties/2/replication_mode = 1
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_1a2b3"]
 height = 1.02793
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_interaction_debug"]
-height = 1.02793
-radial_segments = 16
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_interaction_debug"]
-transparency = 1
-no_depth_test = true
-vertex_color_use_as_albedo = true
-albedo_color = Color(0, 1, 0, 0.3)
+[sub_resource type="SphereShape3D" id="SphereShape3D_camera_collision"]
+radius = 0.2
 
 [node name="Player" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 3
 script = ExtResource("1_2vfxu")
 
-[node name="AdventurerModel" parent="." instance=ExtResource("2_adventurer_model")]
-transform = Transform3D(-1, 0, 8.74228e-08, 0, 0.75, 0, -8.74228e-08, 0, -1, 0, 0, 0)
-
-[node name="HatchetModel" parent="." instance=ExtResource("3_hatchet_model")]
-transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0.3, 0.8, -0.2)
-
-[node name="BowModel" parent="." instance=ExtResource("4_bow_model")]
-transform = Transform3D(-1.09278e-08, 0, -0.25, 0, 0.25, 0, 0.25, 0, -1.09278e-08, -0.3, 0.8, -0.4)
-visible = false
+[node name="AdventurerModel" parent="." instance=ExtResource("2_mdl7e")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 0.75, 0, 8.74228e-08, 0, -1, 0, 0, 0)
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="."]
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.647394, -0.12294)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.00248316, 1.22385, -0.10667)
 shape = SubResource("CapsuleShape3D_2y4vw")
 
-[node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 1.5, 2)
+[node name="CollisionShape3D2" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0133474, 0.872514, -0.0887559)
+shape = SubResource("BoxShape3D_mdl7e")
+
+[node name="CollisionShape3D4" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.00341395, 1.02538, 0.118681)
+shape = SubResource("BoxShape3D_qu4a1")
+
+[node name="CollisionShape3D3" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0505331, 0.368715, -0.0753511)
+shape = SubResource("BoxShape3D_70d11")
+
+[node name="CameraRootOffset" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+
+[node name="HorizontalPivot" type="Node3D" parent="CameraRootOffset"]
+
+[node name="VerticalPivot" type="Node3D" parent="CameraRootOffset/HorizontalPivot"]
+
+[node name="SpringArm3D" type="SpringArm3D" parent="CameraRootOffset/HorizontalPivot/VerticalPivot"]
+spring_length = 3.0
+collision_mask = 1
+shape = SubResource("SphereShape3D_camera_collision")
+
+[node name="Camera3D" type="Camera3D" parent="CameraRootOffset/HorizontalPivot/VerticalPivot/SpringArm3D"]
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
 replication_config = SubResource("SceneReplicationConfig_1a2b3")
@@ -67,7 +90,17 @@ monitorable = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.490833, -0.5)
 shape = SubResource("CylinderShape3D_1a2b3")
 
-[node name="InteractionDebugMesh" type="MeshInstance3D" parent="InteractionArea"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.490833, -0.5)
-mesh = SubResource("CylinderMesh_interaction_debug")
-surface_material_override/0 = SubResource("StandardMaterial3D_interaction_debug")
+[node name="MovementController" type="Node" parent="."]
+script = ExtResource("2_ctrl_move")
+
+[node name="CameraController" type="Node" parent="."]
+script = ExtResource("3_ctrl_cam")
+
+[node name="AnimationController" type="Node" parent="."]
+script = ExtResource("4_ctrl_anim")
+
+[node name="InteractionController" type="Node" parent="."]
+script = ExtResource("5_ctrl_interact")
+
+[node name="EquipmentController" type="Node" parent="."]
+script = ExtResource("6_ctrl_equip")

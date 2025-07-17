@@ -1,11 +1,36 @@
-[gd_scene load_steps=5 format=3 uid="uid://tm8nuhejklh2"]
+[gd_scene load_steps=10 format=3 uid="uid://tm8nuhejklh2"]
 
 [ext_resource type="Script" uid="uid://dyk7e8tjr1i60" path="res://scripts/Campfire.gd" id="1_campfire_script"]
 [ext_resource type="PackedScene" uid="uid://b2efg6rnl1yvi" path="res://assets/tools/Bonfire.glb" id="2_bonfire_model"]
 
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_base"]
-height = 0.5
+height = 0.296387
 radius = 1.05518
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_ah7om"]
+height = 0.342834
+radius = 0.661621
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_fire_additive"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_color = Color(1, 0.8, 0.3, 0.9)
+billboard_mode = 3
+particles_anim_h_frames = 1
+particles_anim_v_frames = 1
+particles_anim_loop = false
+
+[sub_resource type="QuadMesh" id="QuadMesh_fire"]
+size = Vector2(0.3, 0.3)
+
+[sub_resource type="Curve" id="Curve_particle_scale"]
+_data = [Vector2(0, 1.2), 0.0, 0.0, 0, 0, Vector2(0.2, 1), 0.0, 0.0, 0, 0, Vector2(0.6, 0.5), 0.0, 0.0, 0, 0, Vector2(1, 0.05), 0.0, 0.0, 0, 0]
+point_count = 4
+
+[sub_resource type="Gradient" id="Gradient_fire"]
+offsets = PackedFloat32Array(0, 0.2, 0.6, 1)
+colors = PackedColorArray(1, 1, 0.2, 1, 1, 0.5, 0, 1, 1, 0, 0, 0.8, 0.2, 0, 0, 0)
 
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_interaction"]
 radius = 12.0977
@@ -15,11 +40,15 @@ collision_mask = 0
 script = ExtResource("1_campfire_script")
 
 [node name="BonfireModel" parent="." instance=ExtResource("2_bonfire_model")]
-transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0)
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0.106995, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.148193, 0)
 shape = SubResource("CylinderShape3D_base")
+
+[node name="CollisionShape3D2" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0130459, 0.286056, -0.022359)
+shape = SubResource("CylinderShape3D_ah7om")
 
 [node name="CampfireLight" type="OmniLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
@@ -28,6 +57,31 @@ light_energy = 4.086
 shadow_enabled = true
 omni_range = 8.0
 omni_attenuation = 0.8
+
+[node name="FireParticles" type="CPUParticles3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35242, 0)
+material_override = SubResource("StandardMaterial3D_fire_additive")
+amount = 35
+lifetime = 0.6
+preprocess = 0.5
+speed_scale = 0.8
+explosiveness = 0.1
+randomness = 0.3
+lifetime_randomness = 0.2
+mesh = SubResource("QuadMesh_fire")
+emission_shape = 3
+emission_box_extents = Vector3(0.3, 0.1, 0.3)
+direction = Vector3(0, 1, 0)
+spread = 15.0
+gravity = Vector3(0, -0.3, 0)
+initial_velocity_min = 0.6
+initial_velocity_max = 1.5
+angular_velocity_min = -30.0
+angular_velocity_max = 30.0
+scale_amount_min = 0.5
+scale_amount_max = 1.5
+scale_amount_curve = SubResource("Curve_particle_scale")
+color_ramp = SubResource("Gradient_fire")
 
 [node name="InteractionArea" type="Area3D" parent="."]
 collision_layer = 0

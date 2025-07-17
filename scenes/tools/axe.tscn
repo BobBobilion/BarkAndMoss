@@ -1,0 +1,20 @@
+[gd_scene load_steps=4 format=3 uid="uid://bqs4yq8w7h7e"]
+
+[ext_resource type="Script" uid="uid://cloko76mkhxlh" path="res://scripts/tools/axe.gd" id="1_axe_script"]
+[ext_resource type="PackedScene" uid="uid://d37y3elpkeifd" path="res://assets/tools/Axe.glb" id="2_axe_model"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_3rv65"]
+size = Vector3(2.05176, 1.70051, 0.631409)
+
+[node name="Axe" type="Node3D"]
+script = ExtResource("1_axe_script")
+
+[node name="AxeModel" parent="." instance=ExtResource("2_axe_model")]
+
+[node name="Hitbox" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 10
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Hitbox"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.495102, 1.22007, 0.000823975)
+shape = SubResource("BoxShape3D_3rv65")

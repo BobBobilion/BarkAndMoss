@@ -10,6 +10,7 @@ signal terrain_generation_complete
 # --- Constants ---
 const TREE_SCENE_PATH: String = "res://scenes/Tree.tscn"
 const ROCK_SCENE_PATH: String = "res://scenes/Rock.tscn"  # We'll create this scene for rocks
+const GRASS_SCENE_PATH: String = "res://scenes/Grass.tscn"  # Grass clumps for forest biome
 
 # Terrain generation constants - Using centralized scaling system
 const TERRAIN_RESOLUTION: int = GameConstants.WORLD.TERRAIN_RESOLUTION
@@ -18,11 +19,15 @@ const TERRAIN_CHUNKS: int = 4        # Divide terrain into chunks for better per
 # --- Properties ---
 @export var tree_count: int = GameConstants.WORLD.TREE_COUNT
 @export var rock_count: int = GameConstants.WORLD.ROCK_COUNT
+@export var grass_count: int = 2000  # Number of grass clumps to spawn
+@export var generate_grass: bool = true # Master switch for grass generation
 @export var world_size: Vector2 = GameConstants.WORLD.WORLD_SIZE
 @export var tree_spacing: float = GameConstants.WORLD.TREE_SPACING
+@export var grass_spacing: float = 1.0  # Minimum distance between grass clumps
 
 var tree_scene: PackedScene
 var rock_scene: PackedScene
+var grass_scene: PackedScene
 var terrain_mesh: MeshInstance3D
 var terrain_collision: StaticBody3D
 var biome_manager: BiomeManagerClass
@@ -54,21 +59,21 @@ func _ready() -> void:
 func _initialize_biome_manager() -> void:
 	"""Initialize the biome manager for terrain and asset generation."""
 	biome_manager = BiomeManagerClass.new()
-	print("WorldGenerator: Biome manager initialized")
 
 
 func _load_resources() -> void:
 	"""Loads necessary scenes and resources for biome-based generation."""
-	# Load the base tree and rock scenes
+	# Load the base tree, rock, and grass scenes
 	tree_scene = load(TREE_SCENE_PATH)
 	# Note: We'll create the rock scene later if it doesn't exist
 	if ResourceLoader.exists(ROCK_SCENE_PATH):
 		rock_scene = load(ROCK_SCENE_PATH)
+	# Load grass scene for forest biome enhancement
+	if ResourceLoader.exists(GRASS_SCENE_PATH):
+		grass_scene = load(GRASS_SCENE_PATH)
 	
 	# Preload tree and rock models for each biome type
-	print("WorldGenerator: Loading biome-specific assets...")
 	_load_biome_assets()
-	print("WorldGenerator: All biome assets loaded successfully")
 
 
 func _load_biome_assets() -> void:
@@ -94,19 +99,16 @@ func _load_biome_assets() -> void:
 				if mesh:
 					rock_models_cache[biome_type].append(mesh)
 		
-		print("WorldGenerator: Loaded ", tree_models_cache[biome_type].size(), " tree meshes and ", 
-			  rock_models_cache[biome_type].size(), " rock meshes for biome ", biome_type)
+
 
 
 func _generate_world() -> void:
 	"""Generates the complete world in the correct order."""
-	print("WorldGenerator: Starting biome-based world generation...")
 	await _generate_terrain()
-	print("WorldGenerator: Terrain generation complete, starting forest generation...")
 	_generate_forest()
-	print("WorldGenerator: Forest generation complete, starting rock generation...")
 	_generate_rocks()
-	print("WorldGenerator: World generation complete!")
+	if generate_grass:
+		_generate_grass()
 	terrain_generation_complete.emit()
 
 
@@ -128,7 +130,6 @@ func _generate_terrain() -> void:
 	terrain_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	
 	add_child(terrain_mesh)
-	print("WorldGenerator: Biome-based terrain mesh created")
 	
 	# Create collision for the terrain and wait for it to be ready
 	await _create_terrain_collision()
@@ -242,7 +243,7 @@ func _calculate_normals(vertices: PackedVector3Array, indices: PackedInt32Array)
 
 func _create_terrain_collision() -> void:
 	"""Creates collision shape for the terrain."""
-	print("WorldGenerator: Creating terrain collision...")
+
 	
 	terrain_collision = StaticBody3D.new()
 	terrain_collision.name = "TerrainCollision"
@@ -259,7 +260,7 @@ func _create_terrain_collision() -> void:
 		var shape: ConcavePolygonShape3D = terrain_mesh.mesh.create_trimesh_shape()
 		if shape:
 			collision_shape.shape = shape
-			print("WorldGenerator: Terrain collision shape created successfully")
+		
 		else:
 			printerr("WorldGenerator: Failed to create terrain collision shape!")
 			return
@@ -269,11 +270,10 @@ func _create_terrain_collision() -> void:
 	
 	terrain_collision.add_child(collision_shape)
 	add_child(terrain_collision)
-	print("WorldGenerator: Terrain collision added to scene")
+
 	
 	# Wait a frame to ensure collision is fully registered
 	await get_tree().process_frame
-	print("WorldGenerator: Terrain collision is now active")
 
 
 func _generate_forest() -> void:
@@ -330,7 +330,7 @@ func _generate_forest() -> void:
 		call_deferred("_add_tree_to_scene", tree_instance, surface_position, rotation_y)
 		trees_spawned += 1
 
-	print("WorldGenerator: Spawned ", trees_spawned, " biome-specific trees")
+
 
 
 func _generate_rocks() -> void:
@@ -373,19 +373,18 @@ func _generate_rocks() -> void:
 		var trimesh_shape: ConcavePolygonShape3D = rock_mesh.create_trimesh_shape()
 		if trimesh_shape:
 			collision_shape.shape = trimesh_shape
-			print("WorldGenerator: Created accurate collision for rock using trimesh")
+
 		else:
 			# Fallback to convex shape if trimesh fails
 			var convex_shape: ConvexPolygonShape3D = rock_mesh.create_convex_shape()
 			if convex_shape:
 				collision_shape.shape = convex_shape
-				print("WorldGenerator: Created collision for rock using convex shape")
 			else:
 				# Last resort: use AABB-based box shape
 				var box_shape: BoxShape3D = BoxShape3D.new()
 				box_shape.size = rock_mesh.get_aabb().size
 				collision_shape.shape = box_shape
-				print("WorldGenerator: Used fallback box collision for rock")
+
 		
 		# Set collision properties for environment objects
 		static_body.collision_layer = 2  # Environment layer
@@ -405,7 +404,96 @@ func _generate_rocks() -> void:
 		call_deferred("_add_rock_to_scene", static_body, surface_position, rotation_y)
 		rocks_spawned += 1
 
-	print("WorldGenerator: Spawned ", rocks_spawned, " biome-specific rocks")
+
+
+
+func _generate_grass() -> void:
+	"""
+	Generates grass clumps specifically for forest biomes to enhance visual richness.
+	Grass provides ground-level detail and movement in forested areas.
+	"""
+	if not multiplayer.is_server():
+		return
+	
+	if not grass_scene:
+
+		return
+
+	var grass_spawned: int = 0
+	var max_attempts: int = grass_count * 4  # More attempts since grass is more selective
+	var attempts: int = 0
+
+	while grass_spawned < grass_count and attempts < max_attempts:
+		attempts += 1
+		
+		# Get a random position and determine its biome
+		var world_pos: Vector3 = _get_random_world_position()
+		var biome_type: BiomeManagerClass.BiomeType = biome_manager.get_biome_at_position(world_pos)
+		
+		# Only spawn grass in forest and autumn biomes for now
+		if biome_type != BiomeManagerClass.BiomeType.FOREST and biome_type != BiomeManagerClass.BiomeType.AUTUMN:
+			continue
+		
+		# Check grass density for the biome (higher density in forest areas)
+		var grass_spawn_chance: float = 0.8 if biome_type == BiomeManagerClass.BiomeType.FOREST else 0.4
+		if randf() > grass_spawn_chance:
+			continue
+		
+		# Create grass instance
+		var grass_instance: Node3D = grass_scene.instantiate()
+		
+		# Configure the grass for the specific biome
+		if grass_instance.has_method("set_biome_type"):
+			grass_instance.set_biome_type(biome_type)
+		
+		# Add some variation to wind intensity based on terrain
+		var wind_variation: float = randf_range(0.7, 1.3)
+		if grass_instance.has_method("set_wind_intensity"):
+			grass_instance.set_wind_intensity(wind_variation)
+		
+		# Adjust grass density based on proximity to trees (less grass near trees)
+		var density_factor: float = _calculate_grass_density_factor(world_pos)
+		if "grass_density" in grass_instance:
+			grass_instance.grass_density = density_factor
+		
+		# Position the grass on the terrain surface
+		var surface_position: Vector3 = _get_surface_position(world_pos)
+		
+		# Add some random rotation for natural variation
+		var rotation_y: float = randf() * TAU
+		
+		# Use call_deferred to ensure nodes are added safely
+		call_deferred("_add_grass_to_scene", grass_instance, surface_position, rotation_y)
+		grass_spawned += 1
+
+
+
+
+func _calculate_grass_density_factor(pos: Vector3) -> float:
+	"""Calculate grass density based on proximity to trees and terrain features."""
+	# Check for nearby trees - reduce grass density near trees
+	var nearby_objects: Array = []
+	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	
+	# Simple distance-based calculation for now
+	# In a more complex implementation, you could raycast to find nearby trees
+	var terrain_height: float = biome_manager.get_terrain_height_at_position(pos)
+	var slope_factor: float = abs(terrain_height - biome_manager.BASE_TERRAIN_HEIGHT) / biome_manager.MAX_MOUNTAIN_HEIGHT
+	
+	# More grass on flatter terrain, less on steep slopes
+	var density: float = 1.0 - (slope_factor * 0.5)
+	
+	# Add some random variation
+	density *= randf_range(0.6, 1.0)
+	
+	return clamp(density, 0.2, 1.0)
+
+
+func _add_grass_to_scene(grass: Node3D, pos: Vector3, rot_y: float) -> void:
+	"""Adds a grass clump instance to the scene with a given position and rotation."""
+	grass.position = pos
+	grass.rotation.y = rot_y
+	add_child(grass)
 
 
 func _add_tree_to_scene(tree: Node3D, pos: Vector3, rot_y: float) -> void:
@@ -456,7 +544,7 @@ func _create_accurate_tree_collision(tree_instance: Node3D, tree_mesh: Mesh, bio
 	var interactable_collision: CollisionShape3D = tree_instance.get_node("Interactable/CollisionShape3D")
 	
 	if not collision_shape or not interactable_collision:
-		print("WorldGenerator: Could not find collision shapes for tree")
+		
 		return
 	
 	# Create accurate collision shape from the actual tree mesh
@@ -466,16 +554,16 @@ func _create_accurate_tree_collision(tree_instance: Node3D, tree_mesh: Mesh, bio
 	var convex_shape: ConvexPolygonShape3D = tree_mesh.create_convex_shape()
 	if convex_shape:
 		accurate_shape = convex_shape
-		print("WorldGenerator: Created accurate tree collision using convex shape")
+		
 	else:
 		# Fallback to trimesh for maximum accuracy
 		var trimesh_shape: ConcavePolygonShape3D = tree_mesh.create_trimesh_shape()
 		if trimesh_shape:
 			accurate_shape = trimesh_shape
-			print("WorldGenerator: Created accurate tree collision using trimesh shape")
+
 		else:
 			# Keep existing cylinder collision as last resort
-			print("WorldGenerator: Using fallback cylinder collision for tree")
+
 			_adjust_collision_for_biome_tree_fallback(tree_instance, biome_type)
 			return
 	
@@ -557,7 +645,7 @@ func _get_surface_position(world_pos: Vector3) -> Vector3:
 	"""Returns the surface position at a given world coordinate using raycast."""
 	# Cast ray downward from high above to find terrain surface
 	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
-	var max_height: float = biome_manager.MAX_MOUNTAIN_HEIGHT + 20.0
+	var max_height: float = biome_manager.MAX_MOUNTAIN_HEIGHT + biome_manager.BASE_TERRAIN_HEIGHT + 100.0  # Account for dramatically increased terrain heights
 	var from: Vector3 = Vector3(world_pos.x, max_height, world_pos.z)
 	var to: Vector3 = Vector3(world_pos.x, -50.0, world_pos.z)
 	
@@ -580,7 +668,7 @@ func get_terrain_height_at_position(world_pos: Vector3) -> float:
 	Useful for other objects that need to snap to terrain.
 	"""
 	if not biome_manager:
-		print("WorldGenerator: No biome manager available for height lookup")
+
 		return 0.0
 	
 	return biome_manager.get_terrain_height_at_position(world_pos)
@@ -590,13 +678,13 @@ func _get_biome_grass_color(biome_type: BiomeManagerClass.BiomeType) -> Color:
 	"""Get the grass color for a specific biome type."""
 	match biome_type:
 		BiomeManagerClass.BiomeType.MOUNTAIN:
-			return Color(0.4, 0.4, 0.4)  # Grey rocky color
+			return Color(0.55, 0.55, 0.55)  # More prominent grey rocky color - ENHANCED for better gray appearance
 		BiomeManagerClass.BiomeType.FOREST:
 			return Color(0.3, 0.7, 0.2)  # Rich green
 		BiomeManagerClass.BiomeType.AUTUMN:
 			return Color(0.8, 0.6, 0.2)  # Golden autumn color
 		BiomeManagerClass.BiomeType.SNOW:
-			return Color(0.9, 0.9, 1.0)  # Snow white with blue tint
+			return Color(0.95, 0.95, 0.95)  # Pure white snow color - CHANGED from blue-tinted to clean white
 		_:
 			return Color(0.5, 0.5, 0.5)  # Default grey
 

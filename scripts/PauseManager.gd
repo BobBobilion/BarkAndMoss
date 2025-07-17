@@ -1,4 +1,5 @@
 # scripts/PauseManager.gd
+# Global pause manager with window management features
 
 extends Node
 
@@ -32,8 +33,25 @@ func _ready() -> void:
 	print("PauseManager: Ready!")
 
 
+func toggle_fullscreen() -> void:
+	"""Toggle between fullscreen and windowed mode."""
+	var current_mode: int = DisplayServer.window_get_mode()
+	if current_mode == DisplayServer.WINDOW_MODE_FULLSCREEN:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		print("PauseManager: Switched to windowed mode")
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		print("PauseManager: Switched to fullscreen mode")
+
+
 func _input(event: InputEvent) -> void:
-	"""Handle global input for pause functionality."""
+	"""Handle global input for pause functionality and window management."""
+	# Handle F11 fullscreen toggle globally (works anywhere in the game)
+	if event.is_action_pressed("toggle_fullscreen"):
+		toggle_fullscreen()
+		get_viewport().set_input_as_handled()
+		return
+	
 	# Only handle pause input if we're in the main game scene
 	if not _is_in_game():
 		return

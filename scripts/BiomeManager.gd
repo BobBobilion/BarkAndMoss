@@ -36,8 +36,8 @@ const BIOME_TRANSITION_DISTANCE: float = 50.0  # Distance over which biomes blen
 const NOISE_SCALE_ALTITUDE: float = 0.001      # Scale for altitude noise (further reduced for much larger mountain regions)
 const NOISE_SCALE_TEMPERATURE: float = 0.0008  # Scale for temperature noise (further reduced for much larger temperature zones)
 const NOISE_SCALE_HUMIDITY: float = 0.001      # Scale for humidity noise (further reduced for much larger humidity zones)
-const MAX_MOUNTAIN_HEIGHT: float = 80.0        # Maximum mountain height
-const BASE_TERRAIN_HEIGHT: float = 10.0        # Base terrain level
+const MAX_MOUNTAIN_HEIGHT: float = 300.0       # Maximum mountain height - DRAMATICALLY INCREASED for towering peaks
+const BASE_TERRAIN_HEIGHT: float = 35.0        # Base terrain level - INCREASED for deeper/higher hills across all biomes
 
 # --- Tree Asset Paths by Category ---
 const TREE_ASSETS_NORMAL: Array[String] = [
@@ -221,10 +221,10 @@ func get_terrain_height_at_position(world_pos: Vector3) -> float:
 		var mountain_height: float = pow((altitude_factor - 0.5) * 2.0, 2.0) * MAX_MOUNTAIN_HEIGHT
 		base_height += mountain_height
 		
-		# Add cliff-like features in mountains
+		# Add dramatic cliff-like features in mountains - ENHANCED for more dramatic terrain
 		var cliff_noise: float = noise_temperature.get_noise_2d(world_pos.x * 0.05, world_pos.z * 0.05)
-		if cliff_noise > 0.4:
-			base_height += cliff_noise * 20.0
+		if cliff_noise > 0.3:  # Lower threshold for more frequent cliffs
+			base_height += cliff_noise * 60.0  # Tripled cliff height for dramatic terrain features
 	
 	return base_height
 
@@ -300,7 +300,7 @@ func _create_biome_configurations() -> void:
 	mountain_config.tree_assets = TREE_ASSETS_DEAD
 	mountain_config.rock_assets = ROCK_ASSETS_NORMAL
 	mountain_config.terrain_material = _create_mountain_material()
-	mountain_config.grass_color = Color(0.4, 0.4, 0.4)  # Grey rocky color
+	mountain_config.grass_color = Color(0.55, 0.55, 0.55)  # More prominent grey rocky color - ENHANCED for better gray appearance
 	biome_configs[BiomeType.MOUNTAIN] = mountain_config
 	
 	# Forest Biome - normal altitude, green trees, lush
@@ -320,7 +320,7 @@ func _create_biome_configurations() -> void:
 	autumn_config.altitude_min = 0.2
 	autumn_config.altitude_max = 0.7
 	autumn_config.tree_density = 1.2  # Moderate tree coverage
-	autumn_config.rock_density = 0.3  # Low to moderate rock density
+	autumn_config.rock_density = 0.1  # Very low rock density - DECREASED for fewer rocks in autumn areas
 	autumn_config.tree_assets = TREE_ASSETS_AUTUMN
 	autumn_config.rock_assets = ROCK_ASSETS_NORMAL
 	autumn_config.terrain_material = _create_autumn_material()
@@ -336,7 +336,7 @@ func _create_biome_configurations() -> void:
 	snow_config.tree_assets = TREE_ASSETS_SNOW
 	snow_config.rock_assets = ROCK_ASSETS_SNOW
 	snow_config.terrain_material = _create_snow_material()
-	snow_config.grass_color = Color(0.9, 0.9, 1.0)  # Snow white with blue tint
+	snow_config.grass_color = Color(0.95, 0.95, 0.95)  # Pure white snow color - CHANGED from blue-tinted to clean white
 	biome_configs[BiomeType.SNOW] = snow_config
 
 
@@ -358,7 +358,7 @@ func _get_humidity_factor(world_pos: Vector3) -> float:
 func _create_mountain_material() -> StandardMaterial3D:
 	"""Create material for mountain biome terrain."""
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.5, 0.5, 0.5)  # Grey stone color
+	material.albedo_color = Color(0.6, 0.6, 0.6)  # More prominent grey stone color - ENHANCED for better gray appearance
 	material.roughness = 0.8
 	material.metallic = 0.1
 	material.specular = 0.3
@@ -394,7 +394,7 @@ func _create_autumn_material() -> StandardMaterial3D:
 func _create_snow_material() -> StandardMaterial3D:
 	"""Create material for snow biome terrain."""
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.9, 0.9, 1.0)  # Snow white with blue tint
+	material.albedo_color = Color(0.95, 0.95, 0.95)  # Pure white snow color - CHANGED from blue-tinted to clean white
 	material.roughness = 0.2  # Snow is relatively smooth
 	material.metallic = 0.0
 	material.specular = 0.8  # Snow is quite reflective

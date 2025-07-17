@@ -7,8 +7,10 @@ const BiomeManagerClass = preload("res://scripts/BiomeManager.gd")
 # --- Constants ---
 const SPAWN_DISTANCE_MIN: float = GameConstants.SPAWN.DISTANCE_MIN
 const SPAWN_DISTANCE_MAX: float = GameConstants.SPAWN.DISTANCE_MAX
-const MAX_ANIMALS: int = GameConstants.SPAWN.MAX_ANIMALS
+const DESPAWN_RADIUS: float = GameConstants.SPAWN.DESPAWN_RADIUS
+const MAX_ANIMALS_PER_AREA: int = GameConstants.SPAWN.MAX_ANIMALS_PER_AREA
 const SPAWN_CHECK_INTERVAL: float = GameConstants.SPAWN.CHECK_INTERVAL
+const DESPAWN_CHECK_INTERVAL: float = GameConstants.SPAWN.DESPAWN_CHECK_INTERVAL
 const TERRAIN_HEIGHT_OFFSET: float = GameConstants.SPAWN.TERRAIN_HEIGHT_OFFSET
 
 # --- Animal Types and Biome Preferences ---
@@ -16,7 +18,7 @@ var animal_scenes: Dictionary = {
 	"rabbit": {
 		"scene": preload("res://scenes/Rabbit.tscn"),
 		"weight": 5,
-		"max_count": GameConstants.SPAWN.RABBIT_COUNT,  # Scaled with world size
+		"max_count_per_area": GameConstants.SPAWN.RABBIT_COUNT_PER_AREA,  # Max per proximity area
 		"biome_preferences": {
 			BiomeManagerClass.BiomeType.FOREST: 1.0,    # Loves forests
 			BiomeManagerClass.BiomeType.AUTUMN: 0.8,    # Likes autumn areas
@@ -27,7 +29,7 @@ var animal_scenes: Dictionary = {
 	"bird": {
 		"scene": preload("res://scenes/Bird.tscn"),
 		"weight": 4,
-		"max_count": GameConstants.SPAWN.BIRD_COUNT,  # Scaled with world size
+		"max_count_per_area": GameConstants.SPAWN.BIRD_COUNT_PER_AREA,  # Max per proximity area
 		"biome_preferences": {
 			BiomeManagerClass.BiomeType.FOREST: 0.9,    # Common in forests
 			BiomeManagerClass.BiomeType.AUTUMN: 0.7,    # Likes autumn areas
@@ -38,7 +40,7 @@ var animal_scenes: Dictionary = {
 	"deer": {
 		"scene": preload("res://scenes/Deer.tscn"),
 		"weight": 3,
-		"max_count": GameConstants.SPAWN.DEER_COUNT,  # Scaled with world size
+		"max_count_per_area": GameConstants.SPAWN.DEER_COUNT_PER_AREA,  # Max per proximity area
 		"biome_preferences": {
 			BiomeManagerClass.BiomeType.FOREST: 1.0,    # Loves forests
 			BiomeManagerClass.BiomeType.AUTUMN: 0.9,    # Great in autumn
@@ -50,7 +52,7 @@ var animal_scenes: Dictionary = {
 	# "bear": {
 	#     "scene": preload("res://scenes/Bear.tscn"),
 	#     "weight": 1,
-	#     "max_count": 2,
+	#     "max_count_per_area": 1,
 	#     "biome_preferences": {
 	#         BiomeManagerClass.BiomeType.FOREST: 0.8,
 	#         BiomeManagerClass.BiomeType.MOUNTAIN: 0.6,
@@ -67,7 +69,9 @@ var players: Array[Node3D] = []
 
 # --- State ---
 var spawn_timer: float = 0.0
+var despawn_timer: float = 0.0
 var current_animals: Dictionary = {}  # Track spawned animals by type
+var proximity_animals: Dictionary = {}  # Track animals by player proximity: {player_id: {animal_type: [animals]}}
 
 
 func _ready() -> void:
@@ -84,20 +88,29 @@ func _ready() -> void:
 		printerr("AnimalSpawner: Could not find BiomeManager!")
 		return
 	
-	# Start the spawn timer
+	# Initialize timers
 	spawn_timer = SPAWN_CHECK_INTERVAL
+	despawn_timer = DESPAWN_CHECK_INTERVAL
 	
-	print("AnimalSpawner: Ready to spawn biome-aware animals")
+	# AnimalSpawner ready for proximity-based spawning
 
 
 func _process(delta: float) -> void:
-	"""Update the spawning system."""
+	"""Update the spawning and despawning systems."""
+	# Always clean up invalid animals first to prevent freed instance errors
+	_cleanup_invalid_animals()
+	
 	spawn_timer -= delta
+	despawn_timer -= delta
 	
 	if spawn_timer <= 0.0:
 		spawn_timer = SPAWN_CHECK_INTERVAL
 		_update_player_list()
 		_attempt_spawn_animals()
+	
+	if despawn_timer <= 0.0:
+		despawn_timer = DESPAWN_CHECK_INTERVAL
+		_check_for_despawns()
 
 
 func _update_player_list() -> void:
@@ -118,25 +131,17 @@ func _update_player_list() -> void:
 
 
 func _attempt_spawn_animals() -> void:
-	"""Attempt to spawn animals if conditions are met."""
+	"""Attempt to spawn animals using proximity-based spawning."""
 	if players.is_empty():
 		return
 	
-	# Clean up invalid animals from tracking
-	_cleanup_invalid_animals()
+	# Update proximity tracking (cleanup already done in _process)
+	_update_proximity_tracking()
 	
-	# Check if we need to spawn more animals
-	var total_animals: int = _count_total_animals()
-	if total_animals >= MAX_ANIMALS:
-		return
-	
-	# Try to spawn each type of animal
-	for animal_type: String in animal_scenes.keys():
-		var animal_data: Dictionary = animal_scenes[animal_type]
-		var current_count: int = _count_animals_of_type(animal_type)
-		
-		if current_count < animal_data.max_count:
-			_try_spawn_animal(animal_type, animal_data)
+	# Try to spawn animals for each player's proximity area
+	for player in players:
+		var player_id: int = player.get_instance_id()
+		_attempt_spawn_for_player_area(player, player_id)
 
 
 func _try_spawn_animal(animal_type: String, animal_data: Dictionary) -> void:
@@ -172,11 +177,10 @@ func _try_spawn_animal(animal_type: String, animal_data: Dictionary) -> void:
 			current_animals[animal_type] = []
 		current_animals[animal_type].append(animal)
 		
-		print("AnimalSpawner: Spawned ", animal_type, " in ", biome_type, " biome at ", spawn_position)
+		# Successfully spawned animal
 		return  # Successfully spawned
 	
 	# Failed to find suitable biome after max attempts
-	print("AnimalSpawner: Failed to find suitable biome for ", animal_type, " after ", max_spawn_attempts, " attempts")
 
 
 func _find_valid_spawn_position(animal_type: String = "") -> Vector3:
@@ -239,8 +243,28 @@ func _cleanup_invalid_animals() -> void:
 		
 		# Remove invalid animals
 		for i in range(animal_list.size() - 1, -1, -1):
-			if not is_instance_valid(animal_list[i]):
+			var animal_ref = animal_list[i]
+			if not is_instance_valid(animal_ref):
 				animal_list.remove_at(i)
+				continue
+			
+			var animal: Node3D = animal_ref as Node3D
+			if not animal or animal.is_queued_for_deletion():
+				animal_list.remove_at(i)
+	
+	# Also clean up proximity tracking
+	for player_id in proximity_animals.keys():
+		for animal_type: String in proximity_animals[player_id].keys():
+			var proximity_list: Array = proximity_animals[player_id][animal_type]
+			for i in range(proximity_list.size() - 1, -1, -1):
+				var animal_ref = proximity_list[i]
+				if not is_instance_valid(animal_ref):
+					proximity_list.remove_at(i)
+					continue
+				
+				var animal: Node3D = animal_ref as Node3D
+				if not animal or animal.is_queued_for_deletion():
+					proximity_list.remove_at(i)
 
 
 func _count_total_animals() -> int:
@@ -258,14 +282,13 @@ func _count_animals_of_type(animal_type: String) -> int:
 	return 0
 
 
-func add_animal_type(type_name: String, scene: PackedScene, weight: int = 1, max_count: int = 5) -> void:
-	"""Add a new animal type that can be spawned."""
+func add_animal_type(type_name: String, scene: PackedScene, weight: int = 1, max_count_per_area: int = 3) -> void:
+	"""Add a new animal type that can be spawned with proximity-based spawning."""
 	animal_scenes[type_name] = {
 		"scene": scene,
 		"weight": weight,
-		"max_count": max_count
+		"max_count_per_area": max_count_per_area
 	}
-	print("AnimalSpawner: Added animal type: ", type_name)
 
 
 func remove_animal_type(type_name: String) -> void:
@@ -274,15 +297,118 @@ func remove_animal_type(type_name: String) -> void:
 		animal_scenes.erase(type_name)
 		if current_animals.has(type_name):
 			current_animals.erase(type_name)
-		print("AnimalSpawner: Removed animal type: ", type_name)
 
 
 func get_animal_counts() -> Dictionary:
-	"""Get the current count of each animal type for debugging."""
-	var counts: Dictionary = {}
+	"""Get the current count of each animal type for debugging (total and per-player)."""
+	var counts: Dictionary = {
+		"total": {},
+		"per_player": {}
+	}
+	
+	# Get total counts
 	for animal_type: String in animal_scenes.keys():
-		counts[animal_type] = _count_animals_of_type(animal_type)
+		counts.total[animal_type] = _count_animals_of_type(animal_type)
+	
+	# Get per-player proximity counts
+	for player in players:
+		var player_id: int = player.get_instance_id()
+		counts.per_player[player_id] = {}
+		
+		if proximity_animals.has(player_id):
+			for animal_type: String in animal_scenes.keys():
+				if proximity_animals[player_id].has(animal_type):
+					counts.per_player[player_id][animal_type] = proximity_animals[player_id][animal_type].size()
+				else:
+					counts.per_player[player_id][animal_type] = 0
+		else:
+			for animal_type: String in animal_scenes.keys():
+				counts.per_player[player_id][animal_type] = 0
+	
 	return counts
+
+
+func get_proximity_info() -> Dictionary:
+	"""Get proximity-based spawning information for debugging."""
+	var info: Dictionary = {
+		"spawn_distances": {
+			"min": SPAWN_DISTANCE_MIN,
+			"max": SPAWN_DISTANCE_MAX,
+			"despawn": DESPAWN_RADIUS
+		},
+		"limits": {
+			"max_animals_per_area": MAX_ANIMALS_PER_AREA
+		},
+		"player_count": players.size(),
+		"animals_by_player": {}
+	}
+	
+	# Add animal counts per player
+	for player in players:
+		var player_id: int = player.get_instance_id()
+		var player_info: Dictionary = {
+			"position": player.global_position,
+			"animals": {},
+			"total_in_area": _count_animals_in_proximity_area(player_id)
+		}
+		
+		if proximity_animals.has(player_id):
+			for animal_type: String in animal_scenes.keys():
+				if proximity_animals[player_id].has(animal_type):
+					player_info.animals[animal_type] = proximity_animals[player_id][animal_type].size()
+				else:
+					player_info.animals[animal_type] = 0
+		
+		info.animals_by_player[player_id] = player_info
+	
+	return info
+
+
+func print_proximity_debug() -> void:
+	"""Print proximity spawning debug information to console."""
+	# Debug output disabled
+
+
+func remove_animal_immediately(animal: Node3D) -> void:
+	"""Immediately remove an animal from all tracking when it dies/is killed."""
+	if not animal or not is_instance_valid(animal):
+		return
+	
+	# Remove from current_animals tracking
+	for animal_type: String in current_animals.keys():
+		var animal_list: Array = current_animals[animal_type]
+		
+		# Use safe removal to avoid accessing freed instances
+		for i in range(animal_list.size() - 1, -1, -1):
+			var animal_ref = animal_list[i]
+			if not is_instance_valid(animal_ref):
+				animal_list.remove_at(i)
+				continue
+			
+			if animal_ref == animal:
+				animal_list.remove_at(i)
+				break
+	
+	# Remove from proximity tracking
+	for player_id in proximity_animals.keys():
+		for animal_type: String in proximity_animals[player_id].keys():
+			var proximity_list: Array = proximity_animals[player_id][animal_type]
+			
+			# Use safe removal to avoid accessing freed instances
+			for i in range(proximity_list.size() - 1, -1, -1):
+				var animal_ref = proximity_list[i]
+				if not is_instance_valid(animal_ref):
+					proximity_list.remove_at(i)
+					continue
+				
+				if animal_ref == animal:
+					proximity_list.remove_at(i)
+					break
+
+
+func _on_animal_died(animal: BaseAnimal) -> void:
+	"""Handle immediate cleanup when an animal dies/is killed."""
+	remove_animal_immediately(animal)
 
 
 func _get_biome_preference(animal_type: String, biome_type: BiomeManagerClass.BiomeType, animal_data: Dictionary) -> float:
@@ -294,4 +420,201 @@ func _get_biome_preference(animal_type: String, biome_type: BiomeManagerClass.Bi
 	if biome_preferences.has(biome_type):
 		return biome_preferences[biome_type]
 	
-	return 0.1  # Very low preference for unspecified biomes 
+	return 0.1  # Very low preference for unspecified biomes
+
+
+func _update_proximity_tracking() -> void:
+	"""Update the proximity tracking for all players and animals."""
+	# Clear proximity tracking
+	proximity_animals.clear()
+	
+	# Initialize proximity tracking for each player
+	for player in players:
+		var player_id: int = player.get_instance_id()
+		proximity_animals[player_id] = {}
+		
+		# Initialize animal type arrays for this player
+		for animal_type: String in animal_scenes.keys():
+			proximity_animals[player_id][animal_type] = []
+	
+	# Categorize existing animals by proximity to players
+	for animal_type: String in current_animals.keys():
+		var animal_list: Array = current_animals[animal_type]
+		
+		for animal_ref in animal_list:
+			if not is_instance_valid(animal_ref):
+				continue
+			
+			var animal: Node3D = animal_ref as Node3D
+			if not animal or animal.is_queued_for_deletion():
+				continue
+			
+			# Find the closest player within spawn distance
+			var closest_player: Node3D = null
+			var min_distance: float = SPAWN_DISTANCE_MAX
+			
+			for player in players:
+				var distance: float = animal.global_position.distance_to(player.global_position)
+				if distance <= SPAWN_DISTANCE_MAX and distance < min_distance:
+					closest_player = player
+					min_distance = distance
+			
+			# Add animal to proximity tracking if within range
+			if closest_player:
+				var player_id: int = closest_player.get_instance_id()
+				proximity_animals[player_id][animal_type].append(animal)
+
+
+func _attempt_spawn_for_player_area(player: Node3D, player_id: int) -> void:
+	"""Attempt to spawn animals in a specific player's proximity area."""
+	if not proximity_animals.has(player_id):
+		return
+	
+	var player_proximity: Dictionary = proximity_animals[player_id]
+	var total_animals_in_area: int = _count_animals_in_proximity_area(player_id)
+	
+	# Check if we've reached the maximum animals for this area
+	if total_animals_in_area >= MAX_ANIMALS_PER_AREA:
+		return
+	
+	# Try to spawn each type of animal for this player area
+	for animal_type: String in animal_scenes.keys():
+		var animal_data: Dictionary = animal_scenes[animal_type]
+		var current_count_in_area: int = player_proximity[animal_type].size()
+		
+		# Check if we need more of this animal type in this area
+		if current_count_in_area < animal_data.max_count_per_area:
+			_try_spawn_animal_for_player(animal_type, animal_data, player, player_id)
+
+
+func _try_spawn_animal_for_player(animal_type: String, animal_data: Dictionary, player: Node3D, player_id: int) -> void:
+	"""Try to spawn a specific type of animal near a specific player."""
+	var spawn_attempt_count: int = 0
+	var max_spawn_attempts: int = 10
+	
+	while spawn_attempt_count < max_spawn_attempts:
+		spawn_attempt_count += 1
+		
+		var spawn_position: Vector3 = _find_valid_spawn_position_near_player(player, animal_type)
+		if spawn_position == Vector3.ZERO:
+			continue  # Try again with different position
+		
+		# Check biome preference for this animal type
+		var biome_type: BiomeManagerClass.BiomeType = biome_manager.get_biome_at_position(spawn_position)
+		var biome_preference: float = _get_biome_preference(animal_type, biome_type, animal_data)
+		
+		# Use biome preference as spawn chance (higher preference = higher chance)
+		if randf() > biome_preference:
+			continue  # This biome isn't preferred, try different location
+		
+		# Spawn the animal
+		var animal_scene: PackedScene = animal_data.scene
+		var animal: Node3D = animal_scene.instantiate()
+		
+		# Add to the scene
+		get_tree().current_scene.add_child(animal)
+		animal.global_position = spawn_position
+		
+		# Connect death signal for immediate cleanup
+		if animal.has_signal("animal_died"):
+			animal.animal_died.connect(_on_animal_died)
+		
+		# Track the spawned animal
+		if not current_animals.has(animal_type):
+			current_animals[animal_type] = []
+		current_animals[animal_type].append(animal)
+		
+		# Add to proximity tracking
+		proximity_animals[player_id][animal_type].append(animal)
+		
+		return  # Successfully spawned
+	
+	# Failed to find suitable spawn location after max attempts
+
+
+func _find_valid_spawn_position_near_player(player: Node3D, animal_type: String = "") -> Vector3:
+	"""Find a valid position to spawn an animal near a specific player."""
+	var attempts: int = 10  # Maximum attempts to find a valid position
+	
+	while attempts > 0:
+		attempts -= 1
+		
+		# Generate a random position around the player
+		var angle: float = randf() * TAU  # Random angle in radians
+		var distance: float = randf_range(SPAWN_DISTANCE_MIN, SPAWN_DISTANCE_MAX)
+		
+		var spawn_position: Vector3 = player.global_position + Vector3(
+			cos(angle) * distance,
+			0,
+			sin(angle) * distance
+		)
+		
+		# Check if position is valid (not too close to any player)
+		if _is_position_valid(spawn_position):
+			# Get terrain height at this position
+			if world_generator and world_generator.has_method("get_terrain_height_at_position"):
+				var terrain_height: float = world_generator.get_terrain_height_at_position(spawn_position)
+				
+				# Set appropriate height based on animal type
+				if animal_type == "bird":
+					# Birds spawn in the air
+					spawn_position.y = terrain_height + randf_range(4.0, 8.0)  # 4-8 meters above ground
+				else:
+					# Ground animals spawn on terrain surface
+					spawn_position.y = terrain_height + TERRAIN_HEIGHT_OFFSET
+			else:
+				# Fallback heights
+				if animal_type == "bird":
+					spawn_position.y = 6.0  # Default flight height
+				else:
+					spawn_position.y = 1.0  # Default ground height
+			
+			return spawn_position
+	
+	return Vector3.ZERO  # No valid position found
+
+
+func _count_animals_in_proximity_area(player_id: int) -> int:
+	"""Count the total number of animals in a player's proximity area."""
+	if not proximity_animals.has(player_id):
+		return 0
+	
+	var total: int = 0
+	var player_proximity: Dictionary = proximity_animals[player_id]
+	
+	for animal_type: String in player_proximity.keys():
+		total += player_proximity[animal_type].size()
+	
+	return total
+
+
+func _check_for_despawns() -> void:
+	"""Check if any animals should be despawned based on distance from players."""
+	for animal_type: String in current_animals.keys():
+		var animal_list: Array = current_animals[animal_type]
+		
+		# Check each animal for despawn conditions
+		for i in range(animal_list.size() - 1, -1, -1):
+			# Safely check if the array element is valid before assignment
+			var animal_ref = animal_list[i]
+			if not is_instance_valid(animal_ref):
+				animal_list.remove_at(i)
+				continue
+			
+			var animal: Node3D = animal_ref as Node3D
+			if not animal or animal.is_queued_for_deletion():
+				animal_list.remove_at(i)
+				continue
+			
+			# Check if animal is too far from all players
+			var should_despawn: bool = true
+			for player in players:
+				var distance: float = animal.global_position.distance_to(player.global_position)
+				if distance <= DESPAWN_RADIUS:
+					should_despawn = false
+					break
+			
+			# Despawn the animal if it's too far from all players
+			if should_despawn:
+				animal.queue_free()
+				animal_list.remove_at(i) 

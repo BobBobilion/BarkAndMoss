@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://scripts/Hotbar.gd" id="1_5vfxu"]
 [ext_resource type="Script" path="res://scripts/HUD.gd" id="2_6wfxu"]
 [ext_resource type="PackedScene" uid="uid://bv5n6m8uao2p4" path="res://scenes/Inventory.tscn" id="3_inventory"]
-[ext_resource type="Theme" uid="uid://ck27nol81b6wj" path="res://ui/bark_moss_theme.tres" id="4_theme"]
+[ext_resource type="Theme" uid="uid://cyoxrwsnvsuny" path="res://ui/bark_moss_theme.tres" id="4_theme"]
 
 [node name="HUD" type="Control"]
 layout_mode = 3

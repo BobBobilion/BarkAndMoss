@@ -28,6 +28,7 @@ const CRAFTING_RECIPES: Dictionary = {
 # --- Node References ---
 @onready var bonfire_model: Node3D = $BonfireModel
 @onready var campfire_light: OmniLight3D = $CampfireLight
+@onready var fire_particles: CPUParticles3D = $FireParticles
 @onready var interaction_area: Area3D = $InteractionArea
 @onready var safe_zone: Area3D = $SafeZone
 @onready var cooking_timer: Timer = $CookingTimer
@@ -38,6 +39,7 @@ var current_state: CampfireState = CampfireState.LIT
 var cooking_queue: Array[String] = []
 var players_in_range: Array[Node] = []
 var is_player_nearby: bool = false
+var flicker_timer: float = 0.0  # Timer for light flickering effect
 
 # --- Signals ---
 signal cooking_completed(cooked_items: Array[String])
@@ -70,9 +72,39 @@ func _process(delta: float) -> void:
 	# Update light intensity based on nearby trees (simplified for now)
 	_update_light_intensity()
 	
+	# Add realistic fire flickering when lit
+	if current_state != CampfireState.UNLIT:
+		_update_fire_flicker(delta)
+	
 	# Handle player input if nearby
 	if is_player_nearby and Input.is_action_just_pressed("interact"):
 		_handle_player_interaction()
+
+func _update_fire_flicker(delta: float) -> void:
+	"""Create realistic fire flickering effect."""
+	flicker_timer += delta
+	
+	# Create subtle light energy variation using sine waves with different frequencies
+	var base_energy: float = MAX_LIGHT_ENERGY
+	if current_state == CampfireState.COOKING:
+		base_energy *= 1.2
+	
+	# Combine multiple sine waves for complex flickering pattern
+	var flicker_1: float = sin(flicker_timer * 3.0) * 0.1
+	var flicker_2: float = sin(flicker_timer * 7.0) * 0.05
+	var flicker_3: float = sin(flicker_timer * 12.0) * 0.03
+	
+	# Apply combined flickering to light energy
+	campfire_light.light_energy = base_energy + flicker_1 + flicker_2 + flicker_3
+	
+	# Subtle particle amount variation for added realism
+	if fire_particles and fire_particles.emitting:
+		var particle_variation: float = sin(flicker_timer * 5.0) * 0.1
+		var current_intensity: float = 1.0
+		if current_state == CampfireState.COOKING:
+			current_intensity = 1.3
+		
+		fire_particles.speed_scale = (1.2 * current_intensity) + particle_variation
 
 func _update_campfire_state() -> void:
 	"""Update the visual state of the campfire based on current state."""
@@ -80,12 +112,34 @@ func _update_campfire_state() -> void:
 		CampfireState.UNLIT:
 			campfire_light.visible = false
 			campfire_light.light_energy = 0.0
+			fire_particles.emitting = false
 		CampfireState.LIT:
 			campfire_light.visible = true
 			campfire_light.light_energy = MAX_LIGHT_ENERGY
+			fire_particles.emitting = true
+			_set_fire_intensity(1.0)  # Normal fire intensity
 		CampfireState.COOKING:
 			campfire_light.visible = true
 			campfire_light.light_energy = MAX_LIGHT_ENERGY * 1.2  # Slightly brighter when cooking
+			fire_particles.emitting = true
+			_set_fire_intensity(1.3)  # More intense fire when cooking
+
+func _set_fire_intensity(intensity: float) -> void:
+	"""Adjust the fire particle intensity based on campfire activity."""
+	if not fire_particles:
+		return
+	
+	# Adjust particle amount and speed for different intensities
+	var base_amount: int = 35
+	var base_speed: float = 1.2
+	var base_velocity_max: float = 2.5
+	
+	fire_particles.amount = int(base_amount * intensity)
+	fire_particles.speed_scale = base_speed * intensity
+	fire_particles.initial_velocity_max = base_velocity_max * intensity
+	
+	# Add slight randomness to make fire feel more alive
+	fire_particles.randomness = 0.3 + (intensity - 1.0) * 0.1
 
 func _update_light_intensity() -> void:
 	"""Update light intensity based on nearby trees and obstacles."""

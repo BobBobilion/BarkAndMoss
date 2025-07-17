@@ -171,11 +171,11 @@ func _update_character_selection_ui() -> void:
 	normal_style.set_corner_radius_all(8)
 	
 	var selected_style = StyleBoxFlat.new()
-	selected_style.bg_color = Color(0.545, 0.357, 0.169, 0.9)  # Selected panel background (darker)
-	selected_style.border_color = Color(0.918, 0.878, 0.835, 1)  # Highlighted border
+	selected_style.bg_color = Color(0.85, 0.95, 0.85, 0.9)  # Pastel light green background
+	selected_style.border_color = Color(0.545, 0.357, 0.169, 1)  # Same brown border as unselected
 	selected_style.set_border_width_all(4)
 	selected_style.set_corner_radius_all(8)
-	selected_style.shadow_color = Color(0.545, 0.357, 0.169, 0.6)
+	selected_style.shadow_color = Color(0.6, 0.8, 0.6, 0.6)  # Light green shadow
 	selected_style.shadow_size = 6
 	
 	# Apply styles based on selection

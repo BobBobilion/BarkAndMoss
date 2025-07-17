@@ -144,7 +144,7 @@ const DEER := {
 # - Spawn distances: Automatically adjusted
 #
 # Use GameConstants.print_world_info() to see current values
-const WORLD_SCALE_MULTIPLIER: float = 4.0
+const WORLD_SCALE_MULTIPLIER: float = 5.0
 
 # =============================================================================
 # WORLD GENERATION
@@ -170,15 +170,31 @@ const WORLD := {
 # =============================================================================
 
 const SPAWN := {
-	"DISTANCE_MIN": 20.0,
-	"DISTANCE_MAX": 80.0,  # Increased for larger world
-	"BASE_MAX_ANIMALS": 8,  # Original animal count
-	"MAX_ANIMALS": int(8 * WORLD_SCALE_MULTIPLIER),  # Scaled animal count
-	"CHECK_INTERVAL": 5.0,
+	# Proximity-based spawning distances
+	"DISTANCE_MIN": 20.0,  # Minimum distance from player to spawn animals
+	"DISTANCE_MAX": 60.0,  # Maximum distance from player to spawn animals  
+	"DESPAWN_RADIUS": 72.0,  # 120% of max distance - animals despawn beyond this
+	
+	# Animal limits per proximity area (around each player)
+	"MAX_ANIMALS_PER_AREA": 12,  # Maximum animals within proximity area per player
+	"BASE_MAX_ANIMALS": 8,  # Original animal count (legacy)
+	"MAX_ANIMALS": int(8 * WORLD_SCALE_MULTIPLIER),  # Scaled animal count (legacy)
+	
+	# Spawn timing and checks
+	"CHECK_INTERVAL": 3.0,  # How often to check for spawning (reduced for better responsiveness)
+	"DESPAWN_CHECK_INTERVAL": 2.0,  # How often to check for despawning
+	
+	# World positioning
 	"TERRAIN_HEIGHT_OFFSET": 1.0,
 	"PLAYER_SPAWN_OFFSET": 2.0,
 	"SPAWN_HEIGHT_CLEARANCE": 5.0,
-	# Individual animal type counts (scaled)
+	
+	# Individual animal type counts per proximity area
+	"RABBIT_COUNT_PER_AREA": 4,  # Max rabbits per player proximity area
+	"BIRD_COUNT_PER_AREA": 4,    # Max birds per player proximity area
+	"DEER_COUNT_PER_AREA": 3,    # Max deer per player proximity area
+	
+	# Legacy individual animal type counts (scaled globally)
 	"RABBIT_COUNT": int(3 * WORLD_SCALE_MULTIPLIER),
 	"BIRD_COUNT": int(3 * WORLD_SCALE_MULTIPLIER),
 	"DEER_COUNT": int(2 * WORLD_SCALE_MULTIPLIER)
@@ -214,12 +230,21 @@ const UI := {
 # =============================================================================
 
 const PHYSICS_LAYERS := {
-	"TERRAIN": 1,
-	"PLAYER": 2,
-	"INTERACTABLE": 4,
-	"ARROW": 4,
-	"ANIMAL": 8,
-	"CORPSE": 16
+	"TERRAIN": 1,           # Ground, terrain mesh
+	"ENVIRONMENT": 2,       # Trees, rocks, players - solid objects
+	"INTERACTABLE": 4,      # Interaction areas, arrows
+	"ANIMAL": 8,            # Living animals
+	"CORPSE": 16            # Dead animal corpses
+}
+
+# Common collision masks for easy reference
+const COLLISION_MASKS := {
+	"PLAYER": 3,            # Terrain (1) + Environment (2) = 3
+	"ANIMAL": 11,           # Terrain (1) + Environment (2) + Animals (8) = 11
+	"ANIMAL_DETECTION": 2,  # Detect players/environment objects
+	"AXE_HITBOX": 10,       # Environment (2) + Animals (8) = 10
+	"ARROW": 9,             # Terrain (1) + Animals (8) = 9
+	"TERRAIN_ONLY": 1       # Just terrain
 }
 
 # =============================================================================

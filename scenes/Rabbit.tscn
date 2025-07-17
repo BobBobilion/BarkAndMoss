@@ -3,27 +3,27 @@
 [ext_resource type="Script" uid="uid://dcx66qqa28mgb" path="res://scripts/Rabbit.gd" id="1_rabbit_script"]
 [ext_resource type="PackedScene" uid="uid://bd78f0vsjrrju" path="res://assets/animals/Rabbit.glb" id="2_rabbit_model"]
 
-[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_rabbit"]
-radius = 0.3
-height = 0.6
+[sub_resource type="BoxShape3D" id="BoxShape3D_rggft"]
+size = Vector3(0.105194, 0.197601, 0.243195)
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_detection"]
 radius = 6.0
 
 [node name="Rabbit" type="CharacterBody3D"]
 collision_layer = 8
+collision_mask = 11
 script = ExtResource("1_rabbit_script")
 
 [node name="RabbitModel" parent="." instance=ExtResource("2_rabbit_model")]
-transform = Transform3D(-1.74846e-10, 0.004, 1.74846e-10, 0, -1.74846e-10, 0.004, 0.004, 1.74846e-10, 7.64274e-18, 0, 0, 0)
+transform = Transform3D(-7.86807e-11, 0.0018, 7.86807e-11, 0, -7.86807e-11, 0.0018, 0.0018, 7.86807e-11, 3.43923e-18, 0, 0, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0.3, 0)
-shape = SubResource("CapsuleShape3D_rabbit")
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0.00283813, 0.197998, -0.00283813)
+shape = SubResource("BoxShape3D_rggft")
 
 [node name="DetectionArea" type="Area3D" parent="."]
 collision_layer = 0
-collision_mask = 6
+collision_mask = 2
 monitorable = false
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="DetectionArea"]

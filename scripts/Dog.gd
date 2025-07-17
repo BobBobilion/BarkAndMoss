@@ -3,6 +3,7 @@ extends CharacterBody3D
 
 
 # --- Constants ---
+const WALK_SPEED: float = 4.0  # Added walk speed for normal movement
 const RUN_SPEED: float = 8.0
 const JUMP_VELOCITY: float = 5.0
 const MOUSE_SENSITIVITY: float = 0.002
@@ -37,15 +38,21 @@ const ANIM_IDLE: String = "DogArmature|Idle"                         # Default i
 
 # Movement speed thresholds for animation selection
 const WALK_THRESHOLD: float = 0.1                        # Minimum speed to trigger walk
-const GALLOP_THRESHOLD: float = 6.0                      # Speed threshold for gallop vs walk
+const GALLOP_THRESHOLD: float = 6.0                      # Speed threshold for gallop vs walk (adjusted for walk/run system)
 
 
 # --- Properties ---
 # Physics
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
+# Movement
+var current_speed: float = WALK_SPEED  # Default to walking speed
+
 # Camera
-@onready var camera: Camera3D = $Camera3D
+@onready var camera: Camera3D = $CameraRootOffset/HorizontalPivot/VerticalPivot/SpringArm3D/Camera3D
+@onready var horizontal_pivot: Node3D = $CameraRootOffset/HorizontalPivot
+@onready var vertical_pivot: Node3D = $CameraRootOffset/HorizontalPivot/VerticalPivot
+@onready var spring_arm: SpringArm3D = $CameraRootOffset/HorizontalPivot/VerticalPivot/SpringArm3D
 var mouse_delta: Vector2 = Vector2.ZERO
 var camera_pitch: float = 0.0
 var base_camera_position: Vector3
@@ -73,7 +80,7 @@ var was_moving: bool = false  # Track previous movement state to detect transiti
 func _ready() -> void:
 	# Set up collision layers for proper terrain interaction
 	collision_layer = 2      # Dog is on layer 2
-	collision_mask = 1 | 2   # Dog collides with terrain (layer 1) and other players (layer 2)
+	collision_mask = 1 | 2 | 8   # Dog collides with terrain (1), players/environment (2), and animals (8)
 	
 	# This check is the key to fixing camera and input issues.
 	if is_multiplayer_authority():
@@ -87,8 +94,10 @@ func _ready() -> void:
 	# Add to group for identification
 	add_to_group("dog_player")
 
-	# Store the initial camera position
-	base_camera_position = camera.position
+	# Configure SpringArm3D for dog-appropriate camera distance
+	if spring_arm:
+		spring_arm.spring_length = 2.5  # Slightly closer than player
+		spring_arm.collision_mask = 1   # Terrain collision
 	
 	# Initialize animation system
 	_setup_animations()
@@ -170,16 +179,22 @@ func _physics_process(delta: float) -> void:
 		if is_attacking:
 			stop_bite_attack()
 
+	# Handle run/walk switching (like player) [[memory:3259606]]
+	if Input.is_action_pressed("run"):
+		current_speed = RUN_SPEED
+	else:
+		current_speed = WALK_SPEED
+
 	# Handle movement input
 	var input_dir: Vector2 = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
 	var direction: Vector3 = (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
 	if direction:
-		# The dog always moves at RUN_SPEED
-		velocity.x = direction.x * RUN_SPEED
-		velocity.z = direction.z * RUN_SPEED
+		# Use current_speed (walk or run based on input)
+		velocity.x = direction.x * current_speed
+		velocity.z = direction.z * current_speed
 	else:
-		velocity.x = move_toward(velocity.x, 0, RUN_SPEED)
-		velocity.z = move_toward(velocity.z, 0, RUN_SPEED)
+		velocity.x = move_toward(velocity.x, 0, current_speed)
+		velocity.z = move_toward(velocity.z, 0, current_speed)
 
 	move_and_slide()
 	
@@ -193,6 +208,18 @@ func _setup_animations() -> void:
 	if dog_model:
 		animation_player = _find_animation_player_recursive(dog_model)
 		if animation_player:
+			# DEBUG: Print all available animations
+			print("Dog: Available animations:")
+			var animation_list: PackedStringArray = animation_player.get_animation_list()
+			for anim_name in animation_list:
+				print("  - ", anim_name)
+			
+			# Check if our idle variants exist
+			print("Dog: Checking idle animations:")
+			print("  ANIM_IDLE (", ANIM_IDLE, "): ", animation_player.has_animation(ANIM_IDLE))
+			print("  ANIM_IDLE_2 (", ANIM_IDLE_2, "): ", animation_player.has_animation(ANIM_IDLE_2))
+			print("  ANIM_IDLE_2_HEAD_LOW (", ANIM_IDLE_2_HEAD_LOW, "): ", animation_player.has_animation(ANIM_IDLE_2_HEAD_LOW))
+			
 			# Start with idle animation
 			_play_animation(ANIM_IDLE)
 
@@ -223,9 +250,11 @@ func _update_movement_animation() -> void:
 	# Check if jumping (in air) - jumping takes priority over other actions
 	if not is_on_floor():
 		target_animation = ANIM_GALLOP_JUMP
-	# Don't override eating animation, but allow jump to override attack
+	# Don't override eating or attacking animations with movement animations (jumping can still override all)
 	elif is_eating:
 		return
+	elif is_attacking:
+		return  # FIXED: Don't override attack animation with movement animations
 	# Check movement speed
 	elif is_currently_moving:
 		if speed >= GALLOP_THRESHOLD:
@@ -235,26 +264,42 @@ func _update_movement_animation() -> void:
 	else:
 		# Only select a new idle animation when transitioning from movement to idle
 		# or if no animation is currently playing
-		if was_moving or current_animation.is_empty():
-			# Vary idle animations for more life
-			var idle_variant: int = randi() % 3
-			match idle_variant:
-				0:
-					target_animation = ANIM_IDLE
-				1:
-					target_animation = ANIM_IDLE_2
-				2:
-					target_animation = ANIM_IDLE_2_HEAD_LOW
+		# FIXED: Also check if current animation is NOT an idle animation (e.g., after attack)
+		var is_current_idle: bool = current_animation in [ANIM_IDLE, ANIM_IDLE_2, ANIM_IDLE_2_HEAD_LOW]
+		
+		if was_moving or current_animation.is_empty() or not is_current_idle:
+			# FIXED: Only select new idle animation when transitioning, not every frame
+			# Use default idle to avoid rapid switching
+			target_animation = ANIM_IDLE
 		else:
-			# Stay with current idle animation if already idle
+			# Stay with current idle animation if already idle and let it finish
 			target_animation = current_animation
 	
 	# Update movement state tracking
 	was_moving = is_currently_moving
 	
-	# Play the appropriate animation - allow restarts if animation finished
-	if target_animation != current_animation or not animation_player.is_playing():
+	# Play the appropriate animation - but be careful with idle animation restarts
+	# FIXED: Only restart if we're switching to a different animation, not when idle animations finish
+	if target_animation != current_animation:
 		_play_animation(target_animation)
+	elif not animation_player.is_playing():
+		# Handle animation finishing cases
+		if target_animation in [ANIM_IDLE, ANIM_IDLE_2, ANIM_IDLE_2_HEAD_LOW]:
+			# 30% chance to switch to a different idle animation when current idle finishes
+			if randf() < 0.30:
+				var idle_variants: Array[String] = [ANIM_IDLE, ANIM_IDLE_2, ANIM_IDLE_2_HEAD_LOW]
+				# Remove current animation from options to ensure we get a different one
+				idle_variants.erase(current_animation)
+				var new_idle: String = idle_variants[randi() % idle_variants.size()]
+				print("Dog: Switching from '", current_animation, "' to '", new_idle, "' (30% chance triggered)")
+				_play_animation(new_idle)
+			else:
+				# 70% chance to continue with same idle animation
+				print("Dog: Continuing with '", target_animation, "' (70% chance - no variation)")
+				_play_animation(target_animation)
+		else:
+			# Restart non-idle animations when they finish
+			_play_animation(target_animation)
 
 
 func _play_animation(animation_name: String) -> void:
@@ -264,6 +309,7 @@ func _play_animation(animation_name: String) -> void:
 	
 	# Check if the animation exists
 	if animation_player.has_animation(animation_name):
+		print("Dog: Playing animation '", animation_name, "' (found directly)")
 		animation_player.play(animation_name, ANIMATION_BLEND_TIME)
 		current_animation = animation_name
 		
@@ -280,6 +326,10 @@ func _play_animation(animation_name: String) -> void:
 		match animation_name:
 			ANIM_IDLE:
 				alternatives = ["DogArmature|Idle", "Armature|Idle", "Dog|Idle", "Idle", "DogArmature|idle", "Armature|idle", "Dog|idle", "idle", "DogArmature|Idle_1", "Armature|Idle_1", "Dog|Idle_1", "Idle_1"]
+			ANIM_IDLE_2:
+				alternatives = ["DogArmature|Idle_2", "Armature|Idle_2", "Dog|Idle_2", "Idle_2", "DogArmature|idle_2", "Armature|idle_2", "Dog|idle_2", "idle_2", "DogArmature|Idle2", "Armature|Idle2", "Dog|Idle2", "Idle2", "DogArmature|Idle", "Armature|Idle", "Dog|Idle", "Idle"]
+			ANIM_IDLE_2_HEAD_LOW:
+				alternatives = ["DogArmature|Idle_2_HeadLow", "Armature|Idle_2_HeadLow", "Dog|Idle_2_HeadLow", "Idle_2_HeadLow", "DogArmature|idle_2_headlow", "Armature|idle_2_headlow", "Dog|idle_2_headlow", "idle_2_headlow", "DogArmature|Idle_HeadLow", "Armature|Idle_HeadLow", "Dog|Idle_HeadLow", "Idle_HeadLow", "DogArmature|Idle_2", "Armature|Idle_2", "Dog|Idle_2", "Idle_2", "DogArmature|Idle", "Armature|Idle", "Dog|Idle", "Idle"]
 			ANIM_WALK:
 				alternatives = ["DogArmature|Walk", "Armature|Walk", "Dog|Walk", "Walk", "DogArmature|walking", "Armature|walking", "Dog|walking", "walking"]
 			ANIM_GALLOP:
@@ -318,37 +368,25 @@ func _play_animation(animation_name: String) -> void:
 
 func _handle_camera_rotation(relative_mouse_motion: Vector2) -> void:
 	"""Handles the rotation of the player and camera based on mouse movement."""
-	# Rotate the player body left/right (yaw)
+	# Rotate the dog body left/right (yaw) - essential for movement direction
 	rotate_y(-relative_mouse_motion.x * MOUSE_SENSITIVITY)
 	
-	# Update camera pitch
+	# Update camera pitch on vertical pivot
 	camera_pitch += -relative_mouse_motion.y * MOUSE_SENSITIVITY
 	camera_pitch = clamp(camera_pitch, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX)
 	
-	# Set camera rotation and position
-	camera.rotation.x = camera_pitch
-	_update_camera_position()
+	# Apply pitch to vertical pivot
+	if vertical_pivot:
+		vertical_pivot.rotation.x = camera_pitch
 
 
 func handle_camera_collision() -> void:
 	"""
-	Handles camera collision by casting a ray from the player to the camera.
-	If the ray hits something, the camera is moved closer to the player.
+	Camera collision is now handled automatically by SpringArm3D in the new camera system.
+	This function is kept for compatibility but no longer needed.
 	"""
-	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
-	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(global_position, camera.global_position)
-	query.exclude = [self]
-	
-	var result: Dictionary = space_state.intersect_ray(query)
-	if result:
-		# If something is blocking the camera, move it closer
-		var collision_point: Vector3 = result.position
-		var direction_to_cam: Vector3 = global_position.direction_to(camera.global_position)
-		var safe_distance: float = global_position.distance_to(collision_point) - CAMERA_COLLISION_BIAS
-		camera.global_position = global_position + direction_to_cam * safe_distance
-	else:
-		# Restore dynamic camera position
-		_update_camera_position()
+	# SpringArm3D handles collision automatically
+	pass
 
 
 func _update_corpse_dragging() -> void:
@@ -505,23 +543,8 @@ func _notify_birds_of_bark() -> void:
 
 func _update_camera_position() -> void:
 	"""
-	Calculates the camera's position based on its pitch. This creates a dynamic
-	over-the-shoulder effect when looking up or down.
+	Camera position is now handled by the SpringArm3D system.
+	This function is kept for compatibility but no longer needed.
 	"""
-	# Calculate dynamic camera position based on pitch
-	var pitch_factor: float = -camera_pitch / 1.5  # Normalize pitch to 0-1 range
-	
-	# When looking down (negative pitch), move camera higher and closer
-	# When looking up (positive pitch), keep camera at normal position
-	var height_offset: float = 0.0
-	var distance_offset: float = 0.0
-	
-	if camera_pitch < 0:  # Looking down
-		height_offset = abs(pitch_factor) * 2.0  # Move up to 2 units higher
-		distance_offset = abs(pitch_factor) * 1.0  # Move 1 unit closer
-	
-	# Calculate new camera position
-	var new_y: float = base_camera_position.y + height_offset
-	var new_z: float = base_camera_position.z - distance_offset
-	
-	camera.position = Vector3(base_camera_position.x, new_y, new_z)
+	# SpringArm3D handles camera positioning automatically
+	pass

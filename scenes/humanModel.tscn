@@ -1,0 +1,32 @@
+[gd_scene load_steps=5 format=3 uid="uid://q2jpbar8t2tu"]
+
+[ext_resource type="PackedScene" uid="uid://c17lp7p4hejf3" path="res://assets/animals/Adventurer.glb" id="1_b7lhe"]
+[ext_resource type="PackedScene" uid="uid://bqs4yq8w7h7e" path="res://scenes/tools/axe.tscn" id="2_508eb"]
+[ext_resource type="PackedScene" uid="uid://copxsxvfo42jw" path="res://assets/tools/Bow.glb" id="3_508eb"]
+[ext_resource type="PackedScene" uid="uid://dcruurjyntiu5" path="res://assets/tools/Quiver.glb" id="4_5kkap"]
+
+[node name="Root Scene" instance=ExtResource("1_b7lhe")]
+
+[node name="BoneAttachmentRight" type="BoneAttachment3D" parent="RootNode/CharacterArmature/Skeleton3D" index="5"]
+transform = Transform3D(-0.364092, 0.0516144, -0.929932, 0.798429, -0.496779, -0.340178, -0.479529, -0.86634, 0.139663, -0.00225749, -0.00154502, 0.0101062)
+bone_name = "Index1.R"
+bone_idx = 41
+
+[node name="Axe" parent="RootNode/CharacterArmature/Skeleton3D/BoneAttachmentRight" index="0" instance=ExtResource("2_508eb")]
+transform = Transform3D(-0.000219863, -0.000964093, -0.000148955, -0.000965568, 0.000236833, -0.000107657, 0.000139069, 0.000120156, -0.000982967, -0.000828952, 0.0013764, -2.20677e-05)
+
+[node name="BoneAttachmentLeft" type="BoneAttachment3D" parent="RootNode/CharacterArmature/Skeleton3D" index="6"]
+transform = Transform3D(-0.0964159, 0.134478, 0.986215, -0.977647, -0.19879, -0.0684716, 0.186842, -0.970772, 0.150639, 0.00265033, -0.000412639, 0.00992598)
+bone_name = "Index1.L"
+bone_idx = 13
+
+[node name="Bow" parent="RootNode/CharacterArmature/Skeleton3D/BoneAttachmentLeft" index="0" instance=ExtResource("3_508eb")]
+transform = Transform3D(0.000627764, 0.00293355, 1.51256e-05, -0.00292166, 0.000626597, -0.000267046, -0.000264291, 4.115e-05, 0.00298806, -0.000224352, 0.000449062, -0.000331408)
+
+[node name="BoneAttachment3D" type="BoneAttachment3D" parent="RootNode/CharacterArmature/Skeleton3D" index="7"]
+transform = Transform3D(0.999987, -0.0024739, -0.00435395, -0.00460985, -0.115103, -0.993343, 0.00195627, 0.993351, -0.115113, 4.41544e-05, -0.000658819, 0.0134678)
+bone_name = "Chest"
+bone_idx = 5
+
+[node name="Quiver" parent="RootNode/CharacterArmature/Skeleton3D/BoneAttachment3D" index="0" instance=ExtResource("4_5kkap")]
+transform = Transform3D(-1.18007e-10, -4.54747e-11, -0.004, -0.004, -6.40284e-10, 2.1123e-10, -6.40284e-10, 0.005, -1.27329e-11, -7.20515e-05, 0.00157728, -0.00167479)

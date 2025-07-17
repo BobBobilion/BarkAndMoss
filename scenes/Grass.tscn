@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://ddaadcmnbnt4e"]
+
+[ext_resource type="Script" uid="uid://cuqy8nmmcawq5" path="res://scripts/Grass.gd" id="1_q4h0j"]
+
+[node name="Grass" type="MultiMeshInstance3D"]
+script = ExtResource("1_q4h0j")
+grass_density = 0.1

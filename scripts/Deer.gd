@@ -72,7 +72,7 @@ func _ready() -> void:
 	"""Initialize the deer with proper collision layers and AI setup."""
 	# Set up collision layers - deer are on animal layer
 	collision_layer = 8     # Animal layer
-	collision_mask = 1      # Collide with terrain only (layer 1)
+	collision_mask = 11     # Terrain (1) + Environment (2) + Animals (8) = 11
 	
 	# Add to animals group for identification
 	add_to_group("animals")
@@ -362,7 +362,6 @@ func take_damage(damage: float) -> void:
 		return
 	
 	current_health -= damage
-	print("Deer took %s damage, health: %s/%s" % [damage, current_health, max_health])
 	
 	# Play hit reaction animation (randomly choose left or right)
 	if current_health > 0:
@@ -371,14 +370,8 @@ func take_damage(damage: float) -> void:
 		
 		# Return to normal animation after a short delay
 		var hit_duration: float = 0.5
-		var timer: Timer = Timer.new()
-		add_child(timer)
-		timer.wait_time = hit_duration
-		timer.timeout.connect(func():
-			timer.queue_free()
-			_update_movement_animation()
-		)
-		timer.start()
+		get_tree().create_timer(hit_duration).timeout.connect(func(): _update_movement_animation())
+
 	else:
 		# Death
 		_die()
@@ -407,8 +400,6 @@ func _die() -> void:
 		queue_free()
 	)
 	timer.start()
-	
-	print("Deer died and will spawn corpse")
 
 
 func _spawn_corpse() -> void:
@@ -418,9 +409,6 @@ func _spawn_corpse() -> void:
 		get_tree().current_scene.add_child(corpse)
 		corpse.global_position = global_position
 		corpse.global_rotation = global_rotation
-		print("Deer corpse spawned at: ", global_position)
-	else:
-		print("Deer: No corpse scene available to spawn")
 
 
 func get_state_string() -> String:

@@ -103,6 +103,12 @@ func _find_player_reference() -> void:
 
 func _spawn_initial_clouds() -> void:
 	"""Spawn the initial set of clouds around the player."""
+	# Ensure we're properly in the scene tree before spawning
+	if not is_inside_tree():
+		print("CloudManager: Not in scene tree yet, deferring cloud spawning...")
+		call_deferred("_spawn_initial_clouds")
+		return
+		
 	if cloud_meshes.is_empty():
 		print("CloudManager: No cloud meshes available for spawning")
 		return
@@ -137,7 +143,7 @@ func _spawn_single_cloud() -> Node3D:
 	
 	# Set position relative to player (or world origin)
 	var spawn_position: Vector3 = _get_random_cloud_position()
-	cloud_instance.global_position = spawn_position
+	cloud_instance.position = spawn_position
 	
 	# Set scale (10:1 width to height ratio)
 	var base_scale: float = randf_range(0.8, 1.5)  # Random size variation

@@ -49,7 +49,7 @@ func _ready() -> void:
 	print("HUD: Ready!")
 
 
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	if not is_instance_valid(player):
 		_find_player()
 		return
@@ -61,7 +61,7 @@ func _process(delta: float) -> void:
 	_check_for_interactable()
 
 
-func _input(event: InputEvent) -> void:
+func _input(_event: InputEvent) -> void:
 	# HUD should not handle interaction input - Player script handles this
 	# Removing interaction input handling to avoid conflicts with Player script
 	pass
@@ -98,9 +98,16 @@ func _check_for_interactable() -> void:
 	"""
 	Checks for the closest interactable object and updates the UI accordingly.
 	"""
-	# Always get the current closest interactable from the player.
-	# The player's function is responsible for cleaning up invalid nodes.
-	var closest: Node = player.get_closest_interactable()
+	if not player.has_method("get_interaction_controller"):
+		return
+		
+	var interaction_controller = player.get_interaction_controller()
+	if not interaction_controller:
+		return
+
+	# Always get the current closest interactable from the player's controller.
+	# The controller's function is responsible for cleaning up invalid nodes.
+	var closest: Node = interaction_controller.get_closest_interactable()
 
 	# Case 1: The closest interactable is new or different.
 	if closest and closest != current_interactable:
