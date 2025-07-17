@@ -9,6 +9,21 @@ const FLEE_DISTANCE: float = 8.0
 const DIRECTION_CHANGE_TIME: float = 3.0
 const FLEE_DETECTION_RANGE: float = 6.0
 
+# Animation constants
+const ANIMATION_BLEND_TIME: float = 0.2  # Time to blend between animations
+
+# Available animation names for brown rabbit model
+const ANIM_IDLE: String = "Armature_001|Idle"        # Default idle animation
+const ANIM_RUN: String = "Armature_001|Run"          # Running animation (used for both walk and run)
+const ANIM_DEATH: String = "Armature_001|Die"        # Death animation
+
+# Movement speed thresholds for animation selection
+const WALK_THRESHOLD: float = 0.1                    # Minimum speed to trigger walk
+const RUN_THRESHOLD: float = 3.0                     # Speed threshold for run vs walk
+
+# --- Rabbit Model ---
+const RABBIT_SCENE: PackedScene = preload("res://assets/animals/low_poly_rabbit_brown.glb")
+
 # --- Node References ---
 @onready var rabbit_model: Node3D = $RabbitModel
 @onready var collision_shape: CollisionShape3D = $CollisionShape3D
@@ -36,6 +51,10 @@ var current_health: float = max_health
 # --- Corpse system ---
 var corpse_scene: PackedScene = preload("res://scenes/RabbitCorpse.tscn")
 
+# --- Animation system ---
+var animation_player: AnimationPlayer
+var current_animation: String = ""
+
 
 func _ready() -> void:
 	"""Initialize the rabbit with proper collision layers and AI setup."""
@@ -45,6 +64,9 @@ func _ready() -> void:
 	
 	# Add to animals group for identification
 	add_to_group("animals")
+	
+	# Set up animations
+	_setup_animations()
 	
 	# Store the starting position as wander center
 	wander_center = global_position
@@ -74,6 +96,9 @@ func _physics_process(delta: float) -> void:
 	
 	# Move the rabbit
 	move_and_slide()
+	
+	# Update animations based on movement and state
+	_update_movement_animation()
 
 
 func _update_ai(delta: float) -> void:
@@ -198,10 +223,14 @@ func die() -> void:
 	
 	current_state = State.DEAD
 	
+	# Play death animation
+	_play_animation(ANIM_DEATH)
+	
 	# Spawn a corpse at this location
 	_spawn_corpse()
 	
-	# Remove the rabbit
+	# Remove the rabbit after a short delay to allow death animation to play
+	await get_tree().create_timer(1.0).timeout
 	queue_free()
 
 
@@ -224,4 +253,111 @@ func get_state_name() -> String:
 		State.DEAD:
 			return "Dead"
 		_:
-			return "Unknown" 
+			return "Unknown"
+
+
+
+
+
+# =============================================================================
+# ANIMATION SYSTEM
+# =============================================================================
+
+func _setup_animations() -> void:
+	"""Initialize the animation system by finding the AnimationPlayer in the rabbit model."""
+	# Look for AnimationPlayer in the rabbit model
+	if rabbit_model:
+		animation_player = _find_animation_player_recursive(rabbit_model)
+		if animation_player:
+			# Start with idle animation
+			_play_animation(ANIM_IDLE)
+		else:
+			print("Rabbit: No AnimationPlayer found in rabbit model")
+
+
+func _find_animation_player_recursive(node: Node) -> AnimationPlayer:
+	"""Recursively search for an AnimationPlayer node in the rabbit model."""
+	if node is AnimationPlayer:
+		return node as AnimationPlayer
+	
+	for child in node.get_children():
+		var result: AnimationPlayer = _find_animation_player_recursive(child)
+		if result:
+			return result
+	
+	return null
+
+
+func _update_movement_animation() -> void:
+	"""Update rabbit animations based on current state and movement."""
+	if not animation_player:
+		return
+	
+	# Calculate movement speed for animation selection
+	var speed: float = Vector2(velocity.x, velocity.z).length()
+	var target_animation: String = ""
+	
+	# Select animation based on state and movement
+	match current_state:
+		State.WANDERING:
+			if speed > WALK_THRESHOLD:
+				target_animation = ANIM_RUN  # Use run for both walk and run
+			else:
+				target_animation = ANIM_IDLE
+		State.FLEEING:
+			target_animation = ANIM_RUN  # Always use run when fleeing
+		State.DEAD:
+			target_animation = ANIM_DEATH
+	
+	# Play the appropriate animation - allow restarts if animation finished
+	if target_animation != current_animation or not animation_player.is_playing():
+		_play_animation(target_animation)
+
+
+func _play_animation(animation_name: String) -> void:
+	"""Play the specified animation with fallback handling."""
+	if not animation_player:
+		return
+	
+	# Check if the animation exists
+	if animation_player.has_animation(animation_name):
+		animation_player.play(animation_name, ANIMATION_BLEND_TIME)
+		current_animation = animation_name
+		
+		# Ensure movement animations loop properly
+		var looping_animations: Array[String] = [ANIM_RUN, ANIM_IDLE]
+		
+		if animation_name in looping_animations:
+			var animation_resource: Animation = animation_player.get_animation(animation_name)
+			if animation_resource:
+				animation_resource.loop_mode = Animation.LOOP_LINEAR
+	else:
+		# Try fallback alternatives for common animations
+		var alternatives: Array[String] = []
+		match animation_name:
+			ANIM_IDLE:
+				alternatives = ["Armature_001|Idle", "Armature.001|Idle", "Armature|Idle", "Idle", "idle", "default"]
+			ANIM_RUN:
+				alternatives = ["Armature_001|Run", "Armature.001|Run", "Armature|Run", "Run", "run", "running", "Running"]
+			ANIM_DEATH:
+				alternatives = ["Armature_001|Die", "Armature.001|Die", "Armature|Die", "Die", "die", "Death", "death"]
+		
+		# Try to find an alternative
+		for alt in alternatives:
+			if animation_player.has_animation(alt):
+				animation_player.play(alt, ANIMATION_BLEND_TIME)
+				current_animation = alt
+				
+				# Ensure fallback movement animations loop properly too
+				if alt.to_lower().contains("run") or alt.to_lower().contains("idle"):
+					var animation_resource: Animation = animation_player.get_animation(alt)
+					if animation_resource:
+						animation_resource.loop_mode = Animation.LOOP_LINEAR
+				
+				return
+		
+		# If no animation found, try to play the first available animation
+		var animation_list: PackedStringArray = animation_player.get_animation_list()
+		if animation_list.size() > 0:
+			animation_player.play(animation_list[0], ANIMATION_BLEND_TIME)
+			current_animation = animation_list[0] 

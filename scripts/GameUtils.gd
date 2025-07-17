@@ -81,8 +81,8 @@ static func is_local_authority(node: Node, multiplayer_ref: MultiplayerAPI = nul
 		else:
 			return true  # Assume local authority if no tree
 	
-	# Handle single-player mode (when there's no multiplayer peer)
-	if not multiplayer_ref.has_multiplayer_peer():
+	# Handle single-player mode or when multiplayer peer is null/freed
+	if not multiplayer_ref.has_multiplayer_peer() or not multiplayer_ref.multiplayer_peer:
 		return true
 	
 	return node.is_multiplayer_authority()

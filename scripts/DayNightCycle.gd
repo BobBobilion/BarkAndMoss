@@ -2,7 +2,7 @@ class_name DayNightCycle
 extends Node3D
 
 # --- Constants ---
-const CYCLE_DURATION: float = 60.0          # Full rotation in 1 minute (60 seconds) - changed from 360
+const CYCLE_DURATION: float = 720.0         # Full rotation in 12 minutes (720 seconds) - changed from 60
 const LIGHT_RADIUS: float = 50.0            # Distance from center for sun/moon orbit
 const LIGHT_HEIGHT: float = 30.0            # Height above terrain for the lights
 

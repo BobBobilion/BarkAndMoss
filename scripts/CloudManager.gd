@@ -4,10 +4,14 @@ class_name CloudManager
 extends Node3D
 
 # Cloud generation constants (static values)
-const CLOUD_HEIGHT_MIN: float = 80.0  # Minimum cloud height
-const CLOUD_HEIGHT_MAX: float = 120.0  # Maximum cloud height
-const CLOUD_SPEED_MIN: float = 0.2     # Minimum cloud movement speed
-const CLOUD_SPEED_MAX: float = 0.8     # Maximum cloud movement speed
+const CLOUD_HEIGHT_MIN: float = 200.0  # Minimum cloud height - much higher in sky
+const CLOUD_HEIGHT_MAX: float = 350.0  # Maximum cloud height - much higher in sky
+const CLOUD_SPEED_MIN: float = 0.05    # Minimum cloud movement speed - much slower
+const CLOUD_SPEED_MAX: float = 0.15    # Maximum cloud movement speed - much slower
+const CLOUD_COUNT_MIN: int = 10        # Minimum number of clouds
+const CLOUD_COUNT_MAX: int = 20        # Maximum number of clouds
+const CLOUD_SCALE_MIN: float = 250.0   # Minimum cloud scale multiplier (5x larger)
+const CLOUD_SCALE_MAX: float = 750.0   # Maximum cloud scale multiplier (5x larger)
 
 # Cloud model paths
 const CLOUD_MODEL_PATH: String = "res://assets/environment/Cloud Set.glb"
@@ -36,7 +40,7 @@ func _ready() -> void:
 	
 	# Calculate dynamic values based on current world scale
 	cloud_spawn_radius = max(100.0, 300.0 * GameConstants.get_world_scale_multiplier())
-	cloud_count = GameConstants.WORLD.CLOUD_COUNT
+	cloud_count = randi_range(CLOUD_COUNT_MIN, CLOUD_COUNT_MAX)  # Random count between 10-20
 	movement_radius = cloud_spawn_radius * 0.8  # Clouds move within 80% of spawn radius
 	
 	# Load cloud model
@@ -48,7 +52,7 @@ func _ready() -> void:
 	# Find player for potential culling (optional)
 	call_deferred("_find_player")
 	
-	print("CloudManager: Generated ", cloud_instances.size(), " clouds")
+	print("CloudManager: Generated ", cloud_instances.size(), " large, high-altitude clouds for natural sun filtering")
 
 
 func _process(delta: float) -> void:
@@ -94,18 +98,22 @@ func _generate_clouds() -> void:
 
 
 func _get_random_cloud_position() -> Vector3:
-	"""Generate a random position for a cloud within the world bounds."""
-	# Get current world size for proper cloud distribution
-	var world_size = GameConstants.WORLD.WORLD_SIZE
-	var spawn_radius = max(world_size.x, world_size.y) * 0.6  # Use 60% of world size as cloud area
+	"""Generate a random position for a cloud around the player/world center."""
+	# Use a smaller, more focused cloud area around the player/center
+	var cloud_area_radius = 200.0  # Focused area around player instead of entire world
 	
-	# Random position in a circle around world center
+	# Try to use player position if available, otherwise use world center
+	var center_position = world_center
+	if player_character and is_instance_valid(player_character):
+		center_position = player_character.global_position
+	
+	# Random position in a circle around the center position
 	var angle = randf() * 2.0 * PI
-	var distance = randf_range(spawn_radius * 0.3, spawn_radius)  # Between 30% and 100% of radius
+	var distance = randf_range(cloud_area_radius * 0.3, cloud_area_radius)  # Between 30% and 100% of radius
 	
-	var x = world_center.x + cos(angle) * distance
-	var z = world_center.z + sin(angle) * distance
-	var y = randf_range(CLOUD_HEIGHT_MIN, CLOUD_HEIGHT_MAX)
+	var x = center_position.x + cos(angle) * distance
+	var z = center_position.z + sin(angle) * distance
+	var y = randf_range(CLOUD_HEIGHT_MIN, CLOUD_HEIGHT_MAX)  # Much higher in the sky
 	
 	return Vector3(x, y, z)
 
@@ -119,16 +127,18 @@ func _create_cloud_instance(position: Vector3) -> MeshInstance3D:
 	cloud_instance.mesh = cloud_model
 	cloud_instance.position = position
 	
-	# Add some random rotation and scale for variety
+	# Add random rotation and large scale for realistic cloud appearance
 	cloud_instance.rotation.y = randf() * 2.0 * PI
-	var scale_factor = randf_range(0.8, 1.5)
+	var scale_factor = randf_range(CLOUD_SCALE_MIN, CLOUD_SCALE_MAX)  # Much larger clouds (50x-150x)
 	cloud_instance.scale = Vector3(scale_factor, scale_factor, scale_factor)
 	
-	# Set up material properties for cloud-like appearance
+	# Set up material properties for realistic cloud appearance with sun filtering
 	var material = StandardMaterial3D.new()
-	material.albedo_color = Color(1.0, 1.0, 1.0, 0.8)  # Semi-transparent white
+	material.albedo_color = Color(1.0, 1.0, 1.0, 0.4)  # More transparent for sun filtering
 	material.flags_transparent = true
+	material.flags_use_point_size = false
 	material.no_depth_test = false
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Visible from all angles
 	cloud_instance.material_override = material
 	
 	return cloud_instance
@@ -167,7 +177,8 @@ func _find_player() -> void:
 	var players = get_tree().get_nodes_in_group("human_player")
 	if not players.is_empty():
 		for p in players:
-			if p.is_multiplayer_authority():
+			# Check if multiplayer peer exists before checking authority
+			if multiplayer and multiplayer.multiplayer_peer and p.is_multiplayer_authority():
 				player_character = p
 				break
 
@@ -191,10 +202,10 @@ func regenerate_clouds() -> void:
 	
 	# Recalculate cloud parameters for new world size
 	cloud_spawn_radius = max(100.0, 300.0 * GameConstants.get_world_scale_multiplier())
-	cloud_count = GameConstants.WORLD.CLOUD_COUNT
+	cloud_count = randi_range(CLOUD_COUNT_MIN, CLOUD_COUNT_MAX)  # Random count between 10-20
 	movement_radius = cloud_spawn_radius * 0.8
 	
 	# Generate new clouds with updated world size
 	_generate_clouds()
 	
-	print("CloudManager: Cloud regeneration complete - ", cloud_instances.size(), " clouds") 
+	print("CloudManager: Cloud regeneration complete - ", cloud_instances.size(), " large, high-altitude clouds") 

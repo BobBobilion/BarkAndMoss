@@ -32,7 +32,7 @@ class BiomeConfig:
 		name = biome_name
 
 # --- Constants ---
-const BIOME_TRANSITION_DISTANCE: float = 50.0  # Distance over which biomes blend
+const BIOME_TRANSITION_DISTANCE: float = 5.0  # Reduced from 50.0 for extremely sharp transitions
 const NOISE_SCALE_ALTITUDE: float = 0.001      # Scale for altitude noise (further reduced for much larger mountain regions)
 const NOISE_SCALE_TEMPERATURE: float = 0.0008  # Scale for temperature noise (further reduced for much larger temperature zones)
 const NOISE_SCALE_HUMIDITY: float = 0.001      # Scale for humidity noise (further reduced for much larger humidity zones)
@@ -160,6 +160,8 @@ func _init():
 	_initialize_noise_generators()
 	_create_biome_configurations()
 	print("BiomeManager: Initialized with ", biome_configs.size(), " biome types")
+	# Debug: Print biome distribution
+	_debug_biome_distribution()
 
 
 func get_biome_at_position(world_pos: Vector3) -> BiomeType:
@@ -173,9 +175,10 @@ func get_biome_at_position(world_pos: Vector3) -> BiomeType:
 		return BiomeType.MOUNTAIN
 	
 	# Use temperature and humidity to determine other biomes
-	if temperature_factor < 0.3:
+	# Increased snow threshold to guarantee more snow biomes appear
+	if temperature_factor < 0.4:  # Increased from 0.3 to 0.4 for more snow areas
 		return BiomeType.SNOW
-	elif temperature_factor > 0.7 and humidity_factor < 0.4:
+	elif temperature_factor > 0.65 and humidity_factor < 0.5:  # Adjusted for better distribution
 		return BiomeType.AUTUMN
 	else:
 		return BiomeType.FOREST
@@ -184,29 +187,63 @@ func get_biome_at_position(world_pos: Vector3) -> BiomeType:
 func get_biome_blend_weights(world_pos: Vector3) -> Dictionary:
 	"""Get the blend weights for all biomes at a position for smooth transitions."""
 	var weights: Dictionary = {}
-	var total_weight: float = 0.0
 	
 	# Calculate base factors
 	var altitude_factor: float = _get_altitude_factor(world_pos)
 	var temperature_factor: float = _get_temperature_factor(world_pos)
 	var humidity_factor: float = _get_humidity_factor(world_pos)
 	
-	# Calculate weight for each biome based on how well it fits the conditions
-	weights[BiomeType.MOUNTAIN] = max(0.0, (altitude_factor - 0.5) * 2.0)
-	weights[BiomeType.SNOW] = max(0.0, (0.5 - temperature_factor) * 2.0)
-	weights[BiomeType.AUTUMN] = max(0.0, (temperature_factor - 0.5) * (0.5 - humidity_factor) * 4.0)
-	weights[BiomeType.FOREST] = max(0.0, 1.0 - abs(temperature_factor - 0.5) - abs(humidity_factor - 0.5))
+	# Initialize all weights to 0
+	weights[BiomeType.MOUNTAIN] = 0.0
+	weights[BiomeType.SNOW] = 0.0
+	weights[BiomeType.AUTUMN] = 0.0
+	weights[BiomeType.FOREST] = 0.0
 	
-	# Normalize weights
-	for biome_type in weights:
-		total_weight += weights[biome_type]
+	# Define blend radius for smoother transitions
+	var blend_radius: float = 0.05  # Reduced from 0.1 to 0.05 (50% less blending)
 	
+	# Mountain biome blending (threshold at 0.7)
+	if altitude_factor > 0.7 - blend_radius:
+		if altitude_factor >= 0.7:
+			weights[BiomeType.MOUNTAIN] = 1.0
+		else:
+			# Blend zone: 0.6 to 0.7
+			weights[BiomeType.MOUNTAIN] = (altitude_factor - (0.7 - blend_radius)) / blend_radius
+	
+	# Snow biome blending (threshold at 0.4)
+	if temperature_factor < 0.4 + blend_radius and weights[BiomeType.MOUNTAIN] < 1.0:
+		if temperature_factor <= 0.4:
+			weights[BiomeType.SNOW] = 1.0 - weights[BiomeType.MOUNTAIN]
+		else:
+			# Blend zone: 0.4 to 0.5
+			var snow_blend: float = (0.4 + blend_radius - temperature_factor) / blend_radius
+			weights[BiomeType.SNOW] = snow_blend * (1.0 - weights[BiomeType.MOUNTAIN])
+	
+	# Autumn biome blending (threshold at 0.65 and humidity < 0.5)
+	if temperature_factor > 0.65 - blend_radius and humidity_factor < 0.5 + blend_radius:
+		if weights[BiomeType.MOUNTAIN] < 1.0 and weights[BiomeType.SNOW] < 1.0:
+			var temp_blend: float = 1.0
+			var humid_blend: float = 1.0
+			
+			# Temperature blend
+			if temperature_factor < 0.65:
+				temp_blend = (temperature_factor - (0.65 - blend_radius)) / blend_radius
+			
+			# Humidity blend
+			if humidity_factor > 0.5:
+				humid_blend = (0.5 + blend_radius - humidity_factor) / blend_radius
+			
+			weights[BiomeType.AUTUMN] = temp_blend * humid_blend * (1.0 - weights[BiomeType.MOUNTAIN] - weights[BiomeType.SNOW])
+	
+	# Forest biome fills the rest
+	var total_weight: float = weights[BiomeType.MOUNTAIN] + weights[BiomeType.SNOW] + weights[BiomeType.AUTUMN]
+	weights[BiomeType.FOREST] = max(0.0, 1.0 - total_weight)
+	
+	# Normalize to ensure weights sum to 1.0
+	total_weight = weights[BiomeType.MOUNTAIN] + weights[BiomeType.SNOW] + weights[BiomeType.AUTUMN] + weights[BiomeType.FOREST]
 	if total_weight > 0.0:
 		for biome_type in weights:
 			weights[biome_type] /= total_weight
-	else:
-		# Fallback to forest biome if no weights
-		weights = {BiomeType.FOREST: 1.0}
 	
 	return weights
 
@@ -267,23 +304,28 @@ func get_rock_density_for_biome(biome_type: BiomeType) -> float:
 
 func _initialize_noise_generators() -> void:
 	"""Initialize all noise generators with different seeds and properties."""
+	# Use a base seed that can be randomized but ensures consistent patterns
+	var base_seed: int = randi() % 10000  # Keep it reasonable
+	
 	# Altitude noise - controls mountain distribution
 	noise_altitude = FastNoiseLite.new()
-	noise_altitude.seed = randi()
+	noise_altitude.seed = base_seed
 	noise_altitude.frequency = NOISE_SCALE_ALTITUDE
 	noise_altitude.noise_type = FastNoiseLite.TYPE_PERLIN
 	noise_altitude.fractal_octaves = 4
 	
 	# Temperature noise - controls hot/cold regions
 	noise_temperature = FastNoiseLite.new()
-	noise_temperature.seed = randi() + 1000
+	noise_temperature.seed = base_seed + 1000
 	noise_temperature.frequency = NOISE_SCALE_TEMPERATURE 
 	noise_temperature.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	noise_temperature.fractal_octaves = 3
+	# Adjust gain to create more variation in temperature
+	noise_temperature.fractal_gain = 0.6  # More pronounced hot/cold areas
 	
 	# Humidity noise - controls wet/dry regions
 	noise_humidity = FastNoiseLite.new()
-	noise_humidity.seed = randi() + 2000
+	noise_humidity.seed = base_seed + 2000
 	noise_humidity.frequency = NOISE_SCALE_HUMIDITY
 	noise_humidity.noise_type = FastNoiseLite.TYPE_CELLULAR
 	noise_humidity.fractal_octaves = 2
@@ -358,48 +400,145 @@ func _get_humidity_factor(world_pos: Vector3) -> float:
 func _create_mountain_material() -> StandardMaterial3D:
 	"""Create material for mountain biome terrain."""
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.6, 0.6, 0.6)  # More prominent grey stone color - ENHANCED for better gray appearance
-	material.roughness = 0.8
-	material.metallic = 0.1
-	material.specular = 0.3
+	
+	# Load rock terrain textures (using rock terrain for mountains)
+	var base_texture: Texture2D = load("res://assets/textures/rock terrain/textures/rocks_ground_05_diff_4k.jpg")
+	# Skip normal and roughness for now - use material properties instead
+	
+	# Apply textures
+	if base_texture:
+		material.albedo_texture = base_texture
+	material.albedo_color = Color(0.85, 0.85, 0.85)  # Slightly tint to blend better
+	
+	# Set material properties for rocky mountain terrain
+	material.roughness = 0.9
+	material.metallic = 0.0
+	material.specular = 0.1
+	
+	# Enable texture repeat for large terrain
+	material.texture_repeat = true
+	material.uv1_scale = Vector3(50.0, 50.0, 1.0)  # Increased from 20 to 50 for more tiling
+	material.uv1_triplanar = true  # Use triplanar mapping for steep slopes
+	material.uv1_triplanar_sharpness = 1.0
+	
+	# Shadows and lighting
 	material.flags_receive_shadows = true
 	material.flags_cast_shadow = true
+	
+	if base_texture:
+		print("BiomeManager: Loaded mountain/rock base texture")
+	else:
+		print("BiomeManager: Using fallback mountain material")
+	
 	return material
 
 
 func _create_forest_material() -> StandardMaterial3D:
 	"""Create material for forest biome terrain."""
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.3, 0.7, 0.2)  # Rich green
-	material.roughness = 0.6
+	
+	# Load grass terrain textures for forest biome
+	var base_texture: Texture2D = load("res://assets/textures/grass terrain/textures/rocky_terrain_02_diff_4k.jpg")
+	
+	# Apply textures
+	if base_texture:
+		material.albedo_texture = base_texture
+	material.albedo_color = Color(0.6, 0.85, 0.5)  # Green tint for forest feel
+	
+	# Set material properties for grassy forest terrain
+	material.roughness = 0.75
 	material.metallic = 0.0
-	material.specular = 0.4
+	material.specular = 0.2
+	
+	# Enable texture repeat for large terrain
+	material.texture_repeat = true
+	material.uv1_scale = Vector3(60.0, 60.0, 1.0)  # Increased from 30 to 60 for more tiling
+	material.uv1_triplanar = true  # Use triplanar mapping
+	material.uv1_triplanar_sharpness = 0.5
+	
+	# Shadows and lighting
 	material.flags_receive_shadows = true
 	material.flags_cast_shadow = true
+	
+	if base_texture:
+		print("BiomeManager: Loaded forest/grass base texture")
+	else:
+		print("BiomeManager: Using fallback forest material")
+	
 	return material
 
 
 func _create_autumn_material() -> StandardMaterial3D:
 	"""Create material for autumn biome terrain."""
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.8, 0.6, 0.2)  # Golden autumn color
-	material.roughness = 0.5
+	
+	# Load leaves terrain textures for autumn biome
+	var base_texture: Texture2D = load("res://assets/textures/leaves terrain/textures/leaves_forest_ground_diff_4k.jpg")
+	
+	# Apply textures
+	if base_texture:
+		material.albedo_texture = base_texture
+	material.albedo_color = Color(1.0, 0.9, 0.7)  # Warm autumn tint
+	
+	# Set material properties for autumn leaf-covered terrain
+	material.roughness = 0.65
 	material.metallic = 0.0
-	material.specular = 0.5
+	material.specular = 0.3
+	
+	# Enable texture repeat for large terrain
+	material.texture_repeat = true
+	material.uv1_scale = Vector3(450.0, 450.0, 1.0)  # Scaled 10x from 45 to 450 for much smaller leaves
+	material.uv1_triplanar = true  # Use triplanar mapping
+	material.uv1_triplanar_sharpness = 0.3  # Softer blend for leaves
+	
+	# Shadows and lighting
 	material.flags_receive_shadows = true
 	material.flags_cast_shadow = true
+	
+	if base_texture:
+		print("BiomeManager: Loaded autumn/leaves base texture")
+	else:
+		print("BiomeManager: Using fallback autumn material")
+	
 	return material
 
 
 func _create_snow_material() -> StandardMaterial3D:
 	"""Create material for snow biome terrain."""
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.95, 0.95, 0.95)  # Pure white snow color - CHANGED from blue-tinted to clean white
-	material.roughness = 0.2  # Snow is relatively smooth
+	
+	# Load snow terrain textures
+	var base_texture: Texture2D = load("res://assets/textures/snow terrain/Snow002_4K_Color.jpg")
+	var roughness_texture: Texture2D = load("res://assets/textures/snow terrain/Snow002_4K_Roughness.jpg")
+	
+	# Apply textures
+	if base_texture:
+		material.albedo_texture = base_texture
+	material.albedo_color = Color(1.0, 1.0, 1.0)  # Pure white, no tint
+	
+	if roughness_texture:
+		material.roughness_texture = roughness_texture
+	
+	# Set material properties for snow terrain
+	material.roughness = 0.35  # Snow is relatively smooth
 	material.metallic = 0.0
-	material.specular = 0.8  # Snow is quite reflective
+	material.specular = 0.7  # Snow is quite reflective
+	
+	# Enable texture repeat for large terrain
+	material.texture_repeat = true
+	material.uv1_scale = Vector3(40.0, 40.0, 1.0)  # Increased from 15 to 40 for more tiling
+	material.uv1_triplanar = true  # Use triplanar mapping
+	material.uv1_triplanar_sharpness = 0.8
+	
+	# Shadows and lighting
 	material.flags_receive_shadows = true
 	material.flags_cast_shadow = true
+	
+	if base_texture:
+		print("BiomeManager: Loaded snow base texture")
+	else:
+		print("BiomeManager: Using fallback snow material")
+	
 	return material
 
 
@@ -412,4 +551,31 @@ func _create_default_material() -> StandardMaterial3D:
 	material.specular = 0.5
 	material.flags_receive_shadows = true
 	material.flags_cast_shadow = true
-	return material 
+	return material
+
+
+func _debug_biome_distribution() -> void:
+	"""Debug function to check biome distribution across the map."""
+	var biome_counts: Dictionary = {
+		BiomeType.MOUNTAIN: 0,
+		BiomeType.FOREST: 0,
+		BiomeType.AUTUMN: 0,
+		BiomeType.SNOW: 0
+	}
+	
+	# Sample the world at regular intervals
+	var sample_size: int = 50
+	for x in range(sample_size):
+		for z in range(sample_size):
+			var world_x: float = (float(x) / sample_size - 0.5) * 200.0  # Sample 200x200 area
+			var world_z: float = (float(z) / sample_size - 0.5) * 200.0
+			var pos: Vector3 = Vector3(world_x, 0, world_z)
+			var biome: BiomeType = get_biome_at_position(pos)
+			biome_counts[biome] += 1
+	
+	var total_samples: int = sample_size * sample_size
+	print("BiomeManager: Biome distribution (", total_samples, " samples):")
+	print("  - SNOW: ", biome_counts[BiomeType.SNOW], " (", biome_counts[BiomeType.SNOW] * 100.0 / total_samples, "%)")
+	print("  - FOREST: ", biome_counts[BiomeType.FOREST], " (", biome_counts[BiomeType.FOREST] * 100.0 / total_samples, "%)")
+	print("  - AUTUMN: ", biome_counts[BiomeType.AUTUMN], " (", biome_counts[BiomeType.AUTUMN] * 100.0 / total_samples, "%)")
+	print("  - MOUNTAIN: ", biome_counts[BiomeType.MOUNTAIN], " (", biome_counts[BiomeType.MOUNTAIN] * 100.0 / total_samples, "%)") 

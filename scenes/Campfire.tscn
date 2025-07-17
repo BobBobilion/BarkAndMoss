@@ -51,12 +51,13 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0130459, 0.286056, -0.02235
 shape = SubResource("CylinderShape3D_ah7om")
 
 [node name="CampfireLight" type="OmniLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.76129, 0)
 light_color = Color(1, 0.7, 0.3, 1)
-light_energy = 4.086
+light_energy = 9.569
+light_indirect_energy = 3.247
 shadow_enabled = true
-omni_range = 8.0
-omni_attenuation = 0.8
+omni_range = 10.106
+omni_attenuation = 1.587
 
 [node name="FireParticles" type="CPUParticles3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35242, 0)

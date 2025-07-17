@@ -65,7 +65,11 @@ func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not is_instance_valid(player) or not player.is_multiplayer_authority():
+	# Check if player exists, is in tree, and multiplayer peer exists before checking authority
+	if not is_instance_valid(player) or not player.is_inside_tree() or not multiplayer or not multiplayer.multiplayer_peer:
+		return
+	
+	if not player.is_multiplayer_authority():
 		return
 	
 	# Handle inventory toggle (hold Tab)
@@ -125,7 +129,8 @@ func _find_player() -> void:
 	"""Finds the local player node."""
 	var players: Array[Node] = get_tree().get_nodes_in_group("human_player")
 	for p in players:
-		if p.is_multiplayer_authority():
+		# Check if multiplayer peer exists before checking authority
+		if multiplayer and multiplayer.multiplayer_peer and p.is_multiplayer_authority():
 			player = p
 			return
 

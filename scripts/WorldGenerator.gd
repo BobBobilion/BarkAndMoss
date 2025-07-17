@@ -83,6 +83,11 @@ func _initialize_biome_manager() -> void:
 	biome_manager = BiomeManagerClass.new()
 
 
+func get_biome_manager() -> BiomeManagerClass:
+	"""Get the biome manager instance for other systems to use."""
+	return biome_manager
+
+
 func _load_resources() -> void:
 	"""Loads necessary scenes and resources for biome-based generation."""
 	# Load the base tree, rock, and grass scenes
@@ -168,9 +173,8 @@ func _generate_terrain() -> void:
 	var mesh: ArrayMesh = _create_biome_terrain_mesh()
 	terrain_mesh.mesh = mesh
 	
-	# Create a material that uses vertex colors for biome variation
-	var terrain_material: StandardMaterial3D = _create_biome_aware_terrain_material()
-	terrain_mesh.material_override = terrain_material
+	# Apply biome-specific materials to the terrain
+	_apply_biome_materials_to_terrain()
 	
 	# Ensure the mesh can cast shadows properly (shadow reception is automatic)
 	terrain_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
@@ -214,10 +218,27 @@ func _create_biome_terrain_mesh() -> ArrayMesh:
 			var uv: Vector2 = Vector2(float(x) / terrain_resolution, float(z) / terrain_resolution)
 			uvs.append(uv)
 			
-			# Get biome-specific color for this vertex
-			var biome_type: BiomeManagerClass.BiomeType = biome_manager.get_biome_at_position(Vector3(world_x, 0, world_z))
-			var biome_color: Color = _get_biome_grass_color(biome_type)
-			colors.append(biome_color)
+			# Get biome blend weights for this vertex
+			var biome_weights: Dictionary = biome_manager.get_biome_blend_weights(Vector3(world_x, 0, world_z))
+			
+			# Encode biome weights into vertex color (R=Forest, G=Autumn, B=Snow, A=Mountain)
+			var vertex_color: Color = Color(0, 0, 0, 0)
+			if biome_weights.has(BiomeManagerClass.BiomeType.FOREST):
+				vertex_color.r = biome_weights[BiomeManagerClass.BiomeType.FOREST]
+			if biome_weights.has(BiomeManagerClass.BiomeType.AUTUMN):
+				vertex_color.g = biome_weights[BiomeManagerClass.BiomeType.AUTUMN]
+			if biome_weights.has(BiomeManagerClass.BiomeType.SNOW):
+				vertex_color.b = biome_weights[BiomeManagerClass.BiomeType.SNOW]
+			if biome_weights.has(BiomeManagerClass.BiomeType.MOUNTAIN):
+				vertex_color.a = biome_weights[BiomeManagerClass.BiomeType.MOUNTAIN]
+			
+			# Debug: Ensure at least one weight is set
+			var total_weight: float = vertex_color.r + vertex_color.g + vertex_color.b + vertex_color.a
+			if total_weight == 0.0:
+				push_warning("WorldGenerator: No biome weight set at position (%f, %f). Defaulting to forest." % [world_x, world_z])
+				vertex_color.r = 1.0  # Default to forest
+			
+			colors.append(vertex_color)
 	
 	# Generate indices for triangles
 	for z in range(terrain_resolution):
@@ -366,7 +387,7 @@ func _generate_forest() -> void:
 			mesh_instance.scale = Vector3(2.5, 2.5, 2.5)  # Increased tree size by 2.5x
 			visuals_node.add_child(mesh_instance)
 		
-		# Create accurate collision based on the actual tree mesh
+		# Create accurate collision based on the actual tree mesh geometry
 		_create_accurate_tree_collision(tree_instance, tree_mesh, biome_type)
 		
 		var surface_position: Vector3 = _get_surface_position(world_pos)
@@ -735,20 +756,133 @@ func _get_biome_grass_color(biome_type: BiomeManagerClass.BiomeType) -> Color:
 			return Color(0.5, 0.5, 0.5)  # Default grey
 
 
+func _apply_biome_materials_to_terrain() -> void:
+	"""Apply biome-specific materials to the terrain mesh."""
+	# Create the blended terrain material with our custom shader
+	var terrain_material: Material = _create_blended_terrain_material_shader()
+	
+	# If shader material creation failed, fall back to a biome-based approach
+	if terrain_material is ShaderMaterial:
+		var shader_mat := terrain_material as ShaderMaterial
+		if not shader_mat.shader:
+			print("WorldGenerator: Shader material has no shader, using biome-based material approach")
+			# Sample center of world to determine dominant biome
+			var center_biome: BiomeManagerClass.BiomeType = biome_manager.get_biome_at_position(Vector3.ZERO)
+			terrain_material = biome_manager.get_terrain_material_for_biome(center_biome)
+	
+	terrain_mesh.material_override = terrain_material
+	
+	print("WorldGenerator: Applied biome materials to terrain")
+
+
+func _create_blended_terrain_material_shader() -> ShaderMaterial:
+	"""Create a shader material that blends between biome textures."""
+	# Create a shader material using our custom terrain blending shader
+	var shader_material: ShaderMaterial = ShaderMaterial.new()
+	var terrain_shader: Shader = load("res://shaders/terrain_blend.gdshader")
+	
+	if not terrain_shader:
+		push_error("WorldGenerator: Failed to load terrain blend shader!")
+		# Return a basic colored material as fallback
+		# We'll use the dominant biome's material instead
+		var fallback_std_material: StandardMaterial3D = _create_fallback_terrain_material()
+		# Can't convert StandardMaterial3D to ShaderMaterial, so let's create a simple shader
+		shader_material.shader = null  # No shader means it will use default rendering
+		return shader_material
+	
+	print("WorldGenerator: Successfully loaded terrain blend shader")
+	shader_material.shader = terrain_shader
+	
+	# Create default textures for fallback
+	var default_albedo: ImageTexture = _create_default_texture(Color(0.5, 0.5, 0.5))
+	var default_normal: ImageTexture = _create_default_normal_texture()
+	var default_roughness: ImageTexture = _create_default_texture(Color(0.5, 0.5, 0.5))
+	
+	# Load and assign textures for each biome - using only JPG/PNG files
+	# Forest biome textures (grass terrain)
+	var forest_albedo: Texture2D = load("res://assets/textures/grass terrain/textures/rocky_terrain_02_diff_4k.jpg")
+	if not forest_albedo:
+		print("WorldGenerator: Failed to load forest albedo texture")
+	
+	# Autumn biome textures (leaves terrain)
+	var autumn_albedo: Texture2D = load("res://assets/textures/leaves terrain/textures/leaves_forest_ground_diff_4k.jpg")
+	if not autumn_albedo:
+		print("WorldGenerator: Failed to load autumn albedo texture")
+	
+	# Snow biome textures
+	var snow_albedo: Texture2D = load("res://assets/textures/snow terrain/Snow002_4K_Color.jpg")
+	var snow_normal: Texture2D = load("res://assets/textures/snow terrain/Snow002_4K_NormalGL.jpg")
+	var snow_roughness: Texture2D = load("res://assets/textures/snow terrain/Snow002_4K_Roughness.jpg")
+	
+	# Mountain biome textures (rock terrain)
+	var mountain_albedo: Texture2D = load("res://assets/textures/rock terrain/textures/rocks_ground_05_diff_4k.jpg")
+	var mountain_roughness: Texture2D = load("res://assets/textures/rock terrain/textures/rocks_ground_05_rough_4k.jpg")
+	
+	# Set shader parameters with fallback textures if loading fails
+	shader_material.set_shader_parameter("forest_albedo", forest_albedo if forest_albedo else default_albedo)
+	shader_material.set_shader_parameter("forest_normal", default_normal)  # Use default for now
+	shader_material.set_shader_parameter("forest_roughness", default_roughness)  # Use default for now
+	
+	shader_material.set_shader_parameter("autumn_albedo", autumn_albedo if autumn_albedo else default_albedo)
+	shader_material.set_shader_parameter("autumn_normal", default_normal)  # Use default for now
+	shader_material.set_shader_parameter("autumn_roughness", default_roughness)  # Use default for now
+	
+	shader_material.set_shader_parameter("snow_albedo", snow_albedo if snow_albedo else default_albedo)
+	shader_material.set_shader_parameter("snow_normal", snow_normal if snow_normal else default_normal)
+	shader_material.set_shader_parameter("snow_roughness", snow_roughness if snow_roughness else default_roughness)
+	
+	shader_material.set_shader_parameter("mountain_albedo", mountain_albedo if mountain_albedo else default_albedo)
+	shader_material.set_shader_parameter("mountain_normal", default_normal)  # Use default for now
+	shader_material.set_shader_parameter("mountain_roughness", mountain_roughness if mountain_roughness else default_roughness)
+	
+	# Set other shader parameters
+	shader_material.set_shader_parameter("texture_scale", 10.0)  # Reduced from 50.0 for smaller textures
+	shader_material.set_shader_parameter("autumn_texture_scale", 10.0)  # Same as base scale - makes autumn texture same size as others
+	shader_material.set_shader_parameter("blend_sharpness", 2.0)  # Reduced from 10.0 for smoother transitions
+	shader_material.set_shader_parameter("roughness_multiplier", 1.0)
+	shader_material.set_shader_parameter("normal_strength", 0.5)  # Reduce since we're using defaults
+	
+	print("WorldGenerator: Created blended terrain material with available textures")
+	print("WorldGenerator: Texture scale: 10.0, Autumn scale: 10.0, Blend sharpness: 2.0")
+	
+	return shader_material
+
+
+func _create_default_texture(color: Color) -> ImageTexture:
+	"""Create a simple default texture with the given color."""
+	var image: Image = Image.create(4, 4, false, Image.FORMAT_RGB8)
+	image.fill(color)
+	return ImageTexture.create_from_image(image)
+
+
+func _create_default_normal_texture() -> ImageTexture:
+	"""Create a default normal map texture (neutral normal pointing up)."""
+	var image: Image = Image.create(4, 4, false, Image.FORMAT_RGB8)
+	image.fill(Color(0.5, 0.5, 1.0))  # Neutral normal map color
+	return ImageTexture.create_from_image(image)
+
+
+func _create_blended_terrain_material() -> StandardMaterial3D:
+	"""Legacy function for backward compatibility - redirects to shader material creation."""
+	# This function is kept for compatibility but we actually use the shader material now
+	return _create_fallback_terrain_material()
+
+
+func _create_fallback_terrain_material() -> StandardMaterial3D:
+	"""Create a basic fallback material if shader loading fails."""
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	material.albedo_color = Color(0.5, 0.7, 0.4)  # Default green-brown
+	material.roughness = 0.7
+	material.metallic = 0.0
+	material.vertex_color_use_as_albedo = false  # Changed to false - DO NOT use vertex colors
+	material.vertex_color_is_srgb = false
+	material.flags_receive_shadows = true
+	material.flags_cast_shadow = true
+	return material
+
+
 func _create_biome_aware_terrain_material() -> StandardMaterial3D:
 	"""Create a material that uses vertex colors to show biome variation."""
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	
-	# Enable vertex color usage
-	material.vertex_color_use_as_albedo = true
-	material.vertex_color_is_srgb = false
-	
-	# Set base material properties
-	material.roughness = 0.6
-	material.metallic = 0.0
-	
-	# Enable proper lighting (shadow properties set on mesh instance)
-	material.flags_unshaded = false
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	
-	return material 
+	# This function is now deprecated in favor of _create_blended_terrain_material()
+	# Keeping it for backward compatibility but redirecting to the new function
+	return _create_blended_terrain_material() 

@@ -74,6 +74,10 @@ func _process(_delta: float) -> void:
 		return
 
 	# Only the local player should perform interaction checks
+	# Check if player is still in tree and multiplayer peer exists before checking authority
+	if not player.is_inside_tree() or not multiplayer or not multiplayer.multiplayer_peer:
+		return
+	
 	if not player.is_multiplayer_authority():
 		return
 	
@@ -93,7 +97,8 @@ func _find_player() -> void:
 	var players: Array[Node] = get_tree().get_nodes_in_group("human_player")
 	if not players.is_empty():
 		for p in players:
-			if p.is_multiplayer_authority():
+			# Check if multiplayer peer exists before checking authority
+			if multiplayer and multiplayer.multiplayer_peer and p.is_multiplayer_authority():
 				player = p
 				return
 

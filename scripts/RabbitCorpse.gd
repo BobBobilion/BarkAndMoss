@@ -4,6 +4,9 @@ extends StaticBody3D
 # --- Constants ---
 const INTERACTION_PROMPT: String = "E: Process | Bite: Grab"
 
+# --- Rabbit Model ---
+const RABBIT_SCENE: PackedScene = preload("res://assets/animals/low_poly_rabbit_brown.glb")
+
 # --- Node References ---
 @onready var rabbit_corpse_model: Node3D = $RabbitCorpseModel
 @onready var collision_shape: CollisionShape3D = $CollisionShape3D
@@ -26,6 +29,9 @@ func _ready() -> void:
 	# Add to interactable group
 	add_to_group("interactable")
 	add_to_group("corpses")
+	
+	# Set the corpse to death animation pose (non-looping)
+	_setup_death_pose()
 	
 	# Connect interaction signals
 	if interactable:
@@ -100,4 +106,40 @@ func release() -> void:
 
 func _process(delta: float) -> void:
 	"""Update corpse - no longer need to follow grabber as dog handles positioning."""
-	pass 
+	pass
+
+
+
+
+
+
+
+
+func _setup_death_pose() -> void:
+	"""Set the rabbit corpse to the death animation pose."""
+	if rabbit_corpse_model:
+		var animation_player: AnimationPlayer = _find_animation_player_recursive(rabbit_corpse_model)
+		if animation_player:
+			# Try to find and play the death animation
+			var death_animations: Array[String] = ["Armature_001|Die", "Armature.001|Die", "Armature|Die", "Die", "die", "Death", "death"]
+			
+			for anim_name in death_animations:
+				if animation_player.has_animation(anim_name):
+					animation_player.play(anim_name)
+					# Stop the animation at the end frame to keep the death pose
+					await animation_player.animation_finished
+					animation_player.stop()
+					break
+
+
+func _find_animation_player_recursive(node: Node) -> AnimationPlayer:
+	"""Recursively search for an AnimationPlayer node in the corpse model."""
+	if node is AnimationPlayer:
+		return node as AnimationPlayer
+	
+	for child in node.get_children():
+		var result: AnimationPlayer = _find_animation_player_recursive(child)
+		if result:
+			return result
+	
+	return null 

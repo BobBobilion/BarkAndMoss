@@ -1,10 +1,10 @@
 [gd_scene load_steps=5 format=3 uid="uid://daj2k6m1n4p5q"]
 
 [ext_resource type="Script" uid="uid://dcx66qqa28mgb" path="res://scripts/Rabbit.gd" id="1_rabbit_script"]
-[ext_resource type="PackedScene" uid="uid://bd78f0vsjrrju" path="res://assets/animals/Rabbit.glb" id="2_rabbit_model"]
+[ext_resource type="PackedScene" uid="uid://b2mxo8xjsj3cm" path="res://assets/animals/low_poly_rabbit_brown.glb" id="2_rabbit_model"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_rggft"]
-size = Vector3(0.105194, 0.197601, 0.243195)
+size = Vector3(0.143608, 0.258629, 0.3274)
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_detection"]
 radius = 6.0
@@ -15,10 +15,10 @@ collision_mask = 11
 script = ExtResource("1_rabbit_script")
 
 [node name="RabbitModel" parent="." instance=ExtResource("2_rabbit_model")]
-transform = Transform3D(-7.86807e-11, 0.0018, 7.86807e-11, 0, -7.86807e-11, 0.0018, 0.0018, 7.86807e-11, 3.43923e-18, 0, 0, 0)
+transform = Transform3D(-0.2, 0, -1.74846e-08, 0, 0.2, 0, 1.74846e-08, 0, -0.2, 0, 0.0041545, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0.00283813, 0.197998, -0.00283813)
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0.000938382, 0.259026, -0.0870435)
 shape = SubResource("BoxShape3D_rggft")
 
 [node name="DetectionArea" type="Area3D" parent="."]

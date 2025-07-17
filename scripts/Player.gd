@@ -219,5 +219,6 @@ func get_interaction_controller() -> InteractionController:
 	return interaction_controller
 
 func _exit_tree() -> void:
-	if is_multiplayer_authority() and PauseManager:
+	# Check if multiplayer peer exists before checking authority to avoid errors during cleanup
+	if multiplayer and multiplayer.multiplayer_peer and is_multiplayer_authority() and PauseManager:
 		PauseManager.unregister_player(self)

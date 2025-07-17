@@ -292,8 +292,24 @@ func _handle_wandering(delta: float) -> void:
 	
 	# Move towards target
 	var direction: Vector3 = (target_position - global_position).normalized()
+	direction.y = 0  # Keep movement horizontal
+	
 	velocity.x = direction.x * GRAZE_SPEED
 	velocity.z = direction.z * GRAZE_SPEED
+	
+	# Face movement direction - avoid colinear vectors and same position
+	if direction.length() > 0.1:
+		var target_look_pos: Vector3 = global_position + direction
+		
+		# Ensure target position is sufficiently different from current position
+		if global_position.distance_to(target_look_pos) > 0.01:
+			var up_vector: Vector3 = Vector3.UP
+			
+			# Check if direction is parallel to up vector (avoid colinear warning)
+			if abs(direction.dot(up_vector)) > 0.99:
+				up_vector = Vector3.FORWARD  # Use forward as up vector instead
+			
+			look_at(target_look_pos, up_vector)
 	
 	# Check if reached target or need new direction
 	if global_position.distance_to(target_position) < 2.0 or direction_timer <= 0.0:
@@ -310,10 +326,25 @@ func _handle_fleeing(delta: float) -> void:
 	if flee_target and is_instance_valid(flee_target):
 		# Calculate escape direction (away from threat)
 		var escape_direction: Vector3 = (global_position - flee_target.global_position).normalized()
+		escape_direction.y = 0  # Keep movement horizontal
 		
 		# Move away from the threat
 		velocity.x = escape_direction.x * FLEE_SPEED
 		velocity.z = escape_direction.z * FLEE_SPEED
+		
+		# Face flee direction - avoid colinear vectors and same position
+		if escape_direction.length() > 0.1:
+			var target_look_pos: Vector3 = global_position + escape_direction
+			
+			# Ensure target position is sufficiently different from current position
+			if global_position.distance_to(target_look_pos) > 0.01:
+				var up_vector: Vector3 = Vector3.UP
+				
+				# Check if escape direction is parallel to up vector (avoid colinear warning)
+				if abs(escape_direction.dot(up_vector)) > 0.99:
+					up_vector = Vector3.FORWARD  # Use forward as up vector instead
+				
+				look_at(target_look_pos, up_vector)
 		
 		# Check if far enough away to stop fleeing
 		var distance_to_threat: float = global_position.distance_to(flee_target.global_position)

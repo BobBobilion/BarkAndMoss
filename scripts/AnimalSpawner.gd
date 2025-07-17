@@ -22,7 +22,7 @@ var animal_scenes: Dictionary = {
 		"biome_preferences": {
 			BiomeManagerClass.BiomeType.FOREST: 1.0,    # Loves forests
 			BiomeManagerClass.BiomeType.AUTUMN: 0.8,    # Likes autumn areas
-			BiomeManagerClass.BiomeType.SNOW: 0.3,      # Rare in snow
+			BiomeManagerClass.BiomeType.SNOW: 0.9,      # Higher chance in snow (for white rabbits)
 			BiomeManagerClass.BiomeType.MOUNTAIN: 0.1   # Very rare in mountains
 		}
 	},
@@ -156,8 +156,9 @@ func _try_spawn_animal(animal_type: String, animal_data: Dictionary) -> void:
 		if spawn_position == Vector3.ZERO:
 			continue  # Try again with different position
 		
-		# Check biome preference for this animal type
-		var biome_type: BiomeManagerClass.BiomeType = biome_manager.get_biome_at_position(spawn_position)
+		# Check biome preference for this animal type using ground-level position
+		var ground_position: Vector3 = Vector3(spawn_position.x, 0, spawn_position.z)
+		var biome_type: BiomeManagerClass.BiomeType = biome_manager.get_biome_at_position(ground_position)
 		var biome_preference: float = _get_biome_preference(animal_type, biome_type, animal_data)
 		
 		# Use biome preference as spawn chance (higher preference = higher chance)
@@ -499,8 +500,9 @@ func _try_spawn_animal_for_player(animal_type: String, animal_data: Dictionary, 
 		if spawn_position == Vector3.ZERO:
 			continue  # Try again with different position
 		
-		# Check biome preference for this animal type
-		var biome_type: BiomeManagerClass.BiomeType = biome_manager.get_biome_at_position(spawn_position)
+		# Check biome preference for this animal type using ground-level position
+		var ground_position: Vector3 = Vector3(spawn_position.x, 0, spawn_position.z)
+		var biome_type: BiomeManagerClass.BiomeType = biome_manager.get_biome_at_position(ground_position)
 		var biome_preference: float = _get_biome_preference(animal_type, biome_type, animal_data)
 		
 		# Use biome preference as spawn chance (higher preference = higher chance)
