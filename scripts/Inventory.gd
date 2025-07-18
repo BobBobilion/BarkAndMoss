@@ -15,9 +15,11 @@ const SLOT_SIZE: Vector2 = GameConstants.UI.SLOT_SIZE
 const SLOT_SPACING: Vector2 = GameConstants.UI.SLOT_SPACING
 const EMPTY_SLOT: String = ""
 const ICON_SIZE: int = GameConstants.UI.SLOT_ICON_SIZE
+const MAX_STACK_SIZE: int = 99  # Maximum items per stack
 
 # Using shared style constants from GameConstants.UI
 const FONT_SIZE_TOOLTIP: int = GameConstants.UI.FONT_SIZE_TOOLTIP
+const FONT_SIZE_COUNT: int = 12  # Font size for item count label
 const COLOR_BACKGROUND: Color = GameConstants.UI.COLOR_BACKGROUND
 const COLOR_SLOT_NORMAL: Color = GameConstants.UI.COLOR_SLOT_NORMAL
 const COLOR_SLOT_SELECTED: Color = GameConstants.UI.COLOR_SLOT_SELECTED
@@ -33,7 +35,7 @@ const COLOR_TEXT_SHADOW: Color = GameConstants.UI.COLOR_TEXT_SHADOW
 @onready var tooltip_label: Label = $Tooltip/TooltipLabel
 
 # --- State ---
-var inventory_items: Array[String] = []
+var inventory_items: Array[Dictionary] = []  # Array of {item_name: String, count: int}
 var slot_controls: Array[Control] = []
 var is_open: bool = false
 var player: CharacterBody3D
@@ -83,46 +85,115 @@ func _input(event: InputEvent) -> void:
 
 # --- Public Methods ---
 
-func add_item(item_name: String) -> bool:
-	"""Adds an item to the first available empty slot."""
+func add_item(item_name: String, quantity: int = 1) -> bool:
+	"""Adds items to inventory. First tries to stack with existing items, then uses empty slots."""
+	var remaining: int = quantity
+	
+	# First, try to fill existing stacks
 	for i in range(inventory_items.size()):
-		if inventory_items[i] == EMPTY_SLOT:
-			inventory_items[i] = item_name
+		if remaining <= 0:
+			break
+		if inventory_items[i].item_name == item_name and inventory_items[i].count < MAX_STACK_SIZE:
+			var space_in_stack: int = MAX_STACK_SIZE - inventory_items[i].count
+			var to_add: int = min(remaining, space_in_stack)
+			inventory_items[i].count += to_add
+			remaining -= to_add
+	
+	# Then, use empty slots for remaining items
+	while remaining > 0:
+		var empty_slot_found: bool = false
+		for i in range(inventory_items.size()):
+			if inventory_items[i].item_name == EMPTY_SLOT:
+				inventory_items[i].item_name = item_name
+				inventory_items[i].count = min(remaining, MAX_STACK_SIZE)
+				remaining -= inventory_items[i].count
+				empty_slot_found = true
+				break
+		
+		if not empty_slot_found:
 			_update_inventory_display()
-			return true
-	return false
+			return false  # Inventory full, couldn't add all items
+	
+	_update_inventory_display()
+	return true  # All items added successfully
 
 
 func remove_item(slot_index: int) -> void:
-	"""Removes an item from a specific slot index."""
+	"""Removes one item from a specific slot index. If count reaches 0, clears the slot."""
 	if slot_index >= 0 and slot_index < inventory_items.size():
-		inventory_items[slot_index] = EMPTY_SLOT
+		inventory_items[slot_index].count -= 1
+		if inventory_items[slot_index].count <= 0:
+			inventory_items[slot_index].item_name = EMPTY_SLOT
+			inventory_items[slot_index].count = 0
 		_update_inventory_display()
+
+# Method to remove items by name and quantity
+func remove_item_by_name(item_name: String, quantity: int = 1) -> bool:
+	"""Removes specified quantity of an item by name. Returns true if successful."""
+	var remaining_to_remove: int = quantity
+	
+	# First pass: remove from existing stacks
+	for i in range(inventory_items.size()):
+		if remaining_to_remove <= 0:
+			break
+		if inventory_items[i].item_name == item_name:
+			var remove_count: int = min(inventory_items[i].count, remaining_to_remove)
+			inventory_items[i].count -= remove_count
+			remaining_to_remove -= remove_count
+			
+			# Clear slot if empty
+			if inventory_items[i].count <= 0:
+				inventory_items[i].item_name = EMPTY_SLOT
+				inventory_items[i].count = 0
+	
+	# Update display after all removals
+	_update_inventory_display()
+	
+	# Return true if we removed everything requested
+	return remaining_to_remove == 0
 
 
 func get_item_at_slot(slot_index: int) -> String:
-	"""Returns the item at a given slot index."""
+	"""Returns the item name at a given slot index."""
 	if slot_index >= 0 and slot_index < inventory_items.size():
-		return inventory_items[slot_index]
+		return inventory_items[slot_index].item_name
 	return EMPTY_SLOT
+
+
+func get_count_at_slot(slot_index: int) -> int:
+	"""Returns the item count at a given slot index."""
+	if slot_index >= 0 and slot_index < inventory_items.size():
+		return inventory_items[slot_index].count
+	return 0
 
 
 func has_item(item_name: String) -> bool:
 	"""Checks if the inventory contains a specific item."""
-	return inventory_items.has(item_name)
+	for slot in inventory_items:
+		if slot.item_name == item_name and slot.count > 0:
+			return true
+	return false
 
 
 func get_item_count(item_name: String) -> int:
-	"""Returns the count of a specific item in the inventory."""
-	return inventory_items.count(item_name)
+	"""Returns the total count of a specific item across all slots."""
+	var total_count: int = 0
+	for slot in inventory_items:
+		if slot.item_name == item_name:
+			total_count += slot.count
+	return total_count
 
 
 # --- Private Methods (Setup) ---
 
 func _initialize_inventory() -> void:
 	"""Initializes the inventory array with empty slots."""
-	inventory_items.resize(GRID_COLUMNS * GRID_ROWS)
-	inventory_items.fill(EMPTY_SLOT)
+	inventory_items.clear()
+	for i in range(GRID_COLUMNS * GRID_ROWS):
+		inventory_items.append({
+			"item_name": EMPTY_SLOT,
+			"count": 0
+		})
 
 
 func _find_player() -> void:
@@ -205,6 +276,24 @@ func _create_inventory_slot(index: int) -> Panel:
 	
 	slot.add_child(texture_rect)
 	
+	# Add a count label in the bottom left corner
+	var count_label := Label.new()
+	count_label.name = "CountLabel"
+	count_label.add_theme_font_size_override("font_size", FONT_SIZE_COUNT)
+	count_label.add_theme_color_override("font_color", COLOR_TEXT)
+	count_label.add_theme_color_override("font_shadow_color", COLOR_TEXT_SHADOW)
+	count_label.add_theme_constant_override("shadow_offset_x", 1)
+	count_label.add_theme_constant_override("shadow_offset_y", 1)
+	count_label.add_theme_constant_override("shadow_outline_size", 1)
+	count_label.text = ""  # Start empty
+	count_label.visible = false  # Hidden by default
+	
+	# Position the count label in bottom left corner
+	count_label.set_position(Vector2(4, SLOT_SIZE.y - 18))  # Slight padding from edges
+	count_label.z_index = 1  # Ensure it's above the texture
+	
+	slot.add_child(count_label)
+	
 	slot.mouse_filter = MOUSE_FILTER_PASS
 	slot.mouse_entered.connect(_on_slot_mouse_entered.bind(index))
 	slot.mouse_exited.connect(_on_slot_mouse_exited)
@@ -242,13 +331,27 @@ func _update_inventory_display() -> void:
 	for i in range(slot_controls.size()):
 		var slot: Control = slot_controls[i]
 		var texture_rect: TextureRect = slot.get_child(0) as TextureRect
+		var count_label: Label = slot.get_node("CountLabel") as Label
 		
 		# Set item icon texture using the centralized icon manager, or clear if slot is empty
-		var item: String = inventory_items[i]
-		if item != EMPTY_SLOT:
-			texture_rect.texture = GameConstants.ItemIconManager.get_item_icon(item)
+		var item_data: Dictionary = inventory_items[i]
+		var item_name: String = item_data.item_name
+		var count: int = item_data.count
+		
+		if item_name != EMPTY_SLOT and count > 0:
+			# Show item icon
+			texture_rect.texture = GameConstants.ItemIconManager.get_item_icon(item_name)
+			
+			# Update count label - only show if count > 1
+			if count > 1:
+				count_label.text = str(count)
+				count_label.visible = true
+			else:
+				count_label.visible = false
 		else:
+			# Clear the slot
 			texture_rect.texture = null
+			count_label.visible = false
 
 
 # --- Private Methods (Event Handlers) ---
@@ -258,11 +361,17 @@ func _on_slot_mouse_entered(slot_index: int) -> void:
 	if not is_open:
 		return
 	
-	var item: String = inventory_items[slot_index]
-	var description: String = get_item_description(item)
+	var item_data: Dictionary = inventory_items[slot_index]
+	var item_name: String = item_data.item_name
+	var count: int = item_data.count
+	var description: String = get_item_description(item_name)
 	
 	if not description.is_empty():
-		tooltip_label.text = description
+		# Add count to tooltip if more than 1
+		if count > 1:
+			tooltip_label.text = description + "\n\nCount: " + str(count)
+		else:
+			tooltip_label.text = description
 		tooltip.position = get_global_mouse_position() + Vector2(10, 10)
 		_clamp_tooltip_to_screen()
 		tooltip.visible = true
@@ -278,7 +387,7 @@ func _on_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 	if not is_open or not (event is InputEventMouseButton and event.is_pressed()):
 		return
 	
-	var item: String = inventory_items[slot_index]
+	var item: String = inventory_items[slot_index].item_name
 	if item == EMPTY_SLOT:
 		return
 
@@ -303,7 +412,7 @@ func _handle_right_click(_item: String, _index: int) -> void:
 
 func _consume_item(slot_index: int) -> void:
 	"""Consumes an item and removes it from the inventory."""
-	var item: String = inventory_items[slot_index]
+	var item: String = inventory_items[slot_index].item_name
 	if item == "Cooked Meat":
 		emit_signal("item_used", item)
 		remove_item(slot_index)
@@ -314,9 +423,19 @@ func _equip_to_hotbar(item_name: String, slot_index: int) -> void:
 	var hud := get_tree().get_first_node_in_group("hud")
 	if hud and hud.has_node("Hotbar"):
 		var hotbar := hud.get_node("Hotbar")
-		if hotbar.add_item(item_name):
-			remove_item(slot_index)
+		
+		# Get the full quantity of the item
+		var item_data: Dictionary = inventory_items[slot_index]
+		var quantity: int = item_data.count
+		
+		# Try to add the entire stack to hotbar
+		if hotbar.add_item(item_name, quantity):
+			# Remove entire stack from inventory
+			inventory_items[slot_index].item_name = EMPTY_SLOT
+			inventory_items[slot_index].count = 0
+			_update_inventory_display()
 			emit_signal("item_equipped", item_name)
+			print("Inventory: Moved ", quantity, " x ", item_name, " to hotbar")
 
 
 func _clamp_tooltip_to_screen() -> void:

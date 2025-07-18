@@ -20,6 +20,7 @@ var hud_instance: Control
 var is_performing_action: bool = false
 var pending_interaction_target: Node = null
 var chop_timer: Timer
+var cached_closest_interactable: Node = null  # Cache the closest interactable
 
 func _ready() -> void:
 	print("=== PLAYER READY STARTED ===")
@@ -37,6 +38,12 @@ func _ready() -> void:
 	animation_controller.setup($AdventurerModel)
 	interaction_controller.setup($InteractionArea, self)
 	equipment_controller.setup(self, $AdventurerModel, camera_node)
+
+	# Debug interaction setup
+	print("Player: InteractionArea collision layer = ", $InteractionArea.collision_layer)
+	print("Player: InteractionArea collision mask = ", $InteractionArea.collision_mask)
+	print("Player: InteractionArea monitoring = ", $InteractionArea.monitoring)
+	print("Player: InteractionArea monitorable = ", $InteractionArea.monitorable)
 
 	var is_local_player: bool = is_multiplayer_authority() or not multiplayer.has_multiplayer_peer()
 	print("Player: Is local player: ", is_local_player)
@@ -70,16 +77,23 @@ func _physics_process(delta: float) -> void:
 	# Movement
 	velocity = movement_controller.handle_movement(delta, self, transform)
 	move_and_slide()
+	
+	# Update chunk system with our position
+	_update_chunk_position()
 
 	# Animation
 	if not is_performing_action:
 		animation_controller.update_movement_animation(velocity, is_on_floor(), movement_controller.current_speed)
 
-	# Interaction
-	handle_interaction()
+	# Update cached closest interactable every frame
+	cached_closest_interactable = interaction_controller.get_closest_interactable()
+
+	# Interaction - check input directly here
+	if Input.is_action_just_pressed("interact"):
+		handle_interaction()
 
 	# Equipment
-	var action_to_perform = equipment_controller.handle_equipment_input(delta, interaction_controller.get_closest_interactable())
+	var action_to_perform = equipment_controller.handle_equipment_input(delta, cached_closest_interactable)
 	if action_to_perform:
 		handle_action(action_to_perform)
 
@@ -94,12 +108,18 @@ func _unhandled_input(event: InputEvent) -> void:
 	camera_controller._unhandled_input(event)
 
 func handle_interaction() -> void:
-	var interactable = interaction_controller.handle_interaction_input()
+	# print("Player: Using InteractionController instance: ", interaction_controller.get_instance_id())  # Too spammy
+	# Use the cached closest interactable instead of calling handle_interaction_input
+	var interactable = cached_closest_interactable
+	# print("Player: handle_interaction called, interactable = ", interactable.name if interactable else "None")  # Too spammy
 	if interactable:
 		var prompt: String = interaction_controller.get_interaction_prompt(interactable)
-		var is_tree_or_corpse = "Chop" in prompt or "Process" in prompt or "Tree" in prompt
+		print("Player: Interacting with ", interactable.name, " - Prompt: ", prompt)  # Keep this - it's an action
+		# Only block the deprecated tree chopping interaction, not corpse processing
+		var is_tree_chop = "Chop Tree" in prompt
 		
-		if not is_tree_or_corpse:
+		if not is_tree_chop:
+			# print("Player: Calling interact_with_object on ", interactable.name)  # Redundant with above
 			interaction_controller.interact_with_object(interactable, self)
 
 func handle_action(action_name: String) -> void:
@@ -107,7 +127,8 @@ func handle_action(action_name: String) -> void:
 		return
 	
 	if action_name == "chop":
-		equipment_controller.toggle_axe_hitbox(true)
+		# Don't enable hitbox immediately - wait for downstroke
+		pass
 		
 	is_performing_action = true
 	pending_interaction_target = interaction_controller.get_closest_interactable()
@@ -119,6 +140,35 @@ func handle_action(action_name: String) -> void:
 		var anim = anim_player.get_animation(animation_controller.current_animation)
 		if anim:
 			var duration = anim.length
+			
+			# For chop action, set up hitbox timing
+			if action_name == "chop":
+				# Enable hitbox at 1/3 through animation (downstroke)
+				var downstroke_start = duration * 0.33
+				var downstroke_end = duration * 0.66  # Disable at 66% through animation
+				
+				# Timer to enable hitbox during downstroke
+				var enable_timer = Timer.new()
+				add_child(enable_timer)
+				enable_timer.wait_time = downstroke_start
+				enable_timer.one_shot = true
+				enable_timer.timeout.connect(func(): 
+					equipment_controller.toggle_axe_hitbox(true)
+					enable_timer.queue_free()
+				)
+				enable_timer.start()
+				
+				# Timer to disable hitbox after downstroke
+				var disable_timer = Timer.new()
+				add_child(disable_timer)
+				disable_timer.wait_time = downstroke_end
+				disable_timer.one_shot = true
+				disable_timer.timeout.connect(func(): 
+					equipment_controller.toggle_axe_hitbox(false)
+					disable_timer.queue_free()
+				)
+				disable_timer.start()
+			
 			if chop_timer and is_instance_valid(chop_timer):
 				chop_timer.queue_free()
 
@@ -132,12 +182,12 @@ func handle_action(action_name: String) -> void:
 func _on_action_animation_finished() -> void:
 	is_performing_action = false
 	
-	# Disable hitbox after swing
-	equipment_controller.toggle_axe_hitbox(false)
+	# Don't disable hitbox here anymore - it's already handled by the downstroke timer
+	# equipment_controller.toggle_axe_hitbox(false)
 	
-	if pending_interaction_target and is_instance_valid(pending_interaction_target):
-		interaction_controller.interact_with_object(pending_interaction_target, self)
-		pending_interaction_target = null
+	# Remove the deprecated interaction call - the axe hitbox collision already handles damage
+	# The pending_interaction_target code was trying to call _on_interacted() which is deprecated
+	pending_interaction_target = null
 
 	# Return to idle/movement animation
 	animation_controller.update_movement_animation(velocity, is_on_floor(), movement_controller.current_speed)
@@ -197,11 +247,16 @@ func _add_test_items() -> void:
 	if is_instance_valid(hud_instance) and hud_instance.has_node("Inventory"):
 		var inventory: Node = hud_instance.get_node("Inventory")
 		if inventory.has_method("add_item"):
-			inventory.add_item("Axe")
-			inventory.add_item("Wood")
-			inventory.add_item("Raw Meat")
-			inventory.add_item("Hide")
-			inventory.add_item("Bow")
+			# Starting tools
+			inventory.add_item("Axe")  # Keep axe as starting tool
+			
+			# Starting crafting materials for bow
+			inventory.add_item("Wood", 3)
+			inventory.add_item("Hide", 3)
+			inventory.add_item("Sinew", 3)
+			
+			# Test items for cooking
+			inventory.add_item("Raw Meat", 2)  # For testing cooking system
 
 func add_item_to_inventory(item_name: String) -> bool:
 	if is_instance_valid(hud_instance) and hud_instance.has_node("Inventory"):
@@ -218,7 +273,22 @@ func get_inventory():
 func get_interaction_controller() -> InteractionController:
 	return interaction_controller
 
+func get_equipped_item() -> String:
+	"""Get the currently equipped item from the equipment controller."""
+	if equipment_controller:
+		return equipment_controller.equipped_item
+	return ""
+
 func _exit_tree() -> void:
 	# Check if multiplayer peer exists before checking authority to avoid errors during cleanup
 	if multiplayer and multiplayer.multiplayer_peer and is_multiplayer_authority() and PauseManager:
 		PauseManager.unregister_player(self)
+
+func _update_chunk_position() -> void:
+	"""Update our position in the chunk system for loading/unloading chunks."""
+	# Find GameManager and update our position
+	var game_managers := get_tree().get_nodes_in_group("game_manager")
+	if game_managers.size() > 0:
+		var game_manager = game_managers[0]
+		if game_manager.has_method("update_player_chunk_position"):
+			game_manager.update_player_chunk_position(self)

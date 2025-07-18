@@ -6,7 +6,8 @@ extends Control
 # --- Scripts ---
 const PlayerScript: Script = preload("res://scripts/Player.gd")
 const HotbarScript: Script = preload("res://scripts/Hotbar.gd")
-const InventoryScript: Script = preload("res://scripts/Inventory.gd")
+# const InventoryScript: Script = preload("res://scripts/Inventory.gd")
+# If the above line causes issues, try loading the inventory scene directly when needed
 
 # --- Constants ---
 const CROSSHAIR_COLOR_DEFAULT: Color = Color.WHITE
@@ -35,15 +36,20 @@ var should_show_crosshair: bool = false  # Track if crosshair should be visible 
 # --- Engine Callbacks ---
 
 func _ready() -> void:
-	print("HUD: Initializing...")
+	print("HUD: Ready started")
+	# Ensure clean state
+	current_interactable = null
+	
+	# Add to groups
 	add_to_group("hud")
+	
+	# Initialize nodes
+	_setup_crosshair()
 	
 	# Ensure HUD renders on top of other UI elements
 	z_index = 100
 	visible = true
 	modulate = Color.WHITE
-	
-	_setup_crosshair()
 	
 	# Debug: Check hotbar visibility and positioning
 	if hotbar:
@@ -65,6 +71,14 @@ func _ready() -> void:
 	# Wait for the scene tree to be ready before finding the player
 	await get_tree().process_frame
 	_find_player()
+	
+	# Debug HUD nodes
+	print("HUD: interaction_prompt node = ", interaction_prompt)
+	print("HUD: interaction_prompt valid = ", is_instance_valid(interaction_prompt))
+	if interaction_prompt:
+		print("HUD: interaction_prompt position = ", interaction_prompt.position)
+		print("HUD: interaction_prompt visible = ", interaction_prompt.visible)
+	
 	print("HUD: Ready!")
 
 
@@ -95,12 +109,15 @@ func _input(_event: InputEvent) -> void:
 func _find_player() -> void:
 	"""Finds the local human player in the scene tree."""
 	var players: Array[Node] = get_tree().get_nodes_in_group("human_player")
+	print("HUD: Found ", players.size(), " players in human_player group")
 	if not players.is_empty():
 		for p in players:
-			# Check if multiplayer peer exists before checking authority
-			if multiplayer and multiplayer.multiplayer_peer and p.is_multiplayer_authority():
+			# In single player mode (no multiplayer peer) or if this is the authority
+			if not multiplayer.has_multiplayer_peer() or p.is_multiplayer_authority():
 				player = p
+				print("HUD: Assigned player = ", player.name)
 				return
+	print("HUD: No suitable player found!")
 
 
 func _setup_crosshair() -> void:
@@ -123,18 +140,31 @@ func _check_for_interactable() -> void:
 	Checks for the closest interactable object and updates the UI accordingly.
 	"""
 	if not player.has_method("get_interaction_controller"):
+		print("HUD: Player has no get_interaction_controller method")
 		return
 		
 	var interaction_controller = player.get_interaction_controller()
 	if not interaction_controller:
+		print("HUD: No interaction controller")
 		return
+	
+	# print("HUD: Using InteractionController instance: ", interaction_controller.get_instance_id())  # Too spammy
 
 	# Always get the current closest interactable from the player's controller.
 	# The controller's function is responsible for cleaning up invalid nodes.
 	var closest: Node = interaction_controller.get_closest_interactable()
+	
+	# Debug print - commented out as it's too frequent
+	# if closest:
+	# 	print("HUD: Closest interactable = ", closest.name)
+	# else:
+	# 	print("HUD: No closest interactable")
+	
+	# print("HUD: current_interactable = ", current_interactable.name if current_interactable else "None")  # Too spammy
 
 	# Case 1: The closest interactable is new or different.
 	if closest and closest != current_interactable:
+		print("HUD: New interactable detected: ", closest.name)  # Keep this - it's an event
 		current_interactable = closest
 		_update_crosshair(true)
 		
@@ -142,15 +172,32 @@ func _check_for_interactable() -> void:
 		var prompt: String = ""
 		if current_interactable.has_method("get_interaction_prompt"):
 			prompt = current_interactable.get_interaction_prompt()
+			print("HUD: Showing prompt: ", prompt)  # Keep this - it's an event
 		else:
 			var property_value = current_interactable.get("interaction_prompt")
 			prompt = property_value if property_value else "Interact"
+			print("HUD: Showing prompt from property: ", prompt)  # Keep this - it's an event
 		
 		_show_interaction_prompt(prompt if prompt else "Interact")
 	# Case 2: There is no longer a closest interactable, but we thought there was.
 	elif not closest and current_interactable:
+		print("HUD: Clearing interactable")  # Keep this - it's an event
 		# This handles both looking away and the object being destroyed.
 		_clear_current_interactable()
+	# Case 3: We have the same interactable but the prompt might not be visible
+	elif closest and closest == current_interactable:
+		# Check if the prompt is actually visible
+		if not interaction_prompt.visible:
+			print("HUD: Re-showing prompt for: ", current_interactable.name)  # Keep this - it's an event
+			var prompt: String = ""
+			if current_interactable.has_method("get_interaction_prompt"):
+				prompt = current_interactable.get_interaction_prompt()
+			else:
+				var property_value = current_interactable.get("interaction_prompt")
+				prompt = property_value if property_value else "Interact"
+			_show_interaction_prompt(prompt if prompt else "Interact")
+		# else:
+		# 	print("HUD: No change in interactable state")  # Too spammy
 
 
 func _clear_current_interactable() -> void:
@@ -165,11 +212,15 @@ func _clear_current_interactable() -> void:
 
 func _update_crosshair(can_interact: bool) -> void:
 	"""Updates the crosshair color to indicate interactability."""
-	# Only update crosshair if it should be visible
-	if not should_show_crosshair or not crosshair.visible:
+	# Only update crosshair color if it's visible
+	if not crosshair.visible:
 		return
 		
-	var style: StyleBoxFlat = crosshair.get_theme_stylebox("panel") as StyleBoxFlat
+	# Get the current style and update colors
+	var style: StyleBoxFlat = crosshair.get_theme_stylebox("panel")
+	if not style:
+		return
+		
 	if can_interact:
 		style.bg_color = CROSSHAIR_COLOR_INTERACT
 		style.border_color = CROSSHAIR_BORDER_INTERACT
@@ -180,12 +231,13 @@ func _update_crosshair(can_interact: bool) -> void:
 
 func _show_interaction_prompt(prompt_text: String) -> void:
 	"""Shows the interaction prompt with the given text."""
-	# Only show interaction prompt if crosshair should be visible
-	if not should_show_crosshair:
-		return
-		
+	# print("HUD: _show_interaction_prompt called with: ", prompt_text)  # Already logged when detected
+	
+	# Always show interaction prompts - they're not tied to crosshair visibility
 	interaction_prompt.text = prompt_text
 	interaction_prompt.visible = true
+	# print("HUD: Set interaction_prompt.visible = true")  # Too detailed
+	# print("HUD: interaction_prompt node valid = ", is_instance_valid(interaction_prompt))  # Too detailed
 
 
 func _hide_interaction_prompt() -> void:
@@ -197,17 +249,15 @@ func _hide_interaction_prompt() -> void:
 
 func update_crosshair_visibility(equipped_item: String) -> void:
 	"""Updates crosshair visibility based on the currently equipped item."""
-	# Only show crosshair when holding a bow
+	# Only show crosshair when bow is equipped
 	should_show_crosshair = (equipped_item == "Bow")
 	
-	# Update the crosshair visibility
-	if crosshair:
-		crosshair.visible = should_show_crosshair
-		
-	# Also hide interaction prompt if crosshair is hidden
-	if not should_show_crosshair and interaction_prompt:
-		_hide_interaction_prompt()
-		
+	# Update crosshair visibility
+	crosshair.visible = should_show_crosshair
+	
+	# Don't hide interaction prompt when crosshair is hidden - interactions should always be available
+	# (removed the code that was hiding interaction_prompt)
+	
 	print("HUD: Crosshair visibility updated - equipped: ", equipped_item, " visible: ", should_show_crosshair)
 
 func update_bow_charge_crosshair(is_charging: bool, is_ready: bool) -> void:

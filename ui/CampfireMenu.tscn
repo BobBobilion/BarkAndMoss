@@ -1,0 +1,82 @@
+[gd_scene load_steps=4 format=3 uid="uid://campfire_menu"]
+
+[ext_resource type="Theme" uid="uid://bark_moss_theme" path="res://ui/bark_moss_theme.tres" id="1_theme"]
+[ext_resource type="Script" path="res://scripts/CampfireMenu.gd" id="2_script"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
+bg_color = Color(0.137, 0.2, 0.165, 0.9)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.545, 0.357, 0.169, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[node name="CampfireMenu" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme = ExtResource("1_theme")
+script = ExtResource("2_script")
+
+[node name="Background" type="ColorRect" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 0.7)
+mouse_filter = 0
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="MenuPanel" type="PanelContainer" parent="CenterContainer"]
+custom_minimum_size = Vector2(600, 500)
+theme_override_styles/panel = SubResource("StyleBoxFlat_1")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/MenuPanel"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="Title" type="Label" parent="CenterContainer/MenuPanel/VBoxContainer"]
+layout_mode = 2
+text = "Campfire"
+theme_override_font_sizes/font_size = 32
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/MenuPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="TabContainer" type="TabContainer" parent="CenterContainer/MenuPanel/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+tab_alignment = 1
+
+[node name="Crafting" type="ScrollContainer" parent="CenterContainer/MenuPanel/VBoxContainer/TabContainer"]
+layout_mode = 2
+
+[node name="CraftingGrid" type="GridContainer" parent="CenterContainer/MenuPanel/VBoxContainer/TabContainer/Crafting"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 20
+theme_override_constants/v_separation = 20
+columns = 2
+
+[node name="Cooking" type="ScrollContainer" parent="CenterContainer/MenuPanel/VBoxContainer/TabContainer"]
+visible = false
+layout_mode = 2
+
+[node name="CookingGrid" type="GridContainer" parent="CenterContainer/MenuPanel/VBoxContainer/TabContainer/Cooking"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 20
+theme_override_constants/v_separation = 20
+columns = 2
+
+[node name="CloseHint" type="Label" parent="CenterContainer/MenuPanel/VBoxContainer"]
+layout_mode = 2
+text = "Press ESC to close"
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 14
+horizontal_alignment = 1 

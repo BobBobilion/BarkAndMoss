@@ -14,14 +14,14 @@ collision_mask = 0
 script = ExtResource("1_deer_corpse_script")
 
 [node name="DeerCorpseModel" parent="." instance=ExtResource("3_deer_model")]
-transform = Transform3D(-0.00582223, -0.599972, 0, -0.59997, 0.00582221, -0.00147652, 0.00147645, -1.43277e-05, -0.599998, 1.98274, -0.00940199, 0.177284)
+transform = Transform3D(-0.00582223, -0.599972, 0, -0.59997, 0.00582221, -0.00147652, 0.00147645, -1.43277e-05, -0.599998, -0.001881, 0.539808, -0.0537143)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(-0.567576, -0.457442, -0.684547, 0.704889, 0.159642, -0.691121, 0.425431, -0.874792, 0.231836, 0.427831, 0.178647, -0.0870997)
+transform = Transform3D(-0.567576, -0.457442, -0.684547, 0.765438, 0.0130703, -0.643379, 0.303256, -0.889143, 0.342724, -1.55679, 0.705871, -0.320251)
 shape = SubResource("CapsuleShape3D_deer_corpse")
 
 [node name="Interactable" type="Area3D" parent="."]
-transform = Transform3D(-0.885384, -0.457443, -0.0827116, 0.00973572, 0.159643, -0.987127, 0.464758, -0.874793, -0.136891, 0.565066, 0.130755, 0.175337)
+transform = Transform3D(-0.885384, -0.457443, -0.0827116, 0.0863094, 0.0130711, -0.996183, 0.456777, -0.889144, 0.0279093, -1.41956, 0.701951, -0.0535086)
 collision_layer = 2
 collision_mask = 0
 monitoring = false

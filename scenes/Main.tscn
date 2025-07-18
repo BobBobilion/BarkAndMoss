@@ -6,6 +6,7 @@
 [ext_resource type="Script" uid="uid://lfaaw11pa4ra" path="res://scripts/DayNightCycle.gd" id="5_day_night_cycle"]
 [ext_resource type="PackedScene" uid="uid://tm8nuhejklh2" path="res://scenes/Campfire.tscn" id="6_campfire"]
 [ext_resource type="Script" uid="uid://cg87mciet51yb" path="res://scripts/CloudManager.gd" id="7_cloud_manager"]
+[ext_resource type="Script" path="res://scripts/Main.gd" id="8_main"]
 
 [sub_resource type="Environment" id="Environment_1u7xv"]
 background_mode = 1
@@ -23,6 +24,7 @@ ssil_intensity = 0.25
 glow_enabled = true
 
 [node name="Main" type="Node3D"]
+script = ExtResource("8_main")
 
 [node name="GameManager" type="Node" parent="."]
 script = ExtResource("1_1q3rw")

@@ -281,6 +281,7 @@ var biome_configs: Dictionary = {}
 var noise_altitude: FastNoiseLite
 var noise_temperature: FastNoiseLite
 var noise_humidity: FastNoiseLite
+var world_seed: int = 12345
 
 # --- Public Methods ---
 
@@ -293,6 +294,11 @@ func _init():
 	# Debug: Print biome distribution
 	_debug_biome_distribution()
 
+
+func set_world_seed(seed_value: int) -> void:
+	"""Set the world generation seed."""
+	world_seed = seed_value
+	_initialize_noise_generators()
 
 func get_biome_at_position(world_pos: Vector3) -> BiomeType:
 	"""Determine the primary biome type at a given world position."""
@@ -546,7 +552,7 @@ func _ensure_static_dictionaries_initialized() -> void:
 func _initialize_noise_generators() -> void:
 	"""Initialize all noise generators with different seeds and properties."""
 	# Use a base seed that can be randomized but ensures consistent patterns
-	var base_seed: int = randi() % 10000  # Keep it reasonable
+	var base_seed: int = world_seed
 	
 	# Altitude noise - controls mountain distribution
 	noise_altitude = FastNoiseLite.new()

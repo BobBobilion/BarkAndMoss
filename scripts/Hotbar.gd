@@ -27,7 +27,8 @@ const COLOR_TEXT_SHADOW: Color = GameConstants.UI.COLOR_TEXT_SHADOW
 
 var slots: Array[Panel] = []
 var selected_slot: int = 0
-var items: Array[String] = []
+# Changed to support quantities: Array of dictionaries with item_name and count
+var items: Array[Dictionary] = []
 
 @onready var slot_container: HBoxContainer = $HotbarBackground/HBoxContainer
 
@@ -93,8 +94,13 @@ func _input(event: InputEvent) -> void:
 func _initialize_items() -> void:
 	"""Sets up the initial state of the items array."""
 	items.resize(SLOT_COUNT)
-	items.fill(EMPTY_SLOT)
-	items[0] = STARTER_ITEM
+	
+	# Initialize each slot with empty item data
+	for i in range(SLOT_COUNT):
+		items[i] = {"item_name": EMPTY_SLOT, "count": 0}
+	
+	# Set starter item in first slot
+	items[0] = {"item_name": STARTER_ITEM, "count": 1}
 
 
 func _create_slots() -> void:
@@ -165,6 +171,19 @@ func _create_slots() -> void:
 		number_label.add_theme_constant_override("shadow_offset_y", 1)
 		slot.add_child(number_label)
 		
+		# Add count label for item quantities (bottom-left corner)
+		var count_label := Label.new()
+		count_label.name = "CountLabel"
+		count_label.text = ""
+		count_label.position = Vector2(4, slot_size.y - 16)  # Bottom-left
+		count_label.add_theme_font_size_override("font_size", FONT_SIZE_SLOT_NUMBER)
+		count_label.add_theme_color_override("font_color", COLOR_SLOT_NUMBER)
+		count_label.add_theme_color_override("font_shadow_color", COLOR_TEXT_SHADOW)
+		count_label.add_theme_constant_override("shadow_offset_x", 1)
+		count_label.add_theme_constant_override("shadow_offset_y", 1)
+		count_label.visible = false  # Hidden by default
+		slot.add_child(count_label)
+		
 		# Add mouse event handlers for tooltip functionality
 		slot.mouse_entered.connect(_on_slot_mouse_entered.bind(i))
 		slot.mouse_exited.connect(_on_slot_mouse_exited)
@@ -185,7 +204,7 @@ func select_slot(index: int) -> void:
 	selected_slot = index
 	_update_hotbar_visuals()
 	
-	emit_signal("selection_changed", selected_slot, items[selected_slot])
+	emit_signal("selection_changed", selected_slot, items[selected_slot].item_name)
 
 
 func _update_hotbar_visuals() -> void:
@@ -193,14 +212,25 @@ func _update_hotbar_visuals() -> void:
 	for i in range(slots.size()):
 		var slot: Panel = slots[i]
 		var texture_rect: TextureRect = slot.get_child(0) as TextureRect
+		var count_label: Label = slot.get_node("CountLabel") as Label
 		var style: StyleBoxFlat = slot.get_theme_stylebox("panel") as StyleBoxFlat
 		
 		# Show item icons using the centralized icon manager, or clear if slot is empty
-		var item: String = items[i]
-		if item != EMPTY_SLOT:
+		var item: String = items[i].item_name
+		var count: int = items[i].count
+		
+		if item != EMPTY_SLOT and count > 0:
 			texture_rect.texture = GameConstants.ItemIconManager.get_item_icon(item)
+			
+			# Show count if > 1
+			if count > 1:
+				count_label.text = str(count)
+				count_label.visible = true
+			else:
+				count_label.visible = false
 		else:
 			texture_rect.texture = null
+			count_label.visible = false
 		
 		# Update selection highlight with enhanced rustic styling
 		if i == selected_slot:
@@ -212,38 +242,59 @@ func _update_hotbar_visuals() -> void:
 			style.bg_color = COLOR_SLOT_NORMAL
 			style.set_border_width_all(2)
 			style.shadow_size = 2
-			style.shadow_offset = Vector2(1, 2)
+			style.shadow_offset = Vector2(0, 1)
 
 
-func add_item(item_name: String) -> bool:
+func add_item(item_name: String, quantity: int = 1) -> bool:
 	"""
-	Adds an item to the first available empty slot in the hotbar.
+	Adds an item to the hotbar with stacking support.
+	First tries to stack with existing items, then finds an empty slot.
 	Returns true if the item was added, false otherwise.
 	"""
+	if item_name == EMPTY_SLOT:
+		return false
+	
+	var remaining_quantity: int = quantity
+	
+	# First pass: try to stack with existing items of the same type
 	for i in range(items.size()):
-		if items[i] == EMPTY_SLOT:
-			items[i] = item_name
+		if items[i].item_name == item_name:
+			# Stack with existing item
+			items[i].count += remaining_quantity
 			_update_hotbar_visuals()
+			print("Hotbar: Stacked ", remaining_quantity, " ", item_name, " in slot ", i, " (total: ", items[i].count, ")")
 			return true
+	
+	# Second pass: find an empty slot
+	for i in range(items.size()):
+		if items[i].item_name == EMPTY_SLOT:
+			items[i].item_name = item_name
+			items[i].count = remaining_quantity
+			_update_hotbar_visuals()
+			print("Hotbar: Added ", remaining_quantity, " ", item_name, " to slot ", i)
+			return true
+	
+	print("Hotbar: Failed to add ", item_name, " - hotbar is full")
 	return false
 
 
 func remove_item(slot_index: int) -> void:
 	"""Removes an item from a specific slot."""
 	if slot_index >= 0 and slot_index < items.size():
-		items[slot_index] = EMPTY_SLOT
+		items[slot_index].item_name = EMPTY_SLOT
+		items[slot_index].count = 0
 		_update_hotbar_visuals()
 
 
 func get_selected_item() -> String:
 	"""Returns the name of the item in the currently selected slot."""
-	return items[selected_slot]
+	return items[selected_slot].item_name
 
 
 func get_item_at_slot(slot_index: int) -> String:
 	"""Returns the name of the item at a specific slot index."""
 	if slot_index >= 0 and slot_index < items.size():
-		return items[slot_index]
+		return items[slot_index].item_name
 	return EMPTY_SLOT
 
 
@@ -279,7 +330,7 @@ func _create_tooltip() -> void:
 
 func _on_slot_mouse_entered(slot_index: int) -> void:
 	"""Shows the item tooltip when the mouse enters a slot."""
-	var item: String = items[slot_index]
+	var item: String = items[slot_index].item_name
 	if item != EMPTY_SLOT:
 		# Get description from GameConstants
 		var description: String = GameConstants.ITEM_DESCRIPTIONS.get(item, item)

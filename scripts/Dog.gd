@@ -15,9 +15,13 @@ const CAMERA_COLLISION_BIAS: float = 0.2
 const BITE_RANGE: float = 2.0
 const BITE_HITBOX_SIZE: float = 1.5
 const BITE_COOLDOWN: float = 0.5
+# Attack animation duration (approximate time for attack animation to complete)
+const ATTACK_ANIMATION_DURATION: float = 1.0
 
 # Bark
 const BARK_COOLDOWN: float = 1.0
+# Bark animation duration (approximate time for bark behavior to complete)
+const BARK_ANIMATION_DURATION: float = 1.0
 
 # Animation constants
 const ANIMATION_BLEND_TIME: float = 0.2  # Time to blend between animations
@@ -60,9 +64,15 @@ var base_camera_position: Vector3
 # Bite Attack
 var is_biting: bool = false
 var bite_timer: float = 0.0
+# New variables for proper animation handling
+var is_attack_animation_playing: bool = false
+var attack_animation_timer: float = 0.0
 
 # Bark
 var bark_timer: float = 0.0
+# New variables for proper animation handling  
+var is_bark_animation_playing: bool = false
+var bark_animation_timer: float = 0.0
 
 # Corpse dragging
 var grabbed_corpse: Node3D = null
@@ -132,22 +142,27 @@ func _process(delta: float) -> void:
 	# Handle camera collision
 	handle_camera_collision()
 	
-	# Handle bite attack (hold left click)
-	if Input.is_action_pressed("attack") and bite_timer <= 0:
-		if not is_biting:
+	# Handle bite attack and corpse dragging
+	if Input.is_action_just_pressed("attack"):
+		# Single-click attack (for animals) or start dragging (for corpses)
+		if bite_timer <= 0 and not is_attack_animation_playing:
 			start_bite_attack()
-		perform_bite_attack()
-	elif Input.is_action_just_released("attack"):
-		stop_bite_attack()
+	elif Input.is_action_pressed("attack") and grabbed_corpse:
+		# Continue dragging corpse while holding attack button
+		# (corpse position is updated in _update_corpse_dragging)
+		pass
+	elif Input.is_action_just_released("attack") and grabbed_corpse:
+		# Release corpse when attack button is released
+		release_corpse()
 	
 	# Handle corpse dragging
 	_update_corpse_dragging()
 	
-	# Handle bark (right click)
-	if Input.is_action_just_pressed("bark") and bark_timer <= 0:
+	# Handle bark (single-click, check if not already barking)
+	if Input.is_action_just_pressed("bark") and bark_timer <= 0 and not is_bark_animation_playing:
 		perform_bark()
 	
-	# Handle corpse release (Q key or right click when holding corpse)
+	# Handle corpse release (Q key as alternative release method)
 	if Input.is_action_just_pressed("ui_cancel") and grabbed_corpse:
 		release_corpse()
 	
@@ -156,6 +171,25 @@ func _process(delta: float) -> void:
 		bite_timer -= delta
 	if bark_timer > 0:
 		bark_timer -= delta
+		
+	# Update animation completion timers
+	if attack_animation_timer > 0:
+		attack_animation_timer -= delta
+		if attack_animation_timer <= 0:
+			# Attack animation finished
+			is_attack_animation_playing = false
+			is_attacking = false
+			is_biting = false
+			# Return to movement animation
+			_update_movement_animation()
+	
+	if bark_animation_timer > 0:
+		bark_animation_timer -= delta
+		if bark_animation_timer <= 0:
+			# Bark animation finished
+			is_bark_animation_playing = false
+			# Return to movement animation
+			_update_movement_animation()
 
 
 func _physics_process(delta: float) -> void:
@@ -166,18 +200,10 @@ func _physics_process(delta: float) -> void:
 	# Add the gravity
 	if not is_on_floor():
 		velocity.y -= gravity * delta
-		
-		# If dog is in air and was attacking, stop the attack
-		if is_attacking:
-			stop_bite_attack()
 
 	# Handle jump
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = JUMP_VELOCITY
-		
-		# Stop any current attack when jumping
-		if is_attacking:
-			stop_bite_attack()
 
 	# Handle run/walk switching (like player) [[memory:3259606]]
 	if Input.is_action_pressed("run"):
@@ -197,6 +223,9 @@ func _physics_process(delta: float) -> void:
 		velocity.z = move_toward(velocity.z, 0, current_speed)
 
 	move_and_slide()
+	
+	# Update chunk system with our position
+	_update_chunk_position()
 	
 	# Update animations based on movement and state
 	_update_movement_animation()
@@ -250,11 +279,13 @@ func _update_movement_animation() -> void:
 	# Check if jumping (in air) - jumping takes priority over other actions
 	if not is_on_floor():
 		target_animation = ANIM_GALLOP_JUMP
-	# Don't override eating or attacking animations with movement animations (jumping can still override all)
+	# Don't override eating, attacking, or barking animations with movement animations
 	elif is_eating:
 		return
-	elif is_attacking:
-		return  # FIXED: Don't override attack animation with movement animations
+	elif is_attack_animation_playing:  # CHANGED: use new animation completion flag
+		return
+	elif is_bark_animation_playing:   # CHANGED: use new animation completion flag
+		return
 	# Check movement speed
 	elif is_currently_moving:
 		if speed >= GALLOP_THRESHOLD:
@@ -398,23 +429,67 @@ func _update_corpse_dragging() -> void:
 
 
 func start_bite_attack() -> void:
-	"""Starts the bite attack animation and sets up the hitbox."""
-	is_attacking = true
-	is_biting = true
-	bite_timer = BITE_COOLDOWN
+	"""Starts the bite attack - checks what we're attacking and responds appropriately."""
+	# First check what we're about to bite/grab
+	var target_type: String = _check_bite_target()
 	
-	# Play attack animation
-	_play_animation(ANIM_ATTACK)
+	if target_type == "animal":
+		# Attacking an animal - play full attack animation
+		is_attacking = true
+		is_biting = true
+		bite_timer = BITE_COOLDOWN
+		
+		# Play attack animation
+		_play_animation(ANIM_ATTACK)
+		is_attack_animation_playing = true
+		attack_animation_timer = ATTACK_ANIMATION_DURATION
+		
+		# Perform the actual attack (damage)
+		perform_bite_attack()
+	elif target_type == "corpse":
+		# Grabbing a corpse - no attack animation, just grab immediately
+		bite_timer = BITE_COOLDOWN
+		perform_bite_attack()  # This will grab the corpse
+	else:
+		# Nothing to attack/grab - play attack animation anyway (missed attack)
+		is_attacking = true
+		is_biting = true
+		bite_timer = BITE_COOLDOWN
+		
+		# Play attack animation
+		_play_animation(ANIM_ATTACK)
+		is_attack_animation_playing = true
+		attack_animation_timer = ATTACK_ANIMATION_DURATION
 
 
-func stop_bite_attack() -> void:
-	"""Stops the bite attack and starts the cooldown."""
-	is_attacking = false
-	is_biting = false
-	bite_timer = BITE_COOLDOWN
+func _check_bite_target() -> String:
+	"""Check what type of target is in bite range. Returns 'animal', 'corpse', or 'none'."""
+	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	var bite_center: Vector3 = global_position + global_transform.basis * Vector3(0, 0, -BITE_RANGE)
 	
-	# Return to appropriate movement animation
-	_update_movement_animation()
+	# Use sphere shape for bite detection
+	var shape: SphereShape3D = SphereShape3D.new()
+	shape.radius = BITE_HITBOX_SIZE
+	
+	var query: PhysicsShapeQueryParameters3D = PhysicsShapeQueryParameters3D.new()
+	query.shape = shape
+	query.transform.origin = bite_center
+	query.collision_mask = 8 | 16  # Animals (8) and corpses (16)
+	
+	var results: Array[Dictionary] = space_state.intersect_shape(query)
+	
+	for result in results:
+		var collider: Node = result.collider
+		
+		# Check for animals first (higher priority)
+		if collider.is_in_group("animals") and collider.has_method("take_damage"):
+			return "animal"
+		
+		# Check for corpses (only if no animals and not already carrying one)
+		elif collider.is_in_group("corpses") and not grabbed_corpse:
+			return "corpse"
+	
+	return "none"
 
 
 func perform_bite_attack() -> void:
@@ -460,7 +535,7 @@ func _grab_corpse(corpse: Node3D) -> void:
 		return  # Already carrying something
 	
 	grabbed_corpse = corpse
-	print("Dog grabbed corpse: ", corpse.name)
+	print("Dog grabbed corpse: ", corpse.name, " (hold attack button to drag, release to drop)")
 	
 	# Tell the corpse it's being grabbed
 	if corpse.has_method("_grab_corpse"):
@@ -488,21 +563,12 @@ func perform_bark() -> void:
 	bark_timer = BARK_COOLDOWN
 	print("Dog barked!")
 	
-	# Could add a bark animation here if available
-	# For now, briefly show idle head low as a "listening" pose
-	if not is_attacking and not is_eating:
-		_play_animation(ANIM_IDLE_2_HEAD_LOW)
-		
-		# Return to normal animation after a short delay
-		var bark_duration: float = 0.5
-		var timer: Timer = Timer.new()
-		add_child(timer)
-		timer.wait_time = bark_duration
-		timer.timeout.connect(func():
-			timer.queue_free()
-			_update_movement_animation()
-		)
-		timer.start()
+	# Play bark behavior animation (head low listening pose)
+	_play_animation(ANIM_IDLE_2_HEAD_LOW)
+	
+	# Set up animation completion tracking
+	is_bark_animation_playing = true
+	bark_animation_timer = BARK_ANIMATION_DURATION
 	
 	# Notify nearby birds about the bark
 	_notify_birds_of_bark()
@@ -548,3 +614,12 @@ func _update_camera_position() -> void:
 	"""
 	# SpringArm3D handles camera positioning automatically
 	pass
+
+func _update_chunk_position() -> void:
+	"""Update our position in the chunk system for loading/unloading chunks."""
+	# Find GameManager and update our position
+	var game_managers := get_tree().get_nodes_in_group("game_manager")
+	if game_managers.size() > 0:
+		var game_manager = game_managers[0]
+		if game_manager.has_method("update_player_chunk_position"):
+			game_manager.update_player_chunk_position(self)

@@ -41,15 +41,16 @@ func get_interaction_prompt() -> String:
 	return "Chop Tree"
 
 
-func take_damage(damage_amount: int):
+func take_damage(damage_amount: int, damager: Node3D = null):
 	if is_chopped:
 		return
 
 	chop_count += damage_amount
-	print("Tree chopped ", chop_count, "/", MAX_CHOPS, " times")
+	print("Tree chopped ", chop_count, "/", MAX_CHOPS, " times | Damager: ", damager.name if damager else "None")
 	
 	if chop_count >= MAX_CHOPS:
-		_chop_tree()
+		print("Tree fully chopped! Calling _chop_tree with damager: ", damager.name if damager else "None")
+		_chop_tree(damager)
 
 func _on_interacted(player: Node) -> void:
 	"""Handles the interaction event when a player chops the stump."""
@@ -59,12 +60,31 @@ func _on_interacted(player: Node) -> void:
 
 # --- Private Methods ---
 
-func _chop_tree() -> void:
+func _chop_tree(chopper: Node3D = null) -> void:
 	"""
 	Handles the final chop, disabling the stump and playing a falling and fading animation.
+	Rewards the player who chopped it with wood.
 	This is the most robust implementation for fading materials.
 	"""
 	is_chopped = true
+	
+	# Reward the player who chopped the tree with wood
+	print("TreeStump: Attempting to reward wood. Chopper: ", chopper.name if chopper else "None")
+	if chopper:
+		print("TreeStump: Chopper has add_item_to_inventory method: ", chopper.has_method("add_item_to_inventory"))
+		if chopper.has_method("add_item_to_inventory"):
+			var wood_reward: int = 2  # Trees give 2 wood when chopped
+			for i in range(wood_reward):
+				print("TreeStump: Attempting to add Wood #", i+1)
+				if chopper.add_item_to_inventory("Wood"):
+					print("TreeStump: Successfully gave 1 Wood to ", chopper.name)
+				else:
+					print("TreeStump: Player inventory full, couldn't give wood")
+					break
+		else:
+			print("TreeStump: ERROR - Chopper doesn't have add_item_to_inventory method!")
+	else:
+		print("TreeStump: ERROR - No chopper reference passed!")
 	
 	# Disable interaction and future physics checks immediately to prevent re-triggering.
 	if is_instance_valid(interactable):
@@ -73,7 +93,8 @@ func _chop_tree() -> void:
 		# Use deferred calls to avoid physics signal blocking
 		interactable.set_deferred("monitoring", false)
 		interactable.set_deferred("monitorable", false)
-	collision_shape.disabled = true
+	# Defer collision shape disabling to avoid physics callback issues
+	collision_shape.set_deferred("disabled", true)
 	
 	# --- Create a new Tween for the animation ---
 	var tween: Tween = create_tween().set_parallel(true)

@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3 uid="uid://c3dw7mq0tqbu"]
+[gd_scene load_steps=6 format=3 uid="uid://c3dw7mq0tqbu"]
 
 [ext_resource type="Script" uid="uid://cte0dfdp75thl" path="res://scripts/RabbitCorpse.gd" id="1_corpse_script"]
 [ext_resource type="Script" uid="uid://bbh1pyej32pbs" path="res://scripts/Interactable.gd" id="2_interactable_script"]
@@ -7,6 +7,10 @@
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_corpse"]
 radius = 0.146676
 height = 0.67404
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_ilokj"]
+radius = 0.468816
+height = 0.937631
 
 [node name="RabbitCorpse" type="StaticBody3D"]
 collision_layer = 16
@@ -19,6 +23,10 @@ transform = Transform3D(8.74228e-09, -0.2, 1.74846e-08, -0.2, -8.74228e-09, 0, 7
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(0.571823, -0.505763, 0.645927, -0.703342, 0.103053, 0.703342, -0.422289, -0.856495, -0.296797, -0.22953, 0.0214154, -0.0562225)
 shape = SubResource("CapsuleShape3D_corpse")
+
+[node name="CollisionShape3D2" type="CollisionShape3D" parent="."]
+transform = Transform3D(-0.0255496, 0.175566, 0.984137, -0.0546935, 0.982738, -0.176736, -0.998177, -0.0583413, -0.015506, -0.193186, 0.413667, -0.0536832)
+shape = SubResource("CapsuleShape3D_ilokj")
 
 [node name="Interactable" type="Area3D" parent="."]
 transform = Transform3D(0.861079, -0.505763, 0.0523994, 0, 0.103053, 0.994676, -0.50847, -0.856495, 0.0887368, -0.128378, 0.000805028, 0.115077)

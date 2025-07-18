@@ -21,10 +21,19 @@ func setup(p_interaction_area: Area3D, p_player_body: CharacterBody3D) -> void:
 # --- Public Methods ---
 func handle_interaction_input() -> Node:
 	if Input.is_action_just_pressed("interact"):
-		return get_closest_interactable()
+		print("InteractionController: 'interact' action pressed")
+		var closest = get_closest_interactable()
+		print("InteractionController: Closest interactable = ", closest.name if closest else "None")
+		return closest
 	return null
 
 func get_closest_interactable() -> Node:
+	# Commented out debug prints - too spammy for every frame
+	# print("InteractionController: get_closest_interactable called")
+	# print("  overlapping_interactables.size() = ", overlapping_interactables.size())
+	# for item in overlapping_interactables:
+	# 	print("  - ", item.name if is_instance_valid(item) else "INVALID")
+	
 	if overlapping_interactables.is_empty():
 		return null
 	
@@ -42,6 +51,7 @@ func get_closest_interactable() -> Node:
 			closest_distance_sq = distance_sq
 			closest = interactable
 	
+	# print("  Returning closest: ", closest.name if closest else "None")  # Too spammy
 	return closest
 
 func get_interaction_prompt(interactable: Node) -> String:
@@ -61,10 +71,22 @@ func interact_with_object(interactable: Node, instigator: Node) -> void:
 # --- Signal Handlers ---
 func _on_area_entered(area: Area3D) -> void:
 	var interactable: Node = area.get_parent()
+	print("InteractionController: Area entered - Area name: '", area.name, "' Parent: '", interactable.name, "'")
+	print("  Parent has get_interaction_prompt: ", interactable.has_method("get_interaction_prompt"))
+	print("  Parent is in interactable group: ", interactable.is_in_group("interactable"))
+	
+	# Check if this parent is already in our list to avoid duplicates
+	if interactable in overlapping_interactables:
+		print("  WARNING: Parent already in overlapping_interactables! Not adding duplicate.")
+		return
+	
 	if interactable.has_method("get_interaction_prompt") or interactable.is_in_group("interactable"):
 		overlapping_interactables.append(interactable)
+		print("  Added to overlapping_interactables. Count: ", overlapping_interactables.size())
 
 func _on_area_exited(area: Area3D) -> void:
 	var interactable: Node = area.get_parent()
+	print("InteractionController: Area exited - ", area.name, " Parent: ", interactable.name)
 	if interactable in overlapping_interactables:
-		overlapping_interactables.erase(interactable) 
+		overlapping_interactables.erase(interactable)
+		print("  Removed from overlapping_interactables. Count: ", overlapping_interactables.size()) 

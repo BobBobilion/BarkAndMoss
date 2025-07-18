@@ -77,13 +77,12 @@ var proximity_animals: Dictionary = {}  # Track animals by player proximity: {pl
 func _ready() -> void:
 	"""Initialize the animal spawner and find required components."""
 	# Find the world generator for terrain height checks and biome data
-	world_generator = get_node("../WorldGenerator") as WorldGenerator
-	if not world_generator:
-		printerr("AnimalSpawner: Could not find WorldGenerator!")
-		return
-	
-	# Get biome manager from world generator
-	biome_manager = world_generator.biome_manager
+	var game_managers := get_tree().get_nodes_in_group("game_manager")
+	if game_managers.size() > 0:
+		var game_manager = game_managers[0]
+		if game_manager.has_method("get_biome_manager"):
+			biome_manager = game_manager.get_biome_manager()
+
 	if not biome_manager:
 		printerr("AnimalSpawner: Could not find BiomeManager!")
 		return

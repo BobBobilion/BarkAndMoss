@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://tm8nuhejklh2"]
+[gd_scene load_steps=11 format=3 uid="uid://tm8nuhejklh2"]
 
 [ext_resource type="Script" uid="uid://dyk7e8tjr1i60" path="res://scripts/Campfire.gd" id="1_campfire_script"]
 [ext_resource type="PackedScene" uid="uid://b2efg6rnl1yvi" path="res://assets/tools/Bonfire.glb" id="2_bonfire_model"]
@@ -31,6 +31,9 @@ point_count = 4
 [sub_resource type="Gradient" id="Gradient_fire"]
 offsets = PackedFloat32Array(0, 0.2, 0.6, 1)
 colors = PackedColorArray(1, 1, 0.2, 1, 1, 0.5, 0, 1, 1, 0, 0, 0.8, 0.2, 0, 0, 0)
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_1b37d"]
+radius = 1.64648
 
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_interaction"]
 radius = 12.0977
@@ -85,12 +88,12 @@ scale_amount_curve = SubResource("Curve_particle_scale")
 color_ramp = SubResource("Gradient_fire")
 
 [node name="InteractionArea" type="Area3D" parent="."]
-collision_layer = 0
+collision_layer = 4
 collision_mask = 2
 
 [node name="InteractionShape" type="CollisionShape3D" parent="InteractionArea"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
-shape = SubResource("CylinderShape3D_interaction")
+shape = SubResource("CylinderShape3D_1b37d")
 
 [node name="SafeZone" type="Area3D" parent="."]
 collision_layer = 0
@@ -108,6 +111,15 @@ one_shot = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 0)
 billboard = 1
 font_size = 24
+
+[node name="CampfireInteractable" type="Area3D" parent="."]
+collision_layer = 4
+collision_mask = 0
+monitoring = false
+
+[node name="InteractableShape" type="CollisionShape3D" parent="CampfireInteractable"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+shape = SubResource("CylinderShape3D_ah7om")
 
 [connection signal="area_entered" from="InteractionArea" to="." method="_on_interaction_area_entered"]
 [connection signal="area_exited" from="InteractionArea" to="." method="_on_interaction_area_exited"]

@@ -17,22 +17,6 @@ const BASE_LIGHT_RANGE: float = 8.0
 const MAX_LIGHT_ENERGY: float = 1.5
 const MIN_LIGHT_ENERGY: float = 0.3
 
-# Crafting recipes
-const CRAFTING_RECIPES: Dictionary = {
-	"Bow": {
-		"Wood": 1,
-		"Sinew": 1
-	}
-	# Future hide-based recipes can be added here:
-	# "Leather Armor": {
-	#     "Hide": 2,
-	#     "Sinew": 1
-	# },
-	# "Leather Pouch": {
-	#     "Hide": 1
-	# }
-}
-
 # --- Node References ---
 @onready var bonfire_model: Node3D = $BonfireModel
 @onready var campfire_light: OmniLight3D = $CampfireLight
@@ -41,6 +25,11 @@ const CRAFTING_RECIPES: Dictionary = {
 @onready var safe_zone: Area3D = $SafeZone
 @onready var cooking_timer: Timer = $CookingTimer
 @onready var ui_prompt: Label3D = $UIPrompt
+@onready var campfire_interactable: Area3D = $CampfireInteractable
+
+# Campfire menu UI
+var campfire_menu_scene: PackedScene = preload("res://ui/CampfireMenu.tscn")
+var campfire_menu_instance: Control = null
 
 # --- State Variables ---
 var current_state: CampfireState = CampfireState.LIT
@@ -65,6 +54,13 @@ func _ready() -> void:
 	if not interaction_area.area_exited.is_connected(_on_interaction_area_exited):
 		interaction_area.area_exited.connect(_on_interaction_area_exited)
 	
+	# Connect the CampfireInteractable signals for debugging
+	if campfire_interactable:
+		if not campfire_interactable.area_entered.is_connected(_on_campfire_interactable_entered):
+			campfire_interactable.area_entered.connect(_on_campfire_interactable_entered)
+		if not campfire_interactable.area_exited.is_connected(_on_campfire_interactable_exited):
+			campfire_interactable.area_exited.connect(_on_campfire_interactable_exited)
+	
 	# Initialize campfire state
 	_update_campfire_state()
 	_update_ui_prompt()
@@ -72,6 +68,15 @@ func _ready() -> void:
 	# Add to groups for identification
 	add_to_group("campfire")
 	add_to_group("interactable")
+	
+	# Debug info - commented out verbose details
+	# print("Campfire: Groups = ", get_groups())
+	# print("Campfire: Has get_interaction_prompt = ", has_method("get_interaction_prompt"))
+	# if campfire_interactable:
+	# 	print("Campfire: Interactable area collision layer = ", campfire_interactable.collision_layer)
+	# 	print("Campfire: Interactable area collision mask = ", campfire_interactable.collision_mask)
+	# 	print("Campfire: Interactable area monitoring = ", campfire_interactable.monitoring)
+	# 	print("Campfire: Interactable area monitorable = ", campfire_interactable.monitorable)
 	
 	print("Campfire: Ready! State: ", CampfireState.keys()[current_state])
 
@@ -181,11 +186,17 @@ func _update_ui_prompt() -> void:
 	
 	ui_prompt.text = prompt_text
 
-func _handle_player_interaction() -> void:
+func _handle_player_interaction(player: Node = null) -> void:
 	"""Handle player interaction with the campfire."""
-	var player: Node = _get_nearby_player()
+	# Use provided player or try to find one
 	if not player:
+		player = _get_nearby_player()
+	
+	if not player:
+		print("Campfire: No player found for interaction!")
 		return
+	
+	print("Campfire: Handling interaction for player: ", player.name)
 	
 	match current_state:
 		CampfireState.UNLIT:
@@ -206,16 +217,18 @@ func _show_campfire_menu(player: Node) -> void:
 	"""Show cooking and crafting options to the player."""
 	print("Campfire: Opening campfire menu for player")
 	
-	# TODO: Implement proper UI menu
-	# For now, automatically try to cook raw meat if available
-	if player.has_method("get_inventory"):
-		var inventory = player.get_inventory()
-		if inventory and inventory.has_method("has_item"):
-			if inventory.has_item("Raw Meat"):
-				_start_cooking(["Raw Meat"])
-				return
+	# Create menu instance if not exists
+	if not campfire_menu_instance:
+		campfire_menu_instance = campfire_menu_scene.instantiate()
+		get_tree().root.add_child(campfire_menu_instance)
+		
+		# Connect menu signals
+		campfire_menu_instance.menu_closed.connect(_on_menu_closed)
+		campfire_menu_instance.item_crafted.connect(_on_item_crafted)
+		campfire_menu_instance.item_cooked.connect(_on_item_cooked)
 	
-	print("Campfire: No raw meat to cook")
+	# Open the menu
+	campfire_menu_instance.open_menu(player, self)
 
 func _add_to_cooking_queue(player: Node) -> void:
 	"""Add items to the cooking queue while cooking is in progress."""
@@ -239,6 +252,11 @@ func _start_cooking(items: Array[String]) -> void:
 	
 	_update_campfire_state()
 	_update_ui_prompt()
+
+# Make start_cooking public for CampfireMenu to call
+func start_cooking(items: Array[String]) -> void:
+	"""Public method to start cooking items."""
+	_start_cooking(items)
 
 func _on_cooking_timer_timeout() -> void:
 	"""Handle cooking completion."""
@@ -267,23 +285,41 @@ func _on_cooking_timer_timeout() -> void:
 	cooking_completed.emit(cooked_items)
 
 func _create_cooked_items(items: Array[String]) -> void:
-	"""Create cooked items near the campfire for pickup."""
-	print("Campfire: Creating cooked items: ", items)
+	"""Create cooked items and add them to the nearby player's inventory."""
+	print("Campfire: Adding cooked items to player inventory: ", items)
 	
-	# TODO: Implement item spawning system
-	# For now, just log the items that would be created
-	for item in items:
-		print("Campfire: Created ", item, " near campfire")
+	# Find the nearby player
+	var player: Node = _get_nearby_player()
+	if not player:
+		# If no player in range, try to find any human player
+		var players: Array[Node] = get_tree().get_nodes_in_group("human_player")
+		if not players.is_empty():
+			player = players[0]
+	
+	if not player:
+		print("Campfire: No player found to give cooked items to!")
+		return
+	
+	# Add items to player's inventory
+	if player.has_method("add_item_to_inventory"):
+		for item in items:
+			if player.add_item_to_inventory(item):
+				print("Campfire: Added ", item, " to player inventory")
+			else:
+				print("Campfire: Failed to add ", item, " to player inventory (full?)")
+	else:
+		print("Campfire: Player doesn't have add_item_to_inventory method!")
 
 func can_craft_item(item_name: String, player_inventory) -> bool:
 	"""Check if the given item can be crafted with available materials."""
-	if not CRAFTING_RECIPES.has(item_name):
+	if not GameConstants.CRAFTING_RECIPES.has(item_name):
 		return false
 	
-	var recipe = CRAFTING_RECIPES[item_name]
+	var recipe_data = GameConstants.CRAFTING_RECIPES[item_name]
+	var materials = recipe_data.get("materials", {})
 	
-	for material in recipe:
-		var required_amount: int = recipe[material]
+	for material in materials:
+		var required_amount: int = materials[material]
 		if not player_inventory.has_method("get_item_count"):
 			return false
 		
@@ -299,13 +335,14 @@ func craft_item(item_name: String, player_inventory) -> bool:
 		print("Campfire: Cannot craft ", item_name, " - insufficient materials")
 		return false
 	
-	var recipe = CRAFTING_RECIPES[item_name]
+	var recipe_data = GameConstants.CRAFTING_RECIPES[item_name]
+	var materials = recipe_data.get("materials", {})
 	
 	# Remove materials from inventory
-	for material in recipe:
-		var required_amount: int = recipe[material]
-		if player_inventory.has_method("remove_item"):
-			player_inventory.remove_item(material, required_amount)
+	for material in materials:
+		var required_amount: int = materials[material]
+		if player_inventory.has_method("remove_item_by_name"):
+			player_inventory.remove_item_by_name(material, required_amount)
 	
 	# Add crafted item to inventory
 	if player_inventory.has_method("add_item"):
@@ -335,6 +372,7 @@ func _get_nearby_player() -> Node:
 
 func _on_interaction_area_entered(area: Area3D) -> void:
 	"""Handle player entering interaction range."""
+	# The area is the player's InteractionArea, so we need to get its parent (the player)
 	var body = area.get_parent()
 	if body and body.is_in_group("human_player"):
 		print("Campfire: Player entered interaction range")
@@ -344,6 +382,7 @@ func _on_interaction_area_entered(area: Area3D) -> void:
 
 func _on_interaction_area_exited(area: Area3D) -> void:
 	"""Handle player leaving interaction range."""
+	# The area is the player's InteractionArea, so we need to get its parent (the player)
 	var body = area.get_parent()
 	if body and body.is_in_group("human_player"):
 		print("Campfire: Player left interaction range")
@@ -355,3 +394,59 @@ func get_spawn_position() -> Vector3:
 	"""Get a safe spawn position near the campfire."""
 	# Return a position slightly offset from the campfire
 	return global_position + Vector3(2.0, 0.5, 2.0) 
+
+func get_interaction_prompt() -> String:
+	"""Get the interaction prompt to display when player is nearby."""
+	match current_state:
+		CampfireState.LIT:
+			if cooking_queue.is_empty():
+				return "E: Cook / Craft"
+			else:
+				return "E: Add to cooking queue"
+		CampfireState.COOKING:
+			var time_left: int = int(cooking_timer.time_left)
+			return "Cooking... (%d seconds left)" % time_left
+		CampfireState.UNLIT:
+			return "E: Light campfire"
+	
+	return ""
+
+func _on_interacted(player: Node) -> void:
+	"""Handle interaction when player presses E near the campfire."""
+	print("Campfire: Interacted by player")
+	_handle_player_interaction(player)
+
+func _get_tree_shadow_count() -> int:
+	"""Count how many trees are blocking the campfire light."""
+	# For now, return a simple count based on nearby trees
+	# TODO: Implement actual tree detection
+	return 0
+
+# --- Menu Callbacks ---
+func _on_menu_closed() -> void:
+	"""Handle menu close event."""
+	print("Campfire: Menu closed")
+	# Re-enable player controls if needed
+	# The menu already handles unpausing
+
+func _on_item_crafted(item_name: String) -> void:
+	"""Handle item crafted event from menu."""
+	print("Campfire: Item crafted - ", item_name)
+	# Could add particle effects or sounds here
+	crafting_completed.emit(item_name)
+
+func _on_item_cooked(item_name: String) -> void:
+	"""Handle item cooked event from menu."""
+	print("Campfire: Item cooking started - ", item_name)
+	# Cooking is already started by the menu calling start_cooking() 
+
+# --- Debug Methods ---
+func _on_campfire_interactable_entered(area: Area3D) -> void:
+	"""Debug: Log when any area enters the CampfireInteractable."""
+	print("Campfire DEBUG: Area entered CampfireInteractable - ", area.name)
+	print("  Area parent: ", area.get_parent().name if area.get_parent() else "None")
+	print("  Area collision layer: ", area.collision_layer)
+
+func _on_campfire_interactable_exited(area: Area3D) -> void:
+	"""Debug: Log when any area exits the CampfireInteractable."""
+	print("Campfire DEBUG: Area exited CampfireInteractable - ", area.name) 

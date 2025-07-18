@@ -71,12 +71,9 @@ func handle_equipment_input(delta: float, closest_interactable: Node) -> String:
 	if Input.is_action_just_pressed("attack"):
 		match equipped_item:
 			"Axe":
-				if closest_interactable:
-					var prompt: String = _get_interaction_prompt(closest_interactable)
-					if prompt.contains("Chop") or prompt.contains("Tree") or prompt.contains("Process"):
-						action_to_perform = "chop"
-				else:
-					action_to_perform = "chop" # Still play the animation
+				# Always allow axe swing with left-click, regardless of nearby interactables
+				# Processing corpses should be done with the interact key (E), not attack
+				action_to_perform = "chop"
 			"Bow":
 				_start_bow_charge()
 			_:
@@ -123,30 +120,54 @@ func _update_tool_visibility(item: String) -> void:
 			# we just need to make the axe visible
 			if axe_model: 
 				axe_model.visible = true
-				# Connect to the hitbox if it exists
-				var hitbox = axe_model.get_node_or_null("Hitbox")
-				if hitbox and hitbox.has_signal("body_entered"):
-					if not hitbox.is_connected("body_entered", _on_axe_hit):
-						hitbox.body_entered.connect(_on_axe_hit)
+				# Connect to the axe's hit_something signal instead of the hitbox directly
+				if axe_model.has_signal("hit_something") and not axe_model.is_connected("hit_something", _on_axe_hit):
+					axe_model.hit_something.connect(_on_axe_hit)
 		"Bow":
 			if bow_model: bow_model.visible = true
 			if quiver_model: quiver_model.visible = true
 
 func toggle_axe_hitbox(is_enabled: bool):
-	if is_instance_valid(axe_model):
-		var hitbox = axe_model.get_node_or_null("Hitbox")
-		if hitbox:
-			hitbox.monitoring = is_enabled
+	if is_instance_valid(axe_model) and axe_model.has_method("set_hitbox_enabled"):
+		# Use the axe's method to enable/disable the hitbox
+		axe_model.set_hitbox_enabled(is_enabled)
 
 func _on_axe_hit(body: Node3D):
 	# Log every axe hit with detailed information
 	print("🪓 AXE HIT! Target: ", body.name, " | Type: ", body.get_class(), " | Groups: ", body.get_groups())
+	print("   -> Player body reference: ", player_body.name if player_body else "None")
 	
+	# Handle hitting animals - instant kill with axe
+	if body.is_in_group("animals") and body.has_method("take_damage"):
+		print("   -> Dealing fatal damage to ", body.name)
+		body.take_damage(100.0)  # Instant kill for animals
+		return
+	
+	# Handle hitting corpses - process them
+	if body.is_in_group("corpses"):
+		print("   -> Processing corpse: ", body.name)
+		_process_corpse_with_axe(body)
+		return
+	
+	# Handle other objects that can take damage (like trees)
 	if body.has_method("take_damage"):
-		print("   -> Dealing 1 damage to ", body.name)
-		body.take_damage(1) # Or whatever damage value
+		print("   -> Dealing 1 damage to ", body.name, " | Groups: ", body.get_groups())
+		# Pass the player reference for trees so they can reward the chopper with wood
+		# Check for TreeStump (the actual node name in the scene)
+		if body.is_in_group("interactable") or "TreeStump" in body.name or "Tree" in body.name:
+			print("   -> Detected as tree, passing player reference")
+			body.take_damage(1, player_body)
+		else:
+			print("   -> Detected as non-tree, using default damage")
+			body.take_damage(1) # Default damage for other objects (animals, etc.)
 	else:
 		print("   -> Target has no take_damage method")
+
+func _process_corpse_with_axe(corpse: Node3D) -> void:
+	"""Process a corpse when hit with the axe."""
+	# Call the corpse's interaction method directly, passing the player
+	if corpse.has_method("_on_interacted") and player_body:
+		corpse._on_interacted(player_body)
 
 # --- Bow Mechanics ---
 func _start_bow_charge() -> void:

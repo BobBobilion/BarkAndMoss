@@ -109,7 +109,60 @@ const CRAFTING := {
 	"AXE_DAMAGE": 25,
 	"TREE_CHOP_TIME": 3.0,       # Seconds to chop down a tree
 	"TREE_HEALTH": 3,            # Number of hits to chop down a tree
-	"CAMPFIRE_COOK_TIME": 5.0,   # Seconds to cook an item
+	"CAMPFIRE_COOK_TIME": 10.0,  # Seconds to cook an item
+}
+
+# Crafting recipes - centralized for consistency
+const CRAFTING_RECIPES := {
+	"Bow": {
+		"name": "Bow",
+		"description": "A simple hunting bow for ranged combat",
+		"materials": {
+			"Wood": 3,
+			"Hide": 1,
+			"Sinew": 1
+		},
+		"icon": "res://assets/ui/icons/bow.png"
+	},
+	# Future recipes can be added here:
+	# "Arrow": {
+	# 	"name": "Arrow",
+	# 	"description": "Ammunition for the bow",
+	# 	"materials": {
+	# 		"Wood": 1,
+	# 		"Stone": 1
+	# 	},
+	# 	"icon": "res://assets/ui/icons/arrow.png"
+	# },
+	# "Spear": {
+	# 	"name": "Spear",
+	# 	"description": "A long-range melee weapon",
+	# 	"materials": {
+	# 		"Wood": 2,
+	# 		"Stone": 1,
+	# 		"Sinew": 1
+	# 	},
+	# 	"icon": "res://assets/ui/icons/spear.png"
+	# }
+}
+
+# Cooking recipes - what can be cooked at campfire
+const COOKING_RECIPES := {
+	"Raw Meat": {
+		"name": "Cooked Meat",
+		"description": "A hearty meal that restores hunger",
+		"cook_time": 10.0,
+		"hunger_restore": 60.0,
+		"icon": "res://assets/ui/icons/cooked_meat.png"
+	}
+	# Future cooking recipes:
+	# "Raw Fish": {
+	# 	"name": "Cooked Fish",
+	# 	"description": "Grilled fish, light but nutritious",
+	# 	"cook_time": 8.0,
+	# 	"hunger_restore": 40.0,
+	# 	"icon": "res://assets/ui/icons/cooked_fish.png"
+	# }
 }
 
 # =============================================================================
