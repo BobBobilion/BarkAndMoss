@@ -4,7 +4,7 @@ extends Node
 # --- Export Variables for Tuning ---
 @export_range(0.0, 0.01, 0.001) var mouse_sensitivity: float = 0.002
 @export_range(0.0, 3.14, 0.1) var tilt_limit: float = deg_to_rad(75.0)  # Convert to radians
-@export_range(1.0, 10.0, 0.5) var spring_arm_length: float = 3.0
+@export_range(1.0, 10.0, 0.5) var spring_arm_length: float = 2.4
 @export_range(0.0, 1.0, 0.1) var camera_collision_bias: float = 0.2
 @export_range(30.0, 120.0, 5.0) var normal_fov: float = 90.0
 @export_range(1.0, 10.0, 0.5) var zoom_speed: float = 5.0

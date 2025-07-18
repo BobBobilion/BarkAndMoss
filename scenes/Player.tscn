@@ -73,7 +73,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 
 [node name="SpringArm3D" type="SpringArm3D" parent="CameraRootOffset/HorizontalPivot/VerticalPivot"]
 shape = SubResource("SphereShape3D_camera_collision")
-spring_length = 3.0
+spring_length = 2.4
 
 [node name="Camera3D" type="Camera3D" parent="CameraRootOffset/HorizontalPivot/VerticalPivot/SpringArm3D"]
 

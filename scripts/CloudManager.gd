@@ -8,8 +8,8 @@ const CLOUD_HEIGHT_MIN: float = 200.0  # Minimum cloud height - much higher in s
 const CLOUD_HEIGHT_MAX: float = 350.0  # Maximum cloud height - much higher in sky
 const CLOUD_SPEED_MIN: float = 0.05    # Minimum cloud movement speed - much slower
 const CLOUD_SPEED_MAX: float = 0.15    # Maximum cloud movement speed - much slower
-const CLOUD_COUNT_MIN: int = 10        # Minimum number of clouds
-const CLOUD_COUNT_MAX: int = 20        # Maximum number of clouds
+const CLOUD_COUNT_MIN: int = 15        # Minimum number of clouds (increased by 1.5x)
+const CLOUD_COUNT_MAX: int = 30        # Maximum number of clouds (increased by 1.5x)
 const CLOUD_SCALE_MIN: float = 250.0   # Minimum cloud scale multiplier (5x larger)
 const CLOUD_SCALE_MAX: float = 750.0   # Maximum cloud scale multiplier (5x larger)
 
@@ -109,7 +109,7 @@ func _get_random_cloud_position() -> Vector3:
 	
 	# Random position in a circle around the center position
 	var angle = randf() * 2.0 * PI
-	var distance = randf_range(cloud_area_radius * 0.3, cloud_area_radius)  # Between 30% and 100% of radius
+	var distance = randf_range(0.0, cloud_area_radius)  # Between 0% and 100% of radius - allows clouds directly overhead
 	
 	var x = center_position.x + cos(angle) * distance
 	var z = center_position.z + sin(angle) * distance
