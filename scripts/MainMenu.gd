@@ -8,9 +8,6 @@ const LOBBY_SCENE_PATH: String = "res://scenes/Lobby.tscn"
 const MAIN_SCENE_PATH: String = "res://scenes/Main.tscn"
 const LOADING_SCENE_PATH: String = "res://scenes/LoadingScreen.tscn"
 
-# World size multiplier options that can be cycled through
-const WORLD_SIZE_OPTIONS: Array[float] = [1.0, 3.0, 5.0, 10.0]
-
 # --- Node References ---
 # Main menu buttons
 @onready var play_button: Button = $VBoxContainer/PlayButton
@@ -29,10 +26,6 @@ const WORLD_SIZE_OPTIONS: Array[float] = [1.0, 3.0, 5.0, 10.0]
 @onready var play_character_button: Button = $CharacterSelectModal/VBoxContainer/PlayButton
 @onready var character_back_button: Button = $CharacterSelectModal/VBoxContainer/BackButton
 
-# World size elements
-@onready var world_size_button: Button = $CharacterSelectModal/VBoxContainer/WorldSizeContainer/WorldSizeButton
-@onready var world_size_description: Label = $CharacterSelectModal/VBoxContainer/WorldSizeContainer/WorldSizeDescription
-
 # Join modal elements
 @onready var ip_input: LineEdit = $JoinModal/VBoxContainer/IPInput
 @onready var cancel_button: Button = $JoinModal/VBoxContainer/HBoxContainer/CancelButton
@@ -45,17 +38,25 @@ const WORLD_SIZE_OPTIONS: Array[float] = [1.0, 3.0, 5.0, 10.0]
 @onready var music_label: Label = $SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer/MusicLabel
 @onready var sfx_slider: HSlider = $SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer/SFXSlider
 @onready var sfx_label: Label = $SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer/SFXLabel
+@onready var render_slider: HSlider = $SettingsModal/MarginContainer/VBoxContainer/RenderSlider
+@onready var render_label: Label = $SettingsModal/MarginContainer/VBoxContainer/RenderLabel
 @onready var close_button: Button = $SettingsModal/MarginContainer/VBoxContainer/HBoxContainer/CloseButton
 
 # --- State Variables ---
 var selected_character: String = ""  # "bark" or "moss"
-var current_world_size_index: int = 2  # Default to 5x (index 2 in WORLD_SIZE_OPTIONS)
 
 
 # --- Engine Callbacks ---
 
 func _ready() -> void:
 	"""Initializes the main menu, connects signals, and loads settings."""
+	# Clean up any leftover UI from previous scenes
+	if PauseManager:
+		PauseManager.force_cleanup()
+	
+	# Clean up leftover UI layers
+	_cleanup_leftover_ui()
+	
 	# Hide modals initially
 	character_select_modal.hide()
 	join_modal.hide()
@@ -76,6 +77,7 @@ func _ready() -> void:
 	volume_slider.value_changed.connect(_on_volume_changed)
 	music_slider.value_changed.connect(_on_music_volume_changed)
 	sfx_slider.value_changed.connect(_on_sfx_volume_changed)
+	render_slider.value_changed.connect(_on_render_distance_changed)
 	
 	# Load saved settings
 	_load_settings()
@@ -159,10 +161,8 @@ func _on_play_character_pressed() -> void:
 	
 	print("Starting game with character: ", selected_character)
 	
-	# Apply the world size setting before starting the game
-	var world_size_multiplier = WORLD_SIZE_OPTIONS[current_world_size_index]
-	GameConstants.set_world_scale_multiplier(world_size_multiplier)
-	print("MainMenu: Starting game with world size: ", world_size_multiplier, "x")
+	# Clean up any leftover game state before starting new game
+	_ensure_clean_game_state()
 	
 	# Set up networking
 	NetworkManager.host_game()
@@ -173,44 +173,6 @@ func _on_play_character_pressed() -> void:
 	
 	# Start the game
 	_transition_to_loading_screen(role)
-
-
-# --- World Size Handlers ---
-
-func _on_world_size_pressed() -> void:
-	"""Handle world size button press - cycles through size options."""
-	print("MainMenu: World size button pressed")
-	
-	# Cycle to the next world size option
-	current_world_size_index = (current_world_size_index + 1) % WORLD_SIZE_OPTIONS.size()
-	
-	# Update the button text and description
-	_update_world_size_display()
-	
-	# Show info about the change
-	print("MainMenu: World size changed to ", WORLD_SIZE_OPTIONS[current_world_size_index], "x")
-
-
-func _update_world_size_display() -> void:
-	"""Update the world size button text and description to show current selection."""
-	var current_size: float = WORLD_SIZE_OPTIONS[current_world_size_index]
-	
-	# Format the text to show the multiplier
-	if current_size == 1.0:
-		world_size_button.text = "1x (Small)"
-		world_size_description.text = "Compact world perfect for quick exploration and cozy survival."
-	elif current_size == 3.0:
-		world_size_button.text = "3x (Medium)"
-		world_size_description.text = "Balanced world size with plenty of resources and room to roam."
-	elif current_size == 5.0:
-		world_size_button.text = "5x (Large)"
-		world_size_description.text = "Expansive world with abundant wildlife and vast wilderness to explore."
-	elif current_size == 10.0:
-		world_size_button.text = "10x (Huge)"
-		world_size_description.text = "Massive world for epic adventures and endless exploration."
-	else:
-		world_size_button.text = str(current_size) + "x"
-		world_size_description.text = "Custom world size with scaled resources and terrain."
 
 
 func _update_character_selection_ui() -> void:
@@ -446,13 +408,24 @@ func _on_sfx_volume_changed(value: float) -> void:
 	_update_effective_volumes()
 
 
+func _on_render_distance_changed(value: float) -> void:
+	"""
+	Handles render distance slider changes. Updates chunk loading distance.
+	"""
+	var distance_int = int(value)
+	GameConstants.SettingsManager.apply_render_distance_setting(distance_int)
+	# Update the label text
+	_update_volume_label_text()
+
+
 func _update_volume_label_text() -> void:
 	"""
-	Updates the volume label text to show percentages in front of the text.
+	Updates the volume label text to show percentages and render distance value.
 	"""
 	volume_label.text = str(int(volume_slider.value)) + "% Master Volume"
 	music_label.text = str(int(music_slider.value)) + "% Music Volume"
 	sfx_label.text = str(int(sfx_slider.value)) + "% SFX Volume"
+	render_label.text = "Render Distance: " + str(int(render_slider.value)) + " chunks"
 
 
 func _update_effective_volumes() -> void:
@@ -488,39 +461,91 @@ func _load_settings() -> void:
 	music_slider.value = settings.get("music_volume", 75.0)
 	sfx_slider.value = settings.get("sfx_volume", 75.0)
 	
-	# Update volume label text with percentages
+	# Apply render distance setting
+	render_slider.value = float(settings.get("render_distance", GameConstants.RENDER_DISTANCE.DEFAULT))
+	
+	# Update label texts
 	_update_volume_label_text()
 	
 	GameConstants.SettingsManager.apply_master_volume_setting(volume_slider.value)
 	GameConstants.SettingsManager.apply_music_volume_setting(music_slider.value)
 	GameConstants.SettingsManager.apply_sfx_volume_setting(sfx_slider.value)
+	GameConstants.SettingsManager.apply_render_distance_setting(int(render_slider.value))
 	_update_effective_volumes()
-	
-	# Load world size setting specifically for character selection
-	var world_size_multiplier = settings.get("world_size_multiplier", 5.0)
-	
-	# Find the index that matches the saved world size
-	for i in range(WORLD_SIZE_OPTIONS.size()):
-		if abs(WORLD_SIZE_OPTIONS[i] - world_size_multiplier) < 0.1:  # Allow for small floating point differences
-			current_world_size_index = i
-			break
-	
-	_update_world_size_display()
 
 
 func _save_settings() -> void:
 	"""
 	Saves current settings to the config file.
 	"""
-	# Save all volume settings through shared system
-	GameConstants.SettingsManager.save_volume_settings(
+	# Save all settings including render distance
+	GameConstants.SettingsManager.save_all_settings(
 		volume_slider.value,
 		music_slider.value,
 		sfx_slider.value,
-		false  # No fullscreen setting anymore
+		false,  # No fullscreen setting anymore
+		int(render_slider.value)  # Render distance
 	)
 	
 	print("MainMenu: Settings saved")
+
+
+func _ensure_clean_game_state() -> void:
+	"""Ensure completely clean state before starting a new game."""
+	print("MainMenu: Ensuring clean game state before starting new game...")
+	
+	# Force cleanup PauseManager
+	if PauseManager:
+		PauseManager.force_cleanup()
+	
+	# Force disconnect from any existing network sessions
+	if NetworkManager:
+		NetworkManager.disconnect_from_game()
+	
+	# Clean up any leftover UI layers
+	_cleanup_leftover_ui()
+	
+	# Remove any leftover player instances from the scene tree
+	var all_players = get_tree().get_nodes_in_group("human_player")
+	all_players.append_array(get_tree().get_nodes_in_group("dog_player"))
+	for player in all_players:
+		if is_instance_valid(player):
+			print("MainMenu: Removing leftover player: %s" % player.name)
+			player.queue_free()
+	
+	# Wait a frame to ensure cleanup completes
+	await get_tree().process_frame
+	
+	print("MainMenu: Game state cleaned for fresh start")
+
+
+func _cleanup_leftover_ui() -> void:
+	"""Clean up any leftover UI layers from previous game sessions."""
+	print("MainMenu: Cleaning up leftover UI layers...")
+	
+	var viewport = get_viewport()
+	if not viewport:
+		return
+	
+	# Remove UILayer (contains HUD/hotbar)
+	var ui_layer = viewport.get_node_or_null("UILayer")
+	if ui_layer:
+		print("MainMenu: Removing leftover UILayer with %d children" % ui_layer.get_child_count())
+		ui_layer.queue_free()
+	
+	# Remove HUDLayer if it exists
+	var hud_layer = viewport.get_node_or_null("HUDLayer")
+	if hud_layer:
+		print("MainMenu: Removing leftover HUDLayer with %d children" % hud_layer.get_child_count())
+		hud_layer.queue_free()
+	
+	# Remove PauseLayer if it exists (should already be cleaned but just in case)
+	var pause_layer = viewport.get_node_or_null("PauseLayer")
+	if pause_layer:
+		print("MainMenu: Removing leftover PauseLayer with %d children" % pause_layer.get_child_count())
+		pause_layer.queue_free()
+	
+	print("MainMenu: UI cleanup complete")
 
 
 func _transition_to_loading_screen(character_role: String) -> void:

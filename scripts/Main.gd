@@ -2,43 +2,32 @@ class_name Main
 extends Node3D
 
 # --- Properties ---
-@onready var game_manager: GameManager = $GameManager
-@onready var world_generator: WorldGenerator = $WorldGenerator
+@onready var game_manager: GameManager = $GameManager as GameManager
 @onready var animal_spawner: Node = $AnimalSpawner
 @onready var environment_node: Node3D = $Environment
 @onready var day_night_cycle: Node3D = $DayNightCycle
 @onready var cloud_manager: Node3D = $CloudManager
 
-var is_chunk_system_enabled: bool = true  # Toggle between old and new system
-
 # --- Engine Callbacks ---
 func _ready() -> void:
 	"""Initialize the main scene with chunk system."""
-	print("Main: Initializing world...")
+	print("Main: Initializing world with chunk-based system")
 	
-	if is_chunk_system_enabled:
-		_setup_chunk_system()
-	else:
-		_setup_legacy_system()
-
-# --- Private Methods ---
-func _setup_chunk_system() -> void:
-	"""Set up the new chunk-based infinite world system."""
-	print("Main: Setting up chunk-based world system")
-	
-	# Disable the old world generator
-	if world_generator:
-		world_generator.visible = false
-		world_generator.set_process(false)
-		world_generator.set_physics_process(false)
+	# Add to group for easy finding by other scripts
+	add_to_group("main")
 	
 	# Initialize game manager with this as the world node
 	if game_manager:
-		game_manager.initialize_world(self)
+		print("Main: GameManager found, initializing world...")
+		var world_seed = GameConstants.WORLD.get("SEED", 12345)
+		game_manager.initialize_world(self, world_seed)
 		
 		# Start the game after a short delay to ensure everything is initialized
 		await get_tree().create_timer(0.1).timeout
+		print("Main: Starting game...")
 		game_manager.start_game()
+	else:
+		print("Main: ERROR - GameManager not found!")
 	
 	# The chunk system will handle terrain and object generation
 	# as players move around
@@ -49,37 +38,43 @@ func _setup_chunk_system() -> void:
 	add_child(debug_ui)
 	
 	print("Main: Chunk system initialized")
-
-func _setup_legacy_system() -> void:
-	"""Set up the old finite world system (fallback)."""
-	print("Main: Setting up legacy world system")
 	
-	# Use the existing WorldGenerator
-	if world_generator:
-		# Wait for terrain to be ready
-		if not world_generator.terrain_generation_complete.is_connected(_on_legacy_terrain_ready):
-			world_generator.terrain_generation_complete.connect(_on_legacy_terrain_ready)
-		
-		# Start generation
-		world_generator.call_deferred("start_generation")
-
-func _on_legacy_terrain_ready() -> void:
-	"""Called when legacy terrain is ready."""
-	print("Main: Legacy terrain ready")
-	
-	# In legacy mode, GameManager handles spawning when terrain is ready
-	# (it has its own connection to terrain_generation_complete)
+	# Debug: Check children after setup
+	await get_tree().create_timer(1.0).timeout
+	print("Main: Children after setup:")
+	for child in get_children():
+		print("  - ", child.name, " (", child.get_class(), ")")
+		if child.name == "GameManager":
+			var gm = child as GameManager
+			if gm.chunk_manager:
+				print("    Has ChunkManager: ", gm.chunk_manager.name)
+				print("    Active chunks: ", gm.chunk_manager.active_chunks.size())
+			else:
+				print("    ChunkManager is null!")
+				
+	# Check for actual terrain meshes after delay
+	await get_tree().create_timer(3.0).timeout
+	print("Main: Checking for terrain meshes...")
+	var mesh_count = 0
+	for child in get_children():
+		if child.has_method("get_class") and child.get_class() == "MeshInstance3D":
+			mesh_count += 1
+			print("  Found mesh: ", child.name)
+	print("Main: Total MeshInstance3D nodes: ", mesh_count)
 
 # --- Public Methods ---
 func get_terrain_height_at_position(world_pos: Vector3) -> float:
-	"""Get terrain height at a position, works with both systems."""
-	if is_chunk_system_enabled and game_manager:
+	"""Get terrain height at a position using the chunk system."""
+	if game_manager:
 		var chunk_manager := game_manager.get_chunk_manager()
 		if chunk_manager:
 			return chunk_manager.get_height_at_position(world_pos)
-	else:
-		# Use legacy world generator
-		if world_generator and world_generator.has_method("get_terrain_height_at_position"):
-			return world_generator.get_terrain_height_at_position(world_pos)
 	
-	return 0.0 
+	return 0.0
+
+func _input(event: InputEvent) -> void:
+	"""Handle debug input for testing."""
+	# Debug input handling removed - was causing conflicts with pause menu
+	pass
+
+# Debug spawn function removed - was causing unintended character spawning 

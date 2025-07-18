@@ -71,7 +71,8 @@ func _ready() -> void:
 	print("=== PLAYER READY FINISHED ===")
 
 func _physics_process(delta: float) -> void:
-	if not is_multiplayer_authority() and multiplayer.has_multiplayer_peer():
+	# Check if multiplayer peer exists before checking authority
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 
 	# Movement
@@ -98,12 +99,14 @@ func _physics_process(delta: float) -> void:
 		handle_action(action_to_perform)
 
 func _process(delta: float) -> void:
-	if not is_multiplayer_authority() and multiplayer.has_multiplayer_peer():
+	# Check if multiplayer peer exists before checking authority
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 	camera_controller.process_camera(delta)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_multiplayer_authority() and multiplayer.has_multiplayer_peer():
+	# Check if multiplayer peer exists before checking authority
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 	camera_controller._unhandled_input(event)
 

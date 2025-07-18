@@ -66,6 +66,7 @@ var animal_scenes: Dictionary = {
 var world_generator: WorldGenerator
 var biome_manager: BiomeManagerClass
 var players: Array[Node3D] = []
+var spawn_parent: Node3D = null  # Parent node for spawned animals
 
 # --- State ---
 var spawn_timer: float = 0.0
@@ -76,26 +77,31 @@ var proximity_animals: Dictionary = {}  # Track animals by player proximity: {pl
 
 func _ready() -> void:
 	"""Initialize the animal spawner and find required components."""
-	# Find the world generator for terrain height checks and biome data
-	var game_managers := get_tree().get_nodes_in_group("game_manager")
-	if game_managers.size() > 0:
-		var game_manager = game_managers[0]
-		if game_manager.has_method("get_biome_manager"):
-			biome_manager = game_manager.get_biome_manager()
-
-	if not biome_manager:
-		printerr("AnimalSpawner: Could not find BiomeManager!")
-		return
+	# Add to group for cleanup purposes
+	add_to_group("animal_spawner")
+	
+	# Try to find the biome manager and spawn parent - they might not be ready yet during _ready()
+	_try_get_biome_manager()
+	_find_spawn_parent()
 	
 	# Initialize timers
 	spawn_timer = SPAWN_CHECK_INTERVAL
 	despawn_timer = DESPAWN_CHECK_INTERVAL
 	
-	# AnimalSpawner ready for proximity-based spawning
-
 
 func _process(delta: float) -> void:
 	"""Update the spawning and despawning systems."""
+	# Try to get biome manager and spawn parent if we don't have them yet
+	if not biome_manager:
+		_try_get_biome_manager()
+		if not biome_manager:
+			return  # Can't spawn without biome manager
+	
+	if not spawn_parent:
+		_find_spawn_parent()
+		if not spawn_parent:
+			return  # Can't spawn without spawn parent
+	
 	# Always clean up invalid animals first to prevent freed instance errors
 	_cleanup_invalid_animals()
 	
@@ -169,7 +175,7 @@ func _try_spawn_animal(animal_type: String, animal_data: Dictionary) -> void:
 		var animal: Node3D = animal_scene.instantiate()
 		
 		# Add to the scene
-		get_tree().current_scene.add_child(animal)
+		spawn_parent.add_child(animal)
 		animal.global_position = spawn_position
 		
 		# Track the spawned animal
@@ -190,8 +196,20 @@ func _find_valid_spawn_position(animal_type: String = "") -> Vector3:
 	while attempts > 0:
 		attempts -= 1
 		
-		# Pick a random player as reference
-		var reference_player: Node3D = players[randi() % players.size()]
+		# Pick a random valid player as reference
+		var reference_player: Node3D = null
+		var valid_players: Array[Node3D] = []
+		
+		# Build list of valid players
+		for player in players:
+			if is_instance_valid(player) and not player.is_queued_for_deletion():
+				valid_players.append(player)
+		
+		# If no valid players, return invalid position
+		if valid_players.is_empty():
+			return Vector3.INF
+		
+		reference_player = valid_players[randi() % valid_players.size()]
 		
 		# Generate a random position around the player
 		var angle: float = randf() * TAU  # Random angle in radians
@@ -231,6 +249,10 @@ func _find_valid_spawn_position(animal_type: String = "") -> Vector3:
 func _is_position_valid(position: Vector3) -> bool:
 	"""Check if a spawn position is valid (not too close to players)."""
 	for player in players:
+		# Check if player is still valid before accessing its position
+		if not is_instance_valid(player) or player.is_queued_for_deletion():
+			continue
+		
 		if position.distance_to(player.global_position) < SPAWN_DISTANCE_MIN:
 			return false
 	return true
@@ -238,6 +260,9 @@ func _is_position_valid(position: Vector3) -> bool:
 
 func _cleanup_invalid_animals() -> void:
 	"""Remove invalid/destroyed animals from tracking."""
+	# Clean up invalid players first
+	_cleanup_invalid_players()
+	
 	for animal_type: String in current_animals.keys():
 		var animal_list: Array = current_animals[animal_type]
 		
@@ -345,6 +370,10 @@ func get_proximity_info() -> Dictionary:
 	
 	# Add animal counts per player
 	for player in players:
+		# Check if player is still valid before accessing its data
+		if not is_instance_valid(player) or player.is_queued_for_deletion():
+			continue
+		
 		var player_id: int = player.get_instance_id()
 		var player_info: Dictionary = {
 			"position": player.global_position,
@@ -454,6 +483,10 @@ func _update_proximity_tracking() -> void:
 			var min_distance: float = SPAWN_DISTANCE_MAX
 			
 			for player in players:
+				# Check if player is still valid before accessing its position
+				if not is_instance_valid(player) or player.is_queued_for_deletion():
+					continue
+				
 				var distance: float = animal.global_position.distance_to(player.global_position)
 				if distance <= SPAWN_DISTANCE_MAX and distance < min_distance:
 					closest_player = player
@@ -513,7 +546,7 @@ func _try_spawn_animal_for_player(animal_type: String, animal_data: Dictionary, 
 		var animal: Node3D = animal_scene.instantiate()
 		
 		# Add to the scene
-		get_tree().current_scene.add_child(animal)
+		spawn_parent.add_child(animal)
 		animal.global_position = spawn_position
 		
 		# Connect death signal for immediate cleanup
@@ -535,6 +568,10 @@ func _try_spawn_animal_for_player(animal_type: String, animal_data: Dictionary, 
 
 func _find_valid_spawn_position_near_player(player: Node3D, animal_type: String = "") -> Vector3:
 	"""Find a valid position to spawn an animal near a specific player."""
+	# Check if player is valid before proceeding
+	if not is_instance_valid(player) or player.is_queued_for_deletion():
+		return Vector3.INF
+	
 	var attempts: int = 10  # Maximum attempts to find a valid position
 	
 	while attempts > 0:
@@ -610,6 +647,10 @@ func _check_for_despawns() -> void:
 			# Check if animal is too far from all players
 			var should_despawn: bool = true
 			for player in players:
+				# Check if player is still valid before accessing its position
+				if not is_instance_valid(player) or player.is_queued_for_deletion():
+					continue
+				
 				var distance: float = animal.global_position.distance_to(player.global_position)
 				if distance <= DESPAWN_RADIUS:
 					should_despawn = false
@@ -618,4 +659,74 @@ func _check_for_despawns() -> void:
 			# Despawn the animal if it's too far from all players
 			if should_despawn:
 				animal.queue_free()
-				animal_list.remove_at(i) 
+				animal_list.remove_at(i)
+
+func _try_get_biome_manager() -> void:
+	"""Try to get the biome manager from the game manager."""
+	var game_managers := get_tree().get_nodes_in_group("game_manager")
+	if game_managers.size() > 0:
+		var game_manager = game_managers[0]
+		if game_manager.has_method("get_biome_manager"):
+			biome_manager = game_manager.get_biome_manager()
+			if biome_manager:
+				print("AnimalSpawner: Successfully found BiomeManager!")
+			else:
+				# Biome manager exists but returns null - chunk system not ready yet
+				pass
+
+func _find_spawn_parent() -> void:
+	"""Find a suitable parent node for spawning animals."""
+	# Try to find the main scene node (usually the root of the current scene)
+	var current_scene = get_tree().current_scene
+	if current_scene and current_scene is Node3D:
+		spawn_parent = current_scene as Node3D
+		print("AnimalSpawner: Using current_scene as spawn parent")
+		return
+	
+	# Fallback: try to find a Main node
+	var main_nodes = get_tree().get_nodes_in_group("main")
+	if main_nodes.size() > 0:
+		spawn_parent = main_nodes[0] as Node3D
+		if spawn_parent:
+			print("AnimalSpawner: Using Main node as spawn parent")
+			return
+	
+	# Another fallback: use the parent of this AnimalSpawner
+	if get_parent() and get_parent() is Node3D:
+		spawn_parent = get_parent() as Node3D
+		print("AnimalSpawner: Using parent node as spawn parent")
+		return
+	
+	# Final fallback: use the current scene or create a fallback node
+	var fallback_scene = get_tree().current_scene
+	if fallback_scene and fallback_scene is Node3D:
+		spawn_parent = fallback_scene as Node3D
+		print("AnimalSpawner: Using current_scene as fallback spawn parent")
+	else:
+		# Last resort: create our own Node3D container
+		spawn_parent = Node3D.new()
+		spawn_parent.name = "AnimalContainer"
+		get_tree().current_scene.add_child(spawn_parent)
+		print("AnimalSpawner: Created new Node3D container as spawn parent")
+
+
+func _cleanup_invalid_players() -> void:
+	"""Remove invalid/destroyed players from tracking."""
+	for i in range(players.size() - 1, -1, -1):
+		if not is_instance_valid(players[i]) or players[i].is_queued_for_deletion():
+			print("AnimalSpawner: Removing invalid player reference")
+			players.remove_at(i)
+
+
+func clear_all_tracking() -> void:
+	"""Clear all animal and player tracking - used when returning to main menu."""
+	print("AnimalSpawner: Clearing all tracking data...")
+	
+	# Clear all animal tracking
+	current_animals.clear()
+	proximity_animals.clear()
+	
+	# Clear player tracking
+	players.clear()
+	
+	print("AnimalSpawner: All tracking data cleared") 

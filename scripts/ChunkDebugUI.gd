@@ -69,36 +69,46 @@ func _update_display() -> void:
 	var text := "=== Chunk System Debug ===\n"
 	
 	# Basic stats
-	text += "Active Chunks: %d\n" % chunk_manager.get_loaded_chunk_count()
-	text += "Generation Queue: %d\n" % chunk_manager.get_generation_queue_size()
-	text += "Loading Queue: %d\n" % chunk_manager.chunk_loading_queue.size()
-	text += "Unloading Queue: %d\n\n" % chunk_manager.chunk_unloading_queue.size()
+	text += "Active Chunks: %d\n" % chunk_manager.active_chunks.size()
+	text += "Generation Queue: %d\n" % chunk_manager.chunks_to_generate.size()
+	text += "Generated Data: %d\n\n" % chunk_manager.generated_chunk_data.size()
 	
 	# Player positions
 	if chunk_manager.player_tracker:
-		text += "Players Tracked: %d\n" % chunk_manager.player_tracker.get_active_player_count()
+		text += "Players Tracked: %d\n" % chunk_manager.player_tracker.player_positions.size()
 		
 		# Get local player position
 		var local_player := _get_local_player()
 		if local_player:
 			var player_pos := local_player.global_position
-			var chunk_pos := chunk_manager.world_to_chunk_position(player_pos)
+			var chunk_pos := Vector2i(
+				floor(player_pos.x / Chunk.CHUNK_SIZE.x),
+				floor(player_pos.z / Chunk.CHUNK_SIZE.y)
+			)
 			text += "Player Chunk: [%d, %d]\n" % [chunk_pos.x, chunk_pos.y]
 			text += "World Pos: (%.1f, %.1f, %.1f)\n" % [player_pos.x, player_pos.y, player_pos.z]
 	
-	# Memory stats from pool
-	if chunk_manager.chunk_pool:
-		var pool_stats := chunk_manager.chunk_pool.get_statistics()
-		text += "\n=== Memory Pool ===\n"
-		text += "Cached Chunks: %d / %d\n" % [pool_stats["cached_chunks"], ChunkPool.MAX_CACHED_CHUNKS]
-		text += "Cache Hit Rate: %.1f%%\n" % (pool_stats["cache_hit_rate"] * 100)
-		text += "Object Reuse: %.1f%%" % (float(pool_stats["total_objects_pooled"]) / 
-			max(pool_stats["total_objects_pooled"] + pool_stats["total_objects_created"], 1) * 100)
+	# Thread information
+	text += "\n=== Generation ===\n"
+	text += "Generation Threads: %d\n" % chunk_manager.generation_threads.size()
+	text += "Is Running: %s" % chunk_manager._is_running
 	
 	info_label.text = text
 
 func _get_local_player() -> Node3D:
 	"""Get the local player node."""
+	# In single player mode (no multiplayer peer), any player is the local player
+	if not multiplayer.has_multiplayer_peer():
+		# Try human player first
+		var human_players = get_tree().get_nodes_in_group("human_player")
+		if human_players.size() > 0:
+			return human_players[0]
+		# Try dog player
+		var dog_players = get_tree().get_nodes_in_group("dog_player")
+		if dog_players.size() > 0:
+			return dog_players[0]
+	
+	# Multiplayer mode - find authority player
 	# Try to find local player
 	for node in get_tree().get_nodes_in_group("human_player"):
 		if node.is_multiplayer_authority():

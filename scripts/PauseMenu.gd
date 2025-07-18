@@ -21,6 +21,8 @@ const MAIN_MENU_SCENE_PATH: String = "res://scenes/MainMenu.tscn"
 @onready var music_label: Label = $SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer/MusicLabel
 @onready var sfx_slider: HSlider = $SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer/SFXSlider
 @onready var sfx_label: Label = $SettingsModal/MarginContainer/VBoxContainer/SubVolumeContainer/VBoxContainer/SFXLabel
+@onready var render_slider: HSlider = $SettingsModal/MarginContainer/VBoxContainer/RenderSlider
+@onready var render_label: Label = $SettingsModal/MarginContainer/VBoxContainer/RenderLabel
 @onready var settings_close_button: Button = $SettingsModal/MarginContainer/VBoxContainer/HBoxContainer/CloseButton
 
 # Confirmation dialog
@@ -53,6 +55,7 @@ func _ready() -> void:
 	volume_slider.value_changed.connect(_on_volume_changed)
 	music_slider.value_changed.connect(_on_music_volume_changed)
 	sfx_slider.value_changed.connect(_on_sfx_volume_changed)
+	render_slider.value_changed.connect(_on_render_distance_changed)
 	
 	# Connect confirmation dialog
 	confirmation_dialog.confirmed.connect(_on_confirmation_confirmed)
@@ -196,6 +199,14 @@ func _on_sfx_volume_changed(value: float) -> void:
 	_update_effective_volumes()
 
 
+func _on_render_distance_changed(value: float) -> void:
+	"""Handle render distance slider changes. Updates chunk loading distance."""
+	var distance_int = int(value)
+	GameConstants.SettingsManager.apply_render_distance_setting(distance_int)
+	# Update the label text
+	_update_volume_label_text()
+
+
 func _update_effective_volumes() -> void:
 	"""Updates the effective volumes using master * specific multipliers."""
 	var master_volume = volume_slider.value
@@ -213,11 +224,12 @@ func _update_effective_volumes() -> void:
 
 func _update_volume_label_text() -> void:
 	"""
-	Updates the volume label text to show percentages in front of the text.
+	Updates the volume label text to show percentages and render distance value.
 	"""
 	volume_label.text = str(int(volume_slider.value)) + "% Master Volume"
 	music_label.text = str(int(music_slider.value)) + "% Music Volume"
 	sfx_label.text = str(int(sfx_slider.value)) + "% SFX Volume"
+	render_label.text = "Render Distance: " + str(int(render_slider.value)) + " chunks"
 
 
 
@@ -242,7 +254,28 @@ func _quit_to_main_menu() -> void:
 	"""Quit to the main menu."""
 	print("PauseMenu: Quitting to main menu...")
 	
-	# Resume the game first to avoid issues with scene changing
+	# Hide the pause menu first
+	hide_pause_menu()
+	
+	# Ensure mouse is visible for main menu (override hide_pause_menu's captured mode)
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	
+	# Clean up game state - find and cleanup GameManager
+	var game_managers = get_tree().get_nodes_in_group("game_manager")
+	if game_managers.size() > 0:
+		var game_manager = game_managers[0]
+		if game_manager.has_method("cleanup_game_state"):
+			game_manager.cleanup_game_state()
+	
+	# Clean up persistent UI layers (HUD/hotbar)
+	_cleanup_persistent_ui()
+	
+	# Clean up PauseManager state
+	if PauseManager:
+		PauseManager.clear_all_players()
+		PauseManager.cleanup_pause_menu()
+	
+	# Resume the game to avoid issues with scene changing
 	get_tree().paused = false
 	
 	# Disconnect from multiplayer if connected
@@ -278,25 +311,53 @@ func _load_settings() -> void:
 	music_slider.value = settings.get("music_volume", 75.0)
 	sfx_slider.value = settings.get("sfx_volume", 75.0)
 	
-	# Update volume label text with percentages
+	# Apply render distance setting
+	render_slider.value = float(settings.get("render_distance", GameConstants.RENDER_DISTANCE.DEFAULT))
+	
+	# Update label texts
 	_update_volume_label_text()
 	
 	GameConstants.SettingsManager.apply_master_volume_setting(volume_slider.value)
 	GameConstants.SettingsManager.apply_music_volume_setting(music_slider.value)
 	GameConstants.SettingsManager.apply_sfx_volume_setting(sfx_slider.value)
+	GameConstants.SettingsManager.apply_render_distance_setting(int(render_slider.value))
 	_update_effective_volumes()
 
 
 func _save_settings() -> void:
 	"""Save current settings to the config file."""
-	GameConstants.SettingsManager.save_volume_settings(
+	GameConstants.SettingsManager.save_all_settings(
 		volume_slider.value,
 		music_slider.value,
 		sfx_slider.value,
-		false  # No fullscreen setting anymore
+		false,  # No fullscreen setting anymore
+		int(render_slider.value)  # Render distance
 	)
 	
 	print("PauseMenu: Settings saved")
+
+
+func _cleanup_persistent_ui() -> void:
+	"""Clean up persistent UI layers that survive scene changes."""
+	print("PauseMenu: Cleaning up persistent UI layers...")
+	
+	var viewport = get_viewport()
+	if not viewport:
+		return
+	
+	# Remove UILayer (contains HUD/hotbar)
+	var ui_layer = viewport.get_node_or_null("UILayer")
+	if ui_layer:
+		print("PauseMenu: Removing UILayer with %d children" % ui_layer.get_child_count())
+		ui_layer.queue_free()
+	
+	# Remove HUDLayer if it exists (alternative name)
+	var hud_layer = viewport.get_node_or_null("HUDLayer")
+	if hud_layer:
+		print("PauseMenu: Removing HUDLayer with %d children" % hud_layer.get_child_count())
+		hud_layer.queue_free()
+	
+	print("PauseMenu: Persistent UI cleanup complete")
 
 
 # --- Utility Methods ---

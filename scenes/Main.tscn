@@ -1,12 +1,11 @@
 [gd_scene load_steps=8 format=3 uid="uid://xsvxwba1wgqb"]
 
 [ext_resource type="Script" uid="uid://7fve8erxqxm3" path="res://scripts/GameManager.gd" id="1_1q3rw"]
-[ext_resource type="Script" uid="uid://b0pt4v2nfl0a2" path="res://scripts/WorldGenerator.gd" id="2_2r4rw"]
 [ext_resource type="Script" uid="uid://b4efkuxudksvc" path="res://scripts/AnimalSpawner.gd" id="4_animal_spawner"]
 [ext_resource type="Script" uid="uid://lfaaw11pa4ra" path="res://scripts/DayNightCycle.gd" id="5_day_night_cycle"]
 [ext_resource type="PackedScene" uid="uid://tm8nuhejklh2" path="res://scenes/Campfire.tscn" id="6_campfire"]
 [ext_resource type="Script" uid="uid://cg87mciet51yb" path="res://scripts/CloudManager.gd" id="7_cloud_manager"]
-[ext_resource type="Script" path="res://scripts/Main.gd" id="8_main"]
+[ext_resource type="Script" uid="uid://desx2u56pv1hv" path="res://scripts/Main.gd" id="8_main"]
 
 [sub_resource type="Environment" id="Environment_1u7xv"]
 background_mode = 1
@@ -32,10 +31,6 @@ script = ExtResource("1_1q3rw")
 [node name="Environment" type="Node3D" parent="."]
 
 [node name="Campfire" parent="Environment" instance=ExtResource("6_campfire")]
-
-[node name="WorldGenerator" type="Node3D" parent="."]
-script = ExtResource("2_2r4rw")
-generate_grass = false
 
 [node name="AnimalSpawner" type="Node" parent="."]
 script = ExtResource("4_animal_spawner")

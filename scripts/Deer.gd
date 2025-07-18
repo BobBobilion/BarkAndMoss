@@ -437,9 +437,31 @@ func _spawn_corpse() -> void:
 	"""Spawn a deer corpse at the current position."""
 	if corpse_scene:
 		var corpse: Node3D = corpse_scene.instantiate()
-		get_tree().current_scene.add_child(corpse)
-		corpse.global_position = global_position
-		corpse.global_rotation = global_rotation
+		
+		# Find a valid parent to add the corpse to - with proper null checking
+		var target_parent: Node = null
+		
+		# First try: current scene (most common case)
+		if get_tree() and get_tree().current_scene:
+			target_parent = get_tree().current_scene
+		# Second try: this deer's parent
+		elif get_parent():
+			target_parent = get_parent()
+		# Third try: find the main scene node
+		elif get_tree():
+			var root = get_tree().root
+			if root and root.get_child_count() > 0:
+				target_parent = root.get_child(0)  # Usually the main scene
+		
+		# Add corpse to scene if we found a valid parent
+		if target_parent:
+			target_parent.add_child(corpse)
+			corpse.global_position = global_position
+			corpse.global_rotation = global_rotation
+		else:
+			# If all else fails, free the corpse to avoid memory leaks
+			corpse.queue_free()
+			print("Warning: Could not spawn deer corpse - no valid parent found")
 
 
 func get_state_string() -> String:

@@ -1,21 +1,21 @@
 shader_type spatial;
 
-// Texture samplers for each biome
-uniform sampler2D forest_albedo : filter_linear_mipmap, repeat_enable;
-uniform sampler2D forest_normal : filter_linear_mipmap, repeat_enable;
-uniform sampler2D forest_roughness : filter_linear_mipmap, repeat_enable;
+// Texture samplers for each biome - changed from filter_linear_mipmap to filter_linear
+uniform sampler2D forest_albedo : filter_linear, repeat_enable;
+uniform sampler2D forest_normal : filter_linear, repeat_enable;
+uniform sampler2D forest_roughness : filter_linear, repeat_enable;
 
-uniform sampler2D autumn_albedo : filter_linear_mipmap, repeat_enable;
-uniform sampler2D autumn_normal : filter_linear_mipmap, repeat_enable;
-uniform sampler2D autumn_roughness : filter_linear_mipmap, repeat_enable;
+uniform sampler2D autumn_albedo : filter_linear, repeat_enable;
+uniform sampler2D autumn_normal : filter_linear, repeat_enable;
+uniform sampler2D autumn_roughness : filter_linear, repeat_enable;
 
-uniform sampler2D snow_albedo : filter_linear_mipmap, repeat_enable;
-uniform sampler2D snow_normal : filter_linear_mipmap, repeat_enable;
-uniform sampler2D snow_roughness : filter_linear_mipmap, repeat_enable;
+uniform sampler2D snow_albedo : filter_linear, repeat_enable;
+uniform sampler2D snow_normal : filter_linear, repeat_enable;
+uniform sampler2D snow_roughness : filter_linear, repeat_enable;
 
-uniform sampler2D mountain_albedo : filter_linear_mipmap, repeat_enable;
-uniform sampler2D mountain_normal : filter_linear_mipmap, repeat_enable;
-uniform sampler2D mountain_roughness : filter_linear_mipmap, repeat_enable;
+uniform sampler2D mountain_albedo : filter_linear, repeat_enable;
+uniform sampler2D mountain_normal : filter_linear, repeat_enable;
+uniform sampler2D mountain_roughness : filter_linear, repeat_enable;
 
 // UV scaling for texture tiling
 uniform float texture_scale : hint_range(1.0, 100.0) = 20.0;
@@ -27,6 +27,9 @@ uniform float blend_sharpness : hint_range(0.1, 10.0) = 2.0;
 // Material properties
 uniform float roughness_multiplier : hint_range(0.0, 1.0) = 1.0;
 uniform float normal_strength : hint_range(0.0, 2.0) = 1.0;
+
+// Debug mode - set to 1.0 to show only forest texture
+uniform float debug_mode : hint_range(0.0, 1.0) = 0.0;
 
 varying vec3 world_position;
 varying vec3 world_normal;
@@ -135,6 +138,12 @@ void fragment() {
     // Apply final values
     ALBEDO = final_albedo;
     ROUGHNESS = final_roughness * roughness_multiplier;
+    
+    // Debug mode - show only forest texture
+    if (debug_mode > 0.5) {
+        ALBEDO = forest_col;
+        ROUGHNESS = 0.5;
+    }
     
     // Convert normal map to world space
     final_normal = final_normal * 2.0 - 1.0;

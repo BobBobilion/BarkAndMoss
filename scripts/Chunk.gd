@@ -2,305 +2,242 @@ class_name Chunk
 extends Node3D
 
 # --- Signals ---
-signal generation_complete()
-signal loading_complete()
-signal unloading_complete()
+signal ready_for_display()
 
 # --- Constants ---
-# Chunk dimensions in world units
-const CHUNK_SIZE: Vector2 = Vector2(64, 64)  # Optimal balance between generation time and overhead
-const CHUNK_HEIGHT: float = 128.0            # Vertical size for generation
-const TERRAIN_RESOLUTION_PER_CHUNK: int = 32 # Vertices per chunk edge
+const CHUNK_SIZE := Vector2(64, 64)
+const TERRAIN_RESOLUTION := 32
 
 # --- Enums ---
-enum ChunkState {
-	UNLOADED,      # Not in memory
-	QUEUED,        # Waiting for generation
-	GENERATING,    # Being generated (thread)
-	GENERATED,     # Data ready, not instantiated
-	LOADING,       # Being added to scene
-	LOADED,        # Fully loaded and visible
-	UNLOADING      # Being removed
-}
-
-enum LODLevel {
-	HIGH,          # Full detail with all objects
-	MEDIUM,        # Terrain + large objects only
-	LOW,           # Terrain only
-	UNLOADED       # Not visible
-}
+enum State { UNLOADED, LOADING, LOADED, UNLOADING }
+enum LOD { HIGH, MEDIUM, LOW, NONE }
 
 # --- Properties ---
-@export var chunk_position: Vector2i  # Chunk coordinates (not world position)
-@export var current_state: ChunkState = ChunkState.UNLOADED
-@export var current_lod: LODLevel = LODLevel.UNLOADED
-@export var reference_count: int = 0  # Number of players needing this chunk
+var chunk_pos: Vector2i
+var current_state := State.UNLOADED
+var current_lod := LOD.NONE
 
-# Generation data (stored for quick re-loading)
-var terrain_data: ChunkTerrainData = null
-var object_data: ChunkObjectData = null
-var is_data_generated: bool = false
+var terrain_data: Dictionary
+var object_data: Dictionary
 
-# Scene nodes
-var terrain_instance: MeshInstance3D = null
-var terrain_collision: StaticBody3D = null
-var objects_container: Node3D = null
-var grass_container: Node3D = null
+var terrain_mesh_instance: MeshInstance3D
+var terrain_collision: StaticBody3D
+var objects_root: Node3D
 
-# Performance tracking
-var generation_time: float = 0.0
-var last_accessed_time: float = 0.0
+# Material passed from ChunkManager
+var _terrain_material: ShaderMaterial = null
 
-# Thread safety
-var _mutex: Mutex = Mutex.new()
-
-# --- Inner Classes ---
-class ChunkTerrainData:
-	var vertices: PackedVector3Array
-	var normals: PackedVector3Array
-	var uvs: PackedVector2Array
-	var colors: PackedColorArray  # For biome blending
-	var indices: PackedInt32Array
-	var height_map: PackedFloat32Array  # For quick height lookups
-
-class ChunkObjectData:
-	var trees: Array[Dictionary] = []      # {position, rotation, scale, mesh_path, biome_type}
-	var rocks: Array[Dictionary] = []      # {position, rotation, scale, mesh_path, biome_type}
-	var grass: Array[Dictionary] = []      # {position, rotation, scale, density}
-	var animals: Array[Dictionary] = []    # {position, type, spawn_data}
-
-# --- Engine Callbacks ---
-func _ready() -> void:
-	add_to_group("chunks")
-	name = "Chunk_%d_%d" % [chunk_position.x, chunk_position.y]
+var _reference_count := 0
+var _mutex := Mutex.new()
 
 # --- Public Methods ---
 func initialize(pos: Vector2i) -> void:
-	"""Initialize chunk with its grid position."""
-	chunk_position = pos
-	position = get_world_position_from_chunk_pos(pos)
-	last_accessed_time = Time.get_ticks_msec() / 1000.0
+	chunk_pos = pos
+	position = Vector3(pos.x * CHUNK_SIZE.x, 0, pos.y * CHUNK_SIZE.y)
+	name = "Chunk_%d_%d" % [pos.x, pos.y]
+	
+	# Add to group for cleanup purposes
+	add_to_group("chunks")
 
-func get_world_position_from_chunk_pos(chunk_pos: Vector2i) -> Vector3:
-	"""Convert chunk coordinates to world position (center of chunk)."""
-	return Vector3(
-		chunk_pos.x * CHUNK_SIZE.x,
-		0,
-		chunk_pos.y * CHUNK_SIZE.y
-	)
+func load_data(data: Dictionary) -> void:
+	current_state = State.LOADING
+	terrain_data = data["terrain"]
+	object_data = data["objects"]
+	
+	_build_terrain()
+	_build_objects()
+	
+	current_state = State.LOADED
+	ready_for_display.emit()
 
-func get_chunk_bounds() -> AABB:
-	"""Get the axis-aligned bounding box for this chunk."""
-	var world_pos := get_world_position_from_chunk_pos(chunk_position)
-	var half_size := Vector3(CHUNK_SIZE.x * 0.5, CHUNK_HEIGHT * 0.5, CHUNK_SIZE.y * 0.5)
-	return AABB(world_pos - half_size, half_size * 2.0)
+func unload() -> void:
+	current_state = State.UNLOADING
+	queue_free()
+
+func set_lod(lod: LOD) -> void:
+	if current_lod == lod:
+		return
+	current_lod = lod
+	
+	if not is_inside_tree() or not objects_root:
+		return
+		
+	match lod:
+		LOD.HIGH:
+			objects_root.show()
+			for child in objects_root.get_children():
+				if "grass" in child.name.to_lower():
+					child.show()
+		LOD.MEDIUM:
+			objects_root.show()
+			for child in objects_root.get_children():
+				if "grass" in child.name.to_lower():
+					child.hide()
+		LOD.LOW:
+			objects_root.hide()
+		LOD.NONE:
+			objects_root.hide()
 
 func add_reference() -> void:
-	"""Called when a player needs this chunk."""
 	_mutex.lock()
-	reference_count += 1
+	_reference_count += 1
 	_mutex.unlock()
 
-func remove_reference() -> void:
-	"""Called when a player no longer needs this chunk."""
+func remove_reference() -> int:
 	_mutex.lock()
-	reference_count = max(0, reference_count - 1)
+	_reference_count = max(0, _reference_count - 1)
+	var count = _reference_count
 	_mutex.unlock()
+	return count
 
-func should_unload() -> bool:
-	"""Check if this chunk should be unloaded."""
-	return reference_count <= 0 and current_state == ChunkState.LOADED
-
-func update_lod(new_lod: LODLevel) -> void:
-	"""Update the level of detail for this chunk."""
-	if current_lod == new_lod:
-		return
-		
-	var old_lod := current_lod
-	current_lod = new_lod
-	
-	# Apply LOD changes
-	match new_lod:
-		LODLevel.HIGH:
-			_show_all_objects()
-		LODLevel.MEDIUM:
-			_show_large_objects_only()
-		LODLevel.LOW:
-			_show_terrain_only()
-		LODLevel.UNLOADED:
-			_hide_everything()
-
-func set_terrain_data(data: ChunkTerrainData) -> void:
-	"""Store generated terrain data for this chunk."""
-	terrain_data = data
-	is_data_generated = true
-
-func set_object_data(data: ChunkObjectData) -> void:
-	"""Store generated object data for this chunk."""
-	object_data = data
-
-func create_terrain_mesh() -> void:
-	"""Create the visual mesh from terrain data."""
+# --- Private Methods ---
+func _build_terrain() -> void:
 	if not terrain_data:
+		print("Chunk: No terrain data for chunk at ", chunk_pos)
 		return
-		
-	# Create mesh instance
-	terrain_instance = MeshInstance3D.new()
-	terrain_instance.name = "TerrainMesh"
 	
-	# Build the mesh
-	var arrays: Array = []
+	print("Chunk: Building terrain for chunk at ", chunk_pos)
+	print("  Vertices: ", terrain_data.vertices.size())
+	print("  Indices: ", terrain_data.indices.size())
+	print("  Colors sample: ", terrain_data.colors[0] if terrain_data.colors.size() > 0 else "No colors")
+		
+	# Create Mesh
+	var mesh := ArrayMesh.new()
+	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = terrain_data.vertices
 	arrays[Mesh.ARRAY_NORMAL] = terrain_data.normals
 	arrays[Mesh.ARRAY_TEX_UV] = terrain_data.uvs
 	arrays[Mesh.ARRAY_COLOR] = terrain_data.colors
 	arrays[Mesh.ARRAY_INDEX] = terrain_data.indices
-	
-	var mesh: ArrayMesh = ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	terrain_instance.mesh = mesh
 	
-	# Enable shadows
-	terrain_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	terrain_mesh_instance = MeshInstance3D.new()
+	terrain_mesh_instance.mesh = mesh
+	terrain_mesh_instance.name = "TerrainMesh_" + str(chunk_pos.x) + "_" + str(chunk_pos.y)
 	
-	add_child(terrain_instance)
-
-func create_terrain_collision() -> void:
-	"""Create collision shape for the terrain."""
-	if not terrain_instance or not terrain_instance.mesh:
-		return
-		
-	terrain_collision = StaticBody3D.new()
-	terrain_collision.name = "TerrainCollision"
-	terrain_collision.collision_layer = 1  # Terrain layer
-	terrain_collision.collision_mask = 0   # Terrain doesn't detect anything
-	
-	var collision_shape := CollisionShape3D.new()
-	collision_shape.name = "TerrainCollisionShape"
-	
-	# Create trimesh collision from mesh
-	var shape: ConcavePolygonShape3D = terrain_instance.mesh.create_trimesh_shape()
-	if shape:
-		collision_shape.shape = shape
-		terrain_collision.add_child(collision_shape)
-		add_child(terrain_collision)
+	# Apply the terrain material
+	if _terrain_material:
+		terrain_mesh_instance.material_override = _terrain_material
+		print("Chunk: Applied terrain material to chunk at ", chunk_pos, " (passed from ChunkManager)")
 	else:
-		push_error("Chunk: Failed to create terrain collision for chunk %v" % chunk_position)
+		# Fallback: Try to get from parent ChunkManager
+		var chunk_manager = get_parent()
+		if chunk_manager and chunk_manager.has_method("get_terrain_material"):
+			var terrain_material = chunk_manager.get_terrain_material()
+			if terrain_material:
+				terrain_mesh_instance.material_override = terrain_material
+				print("Chunk: Applied terrain material to chunk at ", chunk_pos, " (fallback from ChunkManager)")
+			else:
+				print("Chunk: No terrain material available from ChunkManager")
+				# Create a basic colored material as ultimate fallback
+				var fallback_mat = StandardMaterial3D.new()
+				fallback_mat.albedo_color = Color(0.3, 0.6, 0.2)  # Green terrain color
+				fallback_mat.vertex_color_use_as_albedo = true
+				terrain_mesh_instance.material_override = fallback_mat
+				print("Chunk: Using fallback colored material")
+		else:
+			print("Chunk: ChunkManager not found or no get_terrain_material method")
+			# Create a basic colored material as ultimate fallback
+			var fallback_mat = StandardMaterial3D.new()
+			fallback_mat.albedo_color = Color(0.3, 0.6, 0.2)  # Green terrain color
+			fallback_mat.vertex_color_use_as_albedo = true
+			terrain_mesh_instance.material_override = fallback_mat
+			print("Chunk: Using fallback colored material (no parent)")
+	
+	add_child(terrain_mesh_instance)
+	
+	# Create Collision
+	terrain_collision = StaticBody3D.new()
+	var collision_shape := CollisionShape3D.new()
+	collision_shape.shape = mesh.create_trimesh_shape()
+	terrain_collision.add_child(collision_shape)
+	add_child(terrain_collision)
 
-func instantiate_objects(lod: LODLevel) -> void:
-	"""Create object instances based on LOD level."""
+func _build_objects() -> void:
 	if not object_data:
 		return
 		
-	# Create containers if needed
-	if not objects_container:
-		objects_container = Node3D.new()
-		objects_container.name = "Objects"
-		add_child(objects_container)
+	objects_root = Node3D.new()
+	objects_root.name = "Objects"
+	add_child(objects_root)
+
+	for tree in object_data.trees:
+		_create_tree(tree)
+	for rock in object_data.rocks:
+		_create_rock(rock)
+	for grass in object_data.grass:
+		_create_grass(grass)
+
+func _create_tree(data: Dictionary) -> void:
+	# Check if it's a scene file or a mesh file
+	if data.mesh_path.ends_with(".tscn"):
+		# Load as PackedScene
+		var scene: PackedScene = load(data.mesh_path)
+		if not scene:
+			return
+		var instance := scene.instantiate()
+		instance.position = data.position
+		instance.rotation.y = data.rotation
+		instance.scale = Vector3.ONE * data.scale
+		objects_root.add_child(instance)
+	else:
+		# Load as Mesh (for .obj, .glb, .gltf files)
+		var mesh: Mesh = load(data.mesh_path)
+		if not mesh:
+			return
 		
-	if not grass_container and lod == LODLevel.HIGH:
-		grass_container = Node3D.new()
-		grass_container.name = "Grass"
-		add_child(grass_container)
-	
-	# Instantiate objects based on LOD
-	match lod:
-		LODLevel.HIGH:
-			_instantiate_trees()
-			_instantiate_rocks()
-			_instantiate_grass()
-		LODLevel.MEDIUM:
-			_instantiate_trees()
-			_instantiate_rocks()
-		LODLevel.LOW:
-			# Terrain only, no objects
-			pass
-
-func clear_objects() -> void:
-	"""Remove all instantiated objects."""
-	if objects_container:
-		objects_container.queue_free()
-		objects_container = null
-	if grass_container:
-		grass_container.queue_free()
-		grass_container = null
-
-func get_height_at_position(world_pos: Vector3) -> float:
-	"""Get terrain height at a world position within this chunk."""
-	if not terrain_data or not terrain_data.height_map:
-		return 0.0
+		# Create a basic tree node structure
+		var tree_body := StaticBody3D.new()
+		var mesh_instance := MeshInstance3D.new()
+		var collision_shape := CollisionShape3D.new()
 		
-	# Convert world position to chunk-local position
-	var chunk_world_pos := get_world_position_from_chunk_pos(chunk_position)
-	var local_pos := world_pos - chunk_world_pos
+		# Set up the mesh
+		mesh_instance.mesh = mesh
+		
+		# Create collision shape from mesh
+		collision_shape.shape = mesh.create_trimesh_shape()
+		
+		# Build the tree structure
+		tree_body.add_child(mesh_instance)
+		tree_body.add_child(collision_shape)
+		
+		# Apply transform data
+		tree_body.position = data.position
+		tree_body.rotation.y = data.rotation
+		tree_body.scale = Vector3.ONE * data.scale
+		
+		# Add to objects root
+		objects_root.add_child(tree_body)
+
+func _create_rock(data: Dictionary) -> void:
+	# Rocks are simple meshes
+	var mesh: Mesh = load(data.mesh_path)
+	if not mesh:
+		return
 	
-	# Convert to terrain grid coordinates
-	var grid_x := int((local_pos.x / CHUNK_SIZE.x + 0.5) * TERRAIN_RESOLUTION_PER_CHUNK)
-	var grid_z := int((local_pos.z / CHUNK_SIZE.y + 0.5) * TERRAIN_RESOLUTION_PER_CHUNK)
+	var body := StaticBody3D.new()
+	var mesh_instance := MeshInstance3D.new()
+	var collision_shape := CollisionShape3D.new()
 	
-	# Clamp to valid range
-	grid_x = clamp(grid_x, 0, TERRAIN_RESOLUTION_PER_CHUNK)
-	grid_z = clamp(grid_z, 0, TERRAIN_RESOLUTION_PER_CHUNK)
+	mesh_instance.mesh = mesh
+	collision_shape.shape = mesh.create_trimesh_shape()
 	
-	# Get height from height map
-	var index := grid_z * (TERRAIN_RESOLUTION_PER_CHUNK + 1) + grid_x
-	if index < terrain_data.height_map.size():
-		return terrain_data.height_map[index]
+	body.add_child(mesh_instance)
+	body.add_child(collision_shape)
 	
-	return 0.0
+	body.position = data.position
+	body.rotation.y = data.rotation
+	body.scale = Vector3.ONE * data.scale
+	objects_root.add_child(body)
 
-# --- Private Methods ---
-func _show_all_objects() -> void:
-	"""Show all objects for high LOD."""
-	if terrain_instance:
-		terrain_instance.visible = true
-	if objects_container:
-		objects_container.visible = true
-	if grass_container:
-		grass_container.visible = true
-
-func _show_large_objects_only() -> void:
-	"""Show only large objects for medium LOD."""
-	if terrain_instance:
-		terrain_instance.visible = true
-	if objects_container:
-		objects_container.visible = true
-	if grass_container:
-		grass_container.visible = false
-
-func _show_terrain_only() -> void:
-	"""Show only terrain for low LOD."""
-	if terrain_instance:
-		terrain_instance.visible = true
-	if objects_container:
-		objects_container.visible = false
-	if grass_container:
-		grass_container.visible = false
-
-func _hide_everything() -> void:
-	"""Hide all chunk content."""
-	if terrain_instance:
-		terrain_instance.visible = false
-	if objects_container:
-		objects_container.visible = false
-	if grass_container:
-		grass_container.visible = false
-
-func _instantiate_trees() -> void:
-	"""Create tree instances from object data."""
-	# Tree instantiation is now handled by ChunkLoader
-	# This method is kept for backwards compatibility
-	pass
-
-func _instantiate_rocks() -> void:
-	"""Create rock instances from object data."""
-	# Rock instantiation is now handled by ChunkLoader
-	# This method is kept for backwards compatibility
-	pass
-
-func _instantiate_grass() -> void:
-	"""Create grass instances from object data."""
-	# Grass instantiation is now handled by ChunkLoader
-	# This method is kept for backwards compatibility
-	pass 
+func _create_grass(data: Dictionary) -> void:
+	var scene: PackedScene = load("res://scenes/Grass.tscn")
+	if not scene:
+		return
+	var instance := scene.instantiate()
+	instance.name = "Grass"
+	instance.position = data.position
+	instance.rotation.y = data.rotation
+	instance.scale = Vector3.ONE * data.scale
+	objects_root.add_child(instance) 

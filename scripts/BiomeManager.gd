@@ -238,11 +238,7 @@ const TREE_ASSETS_DEAD: Array[String] = [
 	"res://assets/trees/UltimatePack/OBJ/CommonTree_Dead_2.obj",
 	"res://assets/trees/UltimatePack/OBJ/CommonTree_Dead_3.obj",
 	"res://assets/trees/UltimatePack/OBJ/CommonTree_Dead_4.obj",
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_Dead_5.obj",
-	# PineTree dead variants (1-3) 
-	"res://assets/trees/UltimatePack/OBJ/PineTree_Dead_1.obj",
-	"res://assets/trees/UltimatePack/OBJ/PineTree_Dead_2.obj",
-	"res://assets/trees/UltimatePack/OBJ/PineTree_Dead_3.obj"
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_Dead_5.obj"
 ]
 
 # --- Rock Asset Paths by Category ---

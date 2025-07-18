@@ -169,67 +169,54 @@ const COOKING_RECIPES := {
 # WORLD SCALING SYSTEM
 # =============================================================================
 
-# Master scale multiplier for the entire game world
+# Fixed scale multiplier for the infinite world
 # 
-# HOW TO USE:
-# Change world_scale_multiplier to adjust the entire game size:
-# - 1.0  = Small world (100×100, 50 trees, 8 animals)
-# - 3.0  = Medium world (300×300, 450 trees, 24 animals) 
-# - 5.0  = Large world (500×500, 1,250 trees, 40 animals)
-# - 10.0 = Huge world (1000×1000, 5,000 trees, 80 animals)
+# This affects:
+# - Tree & Rock counts per chunk
+# - Animal spawn counts
+# - Cloud spawn radius
+# - Other scaling parameters
 #
-# SCALING BEHAVIOR:
-# - World Size: Linear scaling (multiplier × base size)
-# - Trees & Rocks: Area scaling (multiplier² × base count)
-# - Animals: Linear scaling (multiplier × base count)
-# - Clouds: Linear scaling (multiplier × base count)
-# - Spawn distances: Automatically adjusted
-#
-# Use GameConstants.print_world_info() to see current values
+# Set to 5.0 for a good balance of density and performance
 
-# Static fallback multiplier (used if dynamic value not set)
-const DEFAULT_WORLD_SCALE_MULTIPLIER: float = 1.0
-
-# Dynamic world scale multiplier (can be changed at runtime)
-static var world_scale_multiplier: float = DEFAULT_WORLD_SCALE_MULTIPLIER
+const WORLD_SCALE_MULTIPLIER: float = 5.0
 
 # =============================================================================
 # WORLD GENERATION (Dynamic)
 # =============================================================================
 
-# Function to get current world constants based on dynamic multiplier
+# Function to get current world constants based on fixed multiplier
 static func get_world_constants() -> Dictionary:
 	return {
 		"TERRAIN_RESOLUTION": 256,  # Increased for larger world
 		"HILL_HEIGHT": 8.0,
 		"HILL_FREQUENCY": 0.02,
 		"BASE_WORLD_SIZE": Vector2(100, 100),  # Original world size
-		"WORLD_SIZE": Vector2(100, 100) * world_scale_multiplier,  # Scaled world size
+		"WORLD_SIZE": Vector2(100, 100) * WORLD_SCALE_MULTIPLIER,  # Scaled world size
 		"TREE_SPACING": 5.0,  # Increased spacing for larger world
 		"BASE_TREE_COUNT": 50,  # Original tree count
-		"TREE_COUNT": int(50 * world_scale_multiplier * world_scale_multiplier),  # Scaled by area (multiplier squared)
+		"TREE_COUNT": int(50 * WORLD_SCALE_MULTIPLIER * WORLD_SCALE_MULTIPLIER),  # Scaled by area (multiplier squared)
 		"BASE_ROCK_COUNT": 20,  # Base rock count for original world
-		"ROCK_COUNT": int(20 * world_scale_multiplier * world_scale_multiplier),  # Scaled by area
+		"ROCK_COUNT": int(20 * WORLD_SCALE_MULTIPLIER * WORLD_SCALE_MULTIPLIER),  # Scaled by area
 		"BASE_CLOUD_COUNT": 25,  # Base cloud count (increased for better sky coverage)
-		"CLOUD_COUNT": int(25 * world_scale_multiplier)  # Clouds scale linearly, not by area
+		"CLOUD_COUNT": int(25 * WORLD_SCALE_MULTIPLIER),  # Clouds scale linearly, not by area
+		# Tree and Rock size constants
+		"TREE_BASE_SCALE": 3.0,  # Base scale multiplier for all trees
+		"TREE_MIN_SCALE": 0.8,   # Minimum random scale variation (3.0 * 0.8 = 2.4x final)
+		"TREE_MAX_SCALE": 1.5,   # Maximum random scale variation (3.0 * 1.5 = 4.5x final)
+		"ROCK_MIN_SCALE": 1.0,   # Minimum rock scale (small pebbles)
+		"ROCK_MAX_SCALE": 20.0   # Maximum rock scale (massive boulders!)
 	}
 
-# Backward compatibility: Static WORLD constant (uses current multiplier)
+# Backward compatibility: Static WORLD constant
 static var WORLD: Dictionary:
 	get:
 		return get_world_constants()
 
-# Function to update world scale multiplier from settings
-static func set_world_scale_multiplier(new_multiplier: float) -> void:
-	"""Set the world scale multiplier. This affects all world generation."""
-	world_scale_multiplier = new_multiplier
-	print("GameConstants: World scale multiplier set to ", new_multiplier, "x")
-	print_world_info()
-
-# Function to get current world scale multiplier
+# Function to get world scale multiplier (for backward compatibility)
 static func get_world_scale_multiplier() -> float:
-	"""Get the current world scale multiplier."""
-	return world_scale_multiplier
+	"""Get the world scale multiplier."""
+	return WORLD_SCALE_MULTIPLIER
 
 # =============================================================================
 # SPAWNING SYSTEM
@@ -261,12 +248,12 @@ const SPAWN := {
 static func get_animal_spawn_counts() -> Dictionary:
 	return {
 		"BASE_RABBIT_COUNT": 8,
-		"RABBIT_COUNT": int(8 * world_scale_multiplier),  # Rabbits scale linearly with world size
+		"RABBIT_COUNT": int(8 * WORLD_SCALE_MULTIPLIER),  # Rabbits scale linearly with world size
 		"BASE_DEER_COUNT": 4,
-		"DEER_COUNT": int(4 * world_scale_multiplier),    # Deer scale linearly with world size
+		"DEER_COUNT": int(4 * WORLD_SCALE_MULTIPLIER),    # Deer scale linearly with world size
 		"BASE_BIRD_COUNT": 6,
-		"BIRD_COUNT": int(6 * world_scale_multiplier),    # Birds scale linearly with world size
-		"TOTAL_ANIMALS": int((8 + 4 + 6) * world_scale_multiplier)
+		"BIRD_COUNT": int(6 * WORLD_SCALE_MULTIPLIER),    # Birds scale linearly with world size
+		"TOTAL_ANIMALS": int((8 + 4 + 6) * WORLD_SCALE_MULTIPLIER)
 	}
 
 # Backward compatibility
@@ -313,6 +300,18 @@ const UI := {
 	"COLOR_SLOT_NUMBER": Color(0.918, 0.878, 0.835, 1),
 	"FONT_SIZE_TOOLTIP": 14,
 	"FONT_SIZE_SLOT_NUMBER": 12
+}
+
+# =============================================================================
+# RENDER DISTANCE CONSTANTS
+# =============================================================================
+
+# Render distance presets for chunk loading
+const RENDER_DISTANCE := {
+	"MIN": 2,          # Minimum allowed render distance (2 chunks)
+	"MAX": 8,          # Maximum allowed render distance (8 chunks)
+	"DEFAULT": 3,      # Default render distance (original value)
+	"UNLOAD_OFFSET": 1 # How many chunks beyond load distance to unload
 }
 
 # =============================================================================
@@ -531,7 +530,7 @@ static func print_world_info() -> void:
 	var animal_info = get_animal_spawn_counts()
 	
 	print("=== CURRENT WORLD SETTINGS ===")
-	print("Scale Multiplier: ", world_scale_multiplier, "x")
+	print("Scale Multiplier: ", WORLD_SCALE_MULTIPLIER, "x")
 	print("World Size: ", world_info.WORLD_SIZE)
 	print("Trees: ", world_info.TREE_COUNT, " (", world_info.BASE_TREE_COUNT, " base)")
 	print("Rocks: ", world_info.ROCK_COUNT, " (", world_info.BASE_ROCK_COUNT, " base)")  
@@ -550,11 +549,11 @@ static func _static_init() -> void:
 	var err = config.load("user://settings.cfg")
 	
 	if err == OK:
-		world_scale_multiplier = config.get_value("world", "size_multiplier", DEFAULT_WORLD_SCALE_MULTIPLIER)
-	else:
-		world_scale_multiplier = DEFAULT_WORLD_SCALE_MULTIPLIER
+		# The world_scale_multiplier is now a constant, so this will not change it.
+		# It's kept here for backward compatibility if settings are loaded.
+		pass
 	
-	print("GameConstants: Initialized with world scale multiplier: ", world_scale_multiplier, "x")
+	print("GameConstants: Initialized with world scale multiplier: ", WORLD_SCALE_MULTIPLIER, "x")
 
 
 # =============================================================================
@@ -574,7 +573,7 @@ class SettingsManager:
 			"music_volume": 75.0,
 			"sfx_volume": 75.0,
 			"fullscreen": false,
-			"world_size_multiplier": GameConstants.get_world_scale_multiplier()
+			"render_distance": RENDER_DISTANCE.DEFAULT
 		}
 		
 		if err == OK:
@@ -582,24 +581,17 @@ class SettingsManager:
 			settings.music_volume = config.get_value("audio", "music_volume", 75.0)
 			settings.sfx_volume = config.get_value("audio", "sfx_volume", 75.0)
 			settings.fullscreen = config.get_value("display", "fullscreen", false)
-			settings.world_size_multiplier = config.get_value("world", "size_multiplier", DEFAULT_WORLD_SCALE_MULTIPLIER)
+			settings.render_distance = config.get_value("graphics", "render_distance", RENDER_DISTANCE.DEFAULT)
 		
 		return settings
 	
-	static func save_settings(volume: float, fullscreen: bool, world_size_multiplier: float = -1) -> void:
+	static func save_settings(volume: float, fullscreen: bool) -> void:
 		"""Save all settings to config file."""
 		var config = ConfigFile.new()
 		
 		# Save volume and fullscreen
 		config.set_value("audio", "master_volume", volume)
 		config.set_value("display", "fullscreen", fullscreen)
-		
-		# Save world size if provided, otherwise keep current
-		if world_size_multiplier > 0:
-			config.set_value("world", "size_multiplier", world_size_multiplier)
-			GameConstants.set_world_scale_multiplier(world_size_multiplier)
-		else:
-			config.set_value("world", "size_multiplier", GameConstants.get_world_scale_multiplier())
 		
 		# Save to file
 		config.save("user://settings.cfg")
@@ -648,17 +640,52 @@ class SettingsManager:
 		"""Save all volume settings and fullscreen to config file."""
 		var config = ConfigFile.new()
 		
+		# Load existing settings first to preserve render distance
+		var err = config.load("user://settings.cfg")
+		
 		# Save all volume settings
 		config.set_value("audio", "master_volume", master_volume)
 		config.set_value("audio", "music_volume", music_volume)
 		config.set_value("audio", "sfx_volume", sfx_volume)
 		config.set_value("display", "fullscreen", fullscreen)
 		
-		# Save current world size
-		config.set_value("world", "size_multiplier", GameConstants.get_world_scale_multiplier())
+		# Save to file
+		config.save("user://settings.cfg")
+	
+	static func save_all_settings(master_volume: float, music_volume: float, sfx_volume: float, fullscreen: bool, render_distance: int) -> void:
+		"""Save all settings including render distance to config file."""
+		var config = ConfigFile.new()
+		
+		# Save all settings
+		config.set_value("audio", "master_volume", master_volume)
+		config.set_value("audio", "music_volume", music_volume)
+		config.set_value("audio", "sfx_volume", sfx_volume)
+		config.set_value("display", "fullscreen", fullscreen)
+		config.set_value("graphics", "render_distance", render_distance)
 		
 		# Save to file
 		config.save("user://settings.cfg")
+	
+	static func apply_render_distance_setting(distance: int) -> void:
+		"""Apply render distance setting to the chunk system."""
+		# Clamp the value to valid range
+		var clamped_distance = clamp(distance, RENDER_DISTANCE.MIN, RENDER_DISTANCE.MAX)
+		
+		# Find and update PlayerTracker
+		var game_managers: Array[Node] = Engine.get_main_loop().get_nodes_in_group("game_manager")
+		if game_managers.size() > 0:
+			var game_manager = game_managers[0]
+			if game_manager.has_method("get_chunk_manager"):
+				var chunk_manager = game_manager.get_chunk_manager()
+				if chunk_manager and chunk_manager.player_tracker:
+					chunk_manager.player_tracker.set_render_distance(clamped_distance)
+					print("SettingsManager: Applied render distance: ", clamped_distance)
+				else:
+					print("SettingsManager: ChunkManager or PlayerTracker not found")
+			else:
+				print("SettingsManager: GameManager has no get_chunk_manager method")
+		else:
+			print("SettingsManager: No GameManager found")
 	
 	static func apply_fullscreen_setting(enabled: bool) -> void:
 		"""Apply fullscreen setting to display system."""

@@ -798,42 +798,78 @@ func _create_blended_terrain_material_shader() -> ShaderMaterial:
 	var default_normal: ImageTexture = _create_default_normal_texture()
 	var default_roughness: ImageTexture = _create_default_texture(Color(0.5, 0.5, 0.5))
 	
-	# Load and assign textures for each biome - using only JPG/PNG files
+	# Load and assign textures for each biome - FIXED PATHS
 	# Forest biome textures (grass terrain)
 	var forest_albedo: Texture2D = load("res://assets/textures/grass terrain/textures/rocky_terrain_02_diff_4k.jpg")
 	if not forest_albedo:
-		print("WorldGenerator: Failed to load forest albedo texture")
+		print("WorldGenerator: Failed to load forest albedo texture - using fallback")
+		forest_albedo = default_albedo
+	else:
+		print("WorldGenerator: Successfully loaded forest albedo texture")
 	
-	# Autumn biome textures (leaves terrain)
+	# Autumn biome textures (leaves terrain) - FIXED PATH
 	var autumn_albedo: Texture2D = load("res://assets/textures/leaves terrain/textures/leaves_forest_ground_diff_4k.jpg")
 	if not autumn_albedo:
-		print("WorldGenerator: Failed to load autumn albedo texture")
+		print("WorldGenerator: Failed to load autumn albedo texture - using fallback")
+		autumn_albedo = default_albedo
+	else:
+		print("WorldGenerator: Successfully loaded autumn albedo texture")
 	
 	# Snow biome textures
 	var snow_albedo: Texture2D = load("res://assets/textures/snow terrain/Snow002_4K_Color.jpg")
 	var snow_normal: Texture2D = load("res://assets/textures/snow terrain/Snow002_4K_NormalGL.jpg")
 	var snow_roughness: Texture2D = load("res://assets/textures/snow terrain/Snow002_4K_Roughness.jpg")
 	
-	# Mountain biome textures (rock terrain)
+	if not snow_albedo:
+		print("WorldGenerator: Failed to load snow albedo texture - using fallback")
+		snow_albedo = default_albedo
+	else:
+		print("WorldGenerator: Successfully loaded snow albedo texture")
+	
+	if not snow_normal:
+		print("WorldGenerator: Failed to load snow normal texture - using fallback")
+		snow_normal = default_normal
+	else:
+		print("WorldGenerator: Successfully loaded snow normal texture")
+	
+	if not snow_roughness:
+		print("WorldGenerator: Failed to load snow roughness texture - using fallback")
+		snow_roughness = default_roughness
+	else:
+		print("WorldGenerator: Successfully loaded snow roughness texture")
+	
+	# Mountain biome textures (rock terrain) - FIXED PATHS
 	var mountain_albedo: Texture2D = load("res://assets/textures/rock terrain/textures/rocks_ground_05_diff_4k.jpg")
 	var mountain_roughness: Texture2D = load("res://assets/textures/rock terrain/textures/rocks_ground_05_rough_4k.jpg")
 	
-	# Set shader parameters with fallback textures if loading fails
-	shader_material.set_shader_parameter("forest_albedo", forest_albedo if forest_albedo else default_albedo)
+	if not mountain_albedo:
+		print("WorldGenerator: Failed to load mountain albedo texture - using fallback")
+		mountain_albedo = default_albedo
+	else:
+		print("WorldGenerator: Successfully loaded mountain albedo texture")
+		
+	if not mountain_roughness:
+		print("WorldGenerator: Failed to load mountain roughness texture - using fallback")
+		mountain_roughness = default_roughness
+	else:
+		print("WorldGenerator: Successfully loaded mountain roughness texture")
+	
+	# Set shader parameters with proper fallback handling
+	shader_material.set_shader_parameter("forest_albedo", forest_albedo)
 	shader_material.set_shader_parameter("forest_normal", default_normal)  # Use default for now
 	shader_material.set_shader_parameter("forest_roughness", default_roughness)  # Use default for now
 	
-	shader_material.set_shader_parameter("autumn_albedo", autumn_albedo if autumn_albedo else default_albedo)
+	shader_material.set_shader_parameter("autumn_albedo", autumn_albedo)
 	shader_material.set_shader_parameter("autumn_normal", default_normal)  # Use default for now
 	shader_material.set_shader_parameter("autumn_roughness", default_roughness)  # Use default for now
 	
-	shader_material.set_shader_parameter("snow_albedo", snow_albedo if snow_albedo else default_albedo)
-	shader_material.set_shader_parameter("snow_normal", snow_normal if snow_normal else default_normal)
-	shader_material.set_shader_parameter("snow_roughness", snow_roughness if snow_roughness else default_roughness)
+	shader_material.set_shader_parameter("snow_albedo", snow_albedo)
+	shader_material.set_shader_parameter("snow_normal", snow_normal)
+	shader_material.set_shader_parameter("snow_roughness", snow_roughness)
 	
-	shader_material.set_shader_parameter("mountain_albedo", mountain_albedo if mountain_albedo else default_albedo)
+	shader_material.set_shader_parameter("mountain_albedo", mountain_albedo)
 	shader_material.set_shader_parameter("mountain_normal", default_normal)  # Use default for now
-	shader_material.set_shader_parameter("mountain_roughness", mountain_roughness if mountain_roughness else default_roughness)
+	shader_material.set_shader_parameter("mountain_roughness", mountain_roughness)
 	
 	# Set other shader parameters
 	shader_material.set_shader_parameter("texture_scale", 10.0)  # Reduced from 50.0 for smaller textures

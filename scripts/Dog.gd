@@ -97,6 +97,10 @@ func _ready() -> void:
 		# This is MY character. Enable my camera and capture my mouse.
 		camera.make_current()
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+		
+		# Register with PauseManager for pause functionality
+		if PauseManager:
+			PauseManager.register_player(self)
 	else:
 		# This is a networked copy of another player. Disable its camera.
 		camera.enabled = false
@@ -114,24 +118,32 @@ func _ready() -> void:
 	
 
 
+func _exit_tree() -> void:
+	"""Clean up when dog is removed from scene."""
+	# Unregister from PauseManager
+	if multiplayer and multiplayer.multiplayer_peer and is_multiplayer_authority() and PauseManager:
+		PauseManager.unregister_player(self)
+
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_multiplayer_authority():
+	# Check if multiplayer peer exists before checking authority
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 	if event is InputEventMouseMotion:
 		mouse_delta += event.relative
 
 
 func _input(event: InputEvent) -> void:
-	if not is_multiplayer_authority():
+	# Check if multiplayer peer exists before checking authority
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
-	if event.is_action_pressed("ui_cancel"):
-		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	# ESC key handling removed - let PauseManager handle pause menu functionality
+	# Mouse cursor will be freed when pause menu opens
 
 
 func _process(delta: float) -> void:
-	# Only process input for our own player
-	if not is_multiplayer_authority():
+	# Only process input for our own player - check if multiplayer peer exists first
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 		
 	# Handle mouse look
@@ -193,8 +205,8 @@ func _process(delta: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	# Only process input for our own player
-	if not is_multiplayer_authority():
+	# Only process input for our own player - check if multiplayer peer exists first
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 	
 	# Add the gravity

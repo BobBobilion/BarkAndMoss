@@ -1,351 +1,416 @@
 class_name ChunkManager
 extends Node
 
-# --- Signals ---
-signal chunk_loaded(chunk_pos: Vector2i)
-signal chunk_unloaded(chunk_pos: Vector2i)
-signal all_chunks_ready()
-
-# --- Constants ---
-# Loading distances (in chunks)
-const LOAD_DISTANCE_HIGH: int = 3      # Full detail radius
-const LOAD_DISTANCE_MEDIUM: int = 5    # Reduced detail radius
-const LOAD_DISTANCE_LOW: int = 7       # Terrain only radius
-const UNLOAD_DISTANCE: int = 9         # Beyond this, unload
-const PREDICTIVE_LOAD_DISTANCE: int = 2  # Extra chunks in movement direction
-
-# Performance settings
-const MAX_CHUNKS_PER_FRAME: int = 2    # Max chunks to process per frame
-const CHUNK_UPDATE_INTERVAL: float = 0.1  # How often to check chunk states
-
 # --- Properties ---
-var active_chunks: Dictionary = {}      # Vector2i -> Chunk
-var chunk_generation_queue: Array[Vector2i] = []
-var chunk_loading_queue: Array[Vector2i] = []
-var chunk_unloading_queue: Array[Vector2i] = []
+var active_chunks: Dictionary = {} # { Vector2i: Chunk }
+var world_node: Node3D
+var chunk_generator: ChunkGenerator
+var player_tracker: PlayerTracker
 
-# Components (will be created as children)
-var chunk_generator: ChunkGenerator = null
-var chunk_loader: ChunkLoader = null
-var player_tracker: PlayerTracker = null
-var chunk_pool: ChunkPool = null
+# Cached terrain material for all chunks
+var cached_terrain_material: ShaderMaterial = null
 
-# Performance tracking
-var chunks_generated_count: int = 0
-var chunks_loaded_count: int = 0
-var update_timer: float = 0.0
+# Preload textures at compile time for better reliability
+const FOREST_ALBEDO_PATH = "res://assets/textures/grass terrain/textures/rocky_terrain_02_diff_4k.jpg"
+const AUTUMN_ALBEDO_PATH = "res://assets/textures/leaves terrain/textures/leaves_forest_ground_diff_4k.jpg"  
+const SNOW_ALBEDO_PATH = "res://assets/textures/snow terrain/Snow002_4K_Color.jpg"
+const SNOW_NORMAL_PATH = "res://assets/textures/snow terrain/Snow002_4K_NormalGL.jpg"
+const SNOW_ROUGHNESS_PATH = "res://assets/textures/snow terrain/Snow002_4K_Roughness.jpg"
+const MOUNTAIN_ALBEDO_PATH = "res://assets/textures/rock terrain/textures/rocks_ground_05_diff_4k.jpg"
+const MOUNTAIN_ROUGHNESS_PATH = "res://assets/textures/rock terrain/textures/rocks_ground_05_rough_4k.jpg"
 
-# Thread management
-var generation_thread: Thread = null
-var is_running: bool = true
-var generation_mutex: Mutex = Mutex.new()
-var generation_semaphore: Semaphore = Semaphore.new()
+var generation_threads: Array[Thread] = []
+var chunks_to_generate: Array[Vector2i] = []
+var generated_chunk_data: Dictionary = {}
 
-# World reference
-var world_node: Node3D = null
-
-# Chunk scene path
-const CHUNK_SCENE_PATH: String = "res://scenes/Chunk.tscn"
+var _mutex := Mutex.new()
+var _semaphore := Semaphore.new()
+var _is_running := true
 
 # --- Engine Callbacks ---
 func _ready() -> void:
-	"""Initialize the chunk manager and its subsystems."""
 	name = "ChunkManager"
-	
-	# Create subsystems
-	_create_subsystems()
-	
-	# Start background thread for chunk generation
-	generation_thread = Thread.new()
-	generation_thread.start(_generation_thread_func)
-	
-	print("ChunkManager: Initialized with chunk distances - High:%d, Medium:%d, Low:%d, Unload:%d" % 
-		[LOAD_DISTANCE_HIGH, LOAD_DISTANCE_MEDIUM, LOAD_DISTANCE_LOW, UNLOAD_DISTANCE])
+	_setup_subsystems()
+	_start_generation_threads()
 
 func _exit_tree() -> void:
-	"""Clean up threads and resources."""
-	is_running = false
-	generation_semaphore.post()  # Wake up thread to exit
-	if generation_thread:
-		generation_thread.wait_to_finish()
-
-func _process(delta: float) -> void:
-	"""Update chunk states and process queues."""
-	update_timer += delta
+	# Signal all threads to stop
+	_is_running = false
 	
-	if update_timer >= CHUNK_UPDATE_INTERVAL:
-		update_timer = 0.0
-		_update_chunks()
-		_process_loading_queue()
-		_process_unloading_queue()
+	# Wake up all threads by posting the semaphore once for each thread
+	# This ensures every thread can exit their wait loop
+	for i in range(generation_threads.size()):
+		_semaphore.post()
+	
+	# Now safely wait for all threads to finish
+	for thread in generation_threads:
+		thread.wait_to_finish()
+	
+	print("ChunkManager: All threads cleaned up successfully")
+
+func _process(_delta: float) -> void:
+	# Skip processing if shutting down
+	if not _is_running:
+		return
+	_process_generated_data()
 
 # --- Public Methods ---
-func initialize_world(world: Node3D) -> void:
-	"""Set the world node where chunks will be added."""
+func initialize(world: Node3D, seed: int) -> void:
 	world_node = world
-
-func request_chunk(chunk_pos: Vector2i, priority: float = 0.0) -> void:
-	"""Request a chunk to be loaded at the given position."""
-	# Check if chunk already exists
-	if active_chunks.has(chunk_pos):
-		var chunk: Chunk = active_chunks[chunk_pos]
-		chunk.add_reference()
-		return
-	
-	# Check if chunk data is already cached
-	if chunk_pool.has_chunk_data(chunk_pos):
-		# Data is ready, add directly to loading queue
-		generation_mutex.lock()
-		if not chunk_pos in chunk_loading_queue:
-			chunk_loading_queue.append(chunk_pos)
-		generation_mutex.unlock()
-		return
-	
-	# Add to generation queue if not already queued
-	generation_mutex.lock()
-	if not chunk_pos in chunk_generation_queue and not chunk_pos in chunk_loading_queue:
-		chunk_generation_queue.append(chunk_pos)
-		# Sort by priority (implement priority queue later)
-		generation_semaphore.post()  # Wake up generation thread
-	generation_mutex.unlock()
-
-func release_chunk(chunk_pos: Vector2i) -> void:
-	"""Release a reference to a chunk."""
-	if active_chunks.has(chunk_pos):
-		var chunk: Chunk = active_chunks[chunk_pos]
-		chunk.remove_reference()
-		
-		# Add to unload queue if no references
-		if chunk.should_unload() and not chunk_pos in chunk_unloading_queue:
-			chunk_unloading_queue.append(chunk_pos)
-
-func get_chunk_at_position(world_pos: Vector3) -> Chunk:
-	"""Get the chunk containing the given world position."""
-	var chunk_pos := world_to_chunk_position(world_pos)
-	return active_chunks.get(chunk_pos)
-
-func world_to_chunk_position(world_pos: Vector3) -> Vector2i:
-	"""Convert world position to chunk coordinates."""
-	return Vector2i(
-		int(floor(world_pos.x / Chunk.CHUNK_SIZE.x)),
-		int(floor(world_pos.z / Chunk.CHUNK_SIZE.y))
-	)
+	chunk_generator.initialize(seed)
 
 func get_height_at_position(world_pos: Vector3) -> float:
-	"""Get terrain height at any world position."""
-	var chunk := get_chunk_at_position(world_pos)
-	if chunk and chunk.current_state == Chunk.ChunkState.LOADED:
-		return chunk.get_height_at_position(world_pos)
-	
-	# Fallback to procedural generation for unloaded chunks
+	"""Get terrain height at a position using the chunk generator."""
 	if chunk_generator:
-		return chunk_generator.get_height_at_position(world_pos)
-	
+		return chunk_generator.biome_manager.get_terrain_height_at_position(world_pos)
 	return 0.0
 
-func update_player_position(player_id: int, position: Vector3) -> void:
-	"""Update a player's position for chunk loading."""
+func get_terrain_material() -> ShaderMaterial:
+	"""Get the cached terrain material for chunks, creating it if needed."""
+	if not cached_terrain_material:
+		_create_terrain_material()
+	return cached_terrain_material
+
+
+func cleanup() -> void:
+	"""Clean up the chunk manager when returning to main menu."""
+	print("ChunkManager: Starting cleanup...")
+	
+	# Stop all processing
+	_is_running = false
+	
+	# Wake up all threads so they can exit
+	for i in range(generation_threads.size()):
+		_semaphore.post()
+	
+	# Clear all chunk tracking
+	_mutex.lock()
+	chunks_to_generate.clear()
+	generated_chunk_data.clear()
+	_mutex.unlock()
+	
+	# Remove all active chunks
+	for chunk_pos in active_chunks.keys():
+		var chunk = active_chunks[chunk_pos]
+		if is_instance_valid(chunk):
+			chunk.queue_free()
+	active_chunks.clear()
+	
+	# Clear player tracking if player_tracker exists
 	if player_tracker:
-		player_tracker.update_player_position(player_id, position)
-
-func get_loaded_chunk_count() -> int:
-	"""Get the number of currently loaded chunks."""
-	return active_chunks.size()
-
-func get_generation_queue_size() -> int:
-	"""Get the number of chunks waiting to be generated."""
-	generation_mutex.lock()
-	var size := chunk_generation_queue.size()
-	generation_mutex.unlock()
-	return size
+		player_tracker.clear_all_players()
+	
+	print("ChunkManager: Cleanup complete")
 
 # --- Private Methods ---
-func _create_subsystems() -> void:
-	"""Create and initialize subsystem nodes."""
-	# Create chunk generator
+func _setup_subsystems() -> void:
 	chunk_generator = ChunkGenerator.new()
-	chunk_generator.name = "ChunkGenerator"
 	add_child(chunk_generator)
 	
-	# Create chunk loader
-	chunk_loader = ChunkLoader.new()
-	chunk_loader.name = "ChunkLoader"
-	chunk_loader.chunk_manager = self
-	add_child(chunk_loader)
-	
-	# Create player tracker
 	player_tracker = PlayerTracker.new()
-	player_tracker.name = "PlayerTracker"
-	player_tracker.chunk_manager = self
+	player_tracker.required_chunks_changed.connect(_on_required_chunks_changed)
 	add_child(player_tracker)
-	
-	# Create chunk pool
-	chunk_pool = ChunkPool.new()
-	chunk_pool.name = "ChunkPool"
-	add_child(chunk_pool)
 
-func _update_chunks() -> void:
-	"""Update chunk states based on player positions."""
-	if not player_tracker:
-		return
-	
-	var required_chunks := player_tracker.get_required_chunks()
-	
-	# Request new chunks
-	for chunk_data in required_chunks:
-		var chunk_pos: Vector2i = chunk_data["position"]
-		var priority: float = chunk_data["priority"]
-		var lod: Chunk.LODLevel = chunk_data["lod"]
+func _start_generation_threads() -> void:
+	var thread_count = OS.get_processor_count() - 1
+	for i in range(thread_count):
+		var thread := Thread.new()
+		thread.start(_generation_thread_loop)
+		generation_threads.append(thread)
+
+func _generation_thread_loop() -> void:
+	while _is_running:
+		_semaphore.wait()
+		if not _is_running:
+			return
+			
+		_mutex.lock()
+		if chunks_to_generate.is_empty():
+			_mutex.unlock()
+			continue
+		var chunk_pos = chunks_to_generate.pop_front()
+		_mutex.unlock()
 		
+		var data = chunk_generator.generate_chunk_data(chunk_pos)
+		
+		_mutex.lock()
+		generated_chunk_data[chunk_pos] = data
+		_mutex.unlock()
+
+func _process_generated_data() -> void:
+	_mutex.lock()
+	if generated_chunk_data.is_empty():
+		_mutex.unlock()
+		return
+	var data_copy = generated_chunk_data.duplicate()
+	generated_chunk_data.clear()
+	_mutex.unlock()
+	
+	print("ChunkManager: Processing ", data_copy.size(), " generated chunks")
+	
+	for chunk_pos in data_copy:
 		if active_chunks.has(chunk_pos):
-			# Update LOD if needed
-			var chunk: Chunk = active_chunks[chunk_pos]
-			chunk.update_lod(lod)
+			var chunk = active_chunks[chunk_pos]
+			print("ChunkManager: Loading data for chunk at ", chunk_pos)
+			chunk.load_data(data_copy[chunk_pos])
 		else:
-			# Request new chunk
-			request_chunk(chunk_pos, priority)
+			print("ChunkManager: Warning - no active chunk for generated data at ", chunk_pos)
+
+func _on_required_chunks_changed(required_chunks: Dictionary) -> void:
+	# Skip processing if chunk manager is being cleaned up
+	if not _is_running:
+		return
 	
-	# Check for chunks to unload
-	for chunk_pos in active_chunks.keys():
-		if not _is_chunk_required(chunk_pos, required_chunks):
-			release_chunk(chunk_pos)
-
-func _is_chunk_required(chunk_pos: Vector2i, required_chunks: Array) -> bool:
-	"""Check if a chunk position is in the required chunks list."""
-	for chunk_data in required_chunks:
-		if chunk_data["position"] == chunk_pos:
-			return true
-	return false
-
-func _generation_thread_func() -> void:
-	"""Background thread function for chunk generation."""
-	while is_running:
-		generation_semaphore.wait()  # Wait for work
-		
-		if not is_running:
-			break
-		
-		# Get next chunk to generate
-		generation_mutex.lock()
-		if chunk_generation_queue.size() > 0:
-			var chunk_pos: Vector2i = chunk_generation_queue.pop_front()
-			generation_mutex.unlock()
+	# Unload old chunks
+	for chunk_pos in active_chunks:
+		if not required_chunks.has(chunk_pos):
+			var chunk = active_chunks[chunk_pos]
+			if is_instance_valid(chunk) and not chunk.is_queued_for_deletion():
+				chunk.unload()
+			active_chunks.erase(chunk_pos)
 			
-			# Generate chunk data
-			var chunk_data := chunk_generator.generate_chunk(chunk_pos)
-			
-			# Add to loading queue (main thread will handle instantiation)
-			generation_mutex.lock()
-			chunk_loading_queue.append(chunk_pos)
-			# Store generated data temporarily
-			chunk_pool.store_chunk_data(chunk_pos, chunk_data)
-			generation_mutex.unlock()
+	# Load new chunks and update LOD
+	for chunk_pos in required_chunks:
+		if active_chunks.has(chunk_pos):
+			var chunk = active_chunks[chunk_pos]
+			# Check if chunk is still valid before calling methods on it
+			if is_instance_valid(chunk) and not chunk.is_queued_for_deletion():
+				chunk.set_lod(required_chunks[chunk_pos])
+			else:
+				# Chunk was freed, remove from tracking
+				active_chunks.erase(chunk_pos)
 		else:
-			generation_mutex.unlock()
+			# Ensure material is created before adding chunks
+			if not cached_terrain_material:
+				_create_terrain_material()
+			
+			var new_chunk := Chunk.new()
+			new_chunk.initialize(chunk_pos)
+			# Pass the terrain material directly to the chunk
+			new_chunk.set("_terrain_material", cached_terrain_material)
+			active_chunks[chunk_pos] = new_chunk
+			world_node.add_child(new_chunk)
+			
+			_mutex.lock()
+			chunks_to_generate.push_back(chunk_pos)
+			_mutex.unlock()
+			_semaphore.post()
 
-func _process_loading_queue() -> void:
-	"""Process chunks waiting to be loaded into the scene."""
-	var chunks_processed: int = 0
-	
-	generation_mutex.lock()
-	while chunk_loading_queue.size() > 0 and chunks_processed < MAX_CHUNKS_PER_FRAME:
-		var chunk_pos: Vector2i = chunk_loading_queue.pop_front()
-		generation_mutex.unlock()
-		
-		_load_chunk(chunk_pos)
-		chunks_processed += 1
-		
-		generation_mutex.lock()
-	generation_mutex.unlock()
-
-func _load_chunk(chunk_pos: Vector2i) -> void:
-	"""Load a chunk into the scene."""
-	if active_chunks.has(chunk_pos):
-		return  # Already loaded
-	
-	# Get chunk data from pool
-	var chunk_data = chunk_pool.get_chunk_data(chunk_pos)
-	if not chunk_data or chunk_data.is_empty():
-		# Data not ready yet, put it back in the loading queue
-		generation_mutex.lock()
-		if not chunk_pos in chunk_loading_queue:
-			chunk_loading_queue.push_back(chunk_pos)
-		generation_mutex.unlock()
+func _create_terrain_material() -> void:
+	"""Create the terrain blend material using the same logic as WorldGenerator."""
+	if not chunk_generator or not chunk_generator.biome_manager:
+		print("ChunkManager: Cannot create terrain material - chunk generator not ready")
 		return
 	
-	# Create chunk instance
-	var chunk := Chunk.new()
-	chunk.initialize(chunk_pos)
+	# First, let's create a simple colored material for testing
+	var use_simple_material = false  # Changed back to false to use textures
 	
-	# Set generated data
-	chunk.set_terrain_data(chunk_data["terrain"])
-	chunk.set_object_data(chunk_data["objects"])
-	
-	# Create visual elements
-	chunk.create_terrain_mesh()
-	chunk.create_terrain_collision()
-	
-	# Apply terrain material
-	if chunk_loader:
-		chunk_loader.apply_terrain_material(chunk)
-	
-	# Add to world
-	if world_node:
-		world_node.add_child(chunk)
-	
-	# Store in active chunks
-	active_chunks[chunk_pos] = chunk
-	chunk.current_state = Chunk.ChunkState.LOADED
-	
-	# Initial LOD based on nearest player
-	var lod := _calculate_chunk_lod(chunk_pos)
-	chunk.update_lod(lod)
-	
-	# Instantiate objects through ChunkLoader
-	if chunk_loader:
-		chunk_loader.instantiate_chunk_objects(chunk)
-	
-	chunks_loaded_count += 1
-	chunk_loaded.emit(chunk_pos)
-
-func _process_unloading_queue() -> void:
-	"""Process chunks waiting to be unloaded."""
-	var chunks_processed: int = 0
-	
-	while chunk_unloading_queue.size() > 0 and chunks_processed < MAX_CHUNKS_PER_FRAME:
-		var chunk_pos: Vector2i = chunk_unloading_queue.pop_front()
-		_unload_chunk(chunk_pos)
-		chunks_processed += 1
-
-func _unload_chunk(chunk_pos: Vector2i) -> void:
-	"""Unload a chunk from the scene."""
-	if not active_chunks.has(chunk_pos):
+	if use_simple_material:
+		_create_simple_biome_material()
 		return
 	
-	var chunk: Chunk = active_chunks[chunk_pos]
+	# Create a shader material using our custom terrain blending shader
+	cached_terrain_material = ShaderMaterial.new()
+	var terrain_shader: Shader = load("res://shaders/terrain_blend.gdshader")
 	
-	# Only unload if truly not needed
-	if not chunk.should_unload():
+	if not terrain_shader:
+		push_error("ChunkManager: Failed to load terrain blend shader! Using simple material instead.")
+		_create_simple_biome_material()
 		return
 	
-	# Remove from scene
-	chunk.queue_free()
-	active_chunks.erase(chunk_pos)
+	print("ChunkManager: Successfully loaded terrain blend shader")
+	cached_terrain_material.shader = terrain_shader
 	
-	chunk_unloaded.emit(chunk_pos)
-
-func _calculate_chunk_lod(chunk_pos: Vector2i) -> Chunk.LODLevel:
-	"""Calculate appropriate LOD level for a chunk based on player distances."""
-	if not player_tracker:
-		return Chunk.LODLevel.LOW
+	# Create default textures for fallback
+	var default_albedo: ImageTexture = _create_default_texture(Color(0.5, 0.5, 0.5))
+	var default_normal: ImageTexture = _create_default_normal_texture()
+	var default_roughness: ImageTexture = _create_default_texture(Color(0.5, 0.5, 0.5))
 	
-	var min_distance := player_tracker.get_min_distance_to_chunk(chunk_pos)
+	# Create test textures with distinct colors
+	var test_forest: ImageTexture = _create_solid_color_texture(Color(0.2, 0.8, 0.2))  # Green
+	var test_autumn: ImageTexture = _create_solid_color_texture(Color(0.8, 0.4, 0.1))  # Orange
+	var test_snow: ImageTexture = _create_solid_color_texture(Color(0.9, 0.9, 0.95))  # White
+	var test_mountain: ImageTexture = _create_solid_color_texture(Color(0.5, 0.45, 0.4)) # Grey
 	
-	if min_distance <= LOAD_DISTANCE_HIGH:
-		return Chunk.LODLevel.HIGH
-	elif min_distance <= LOAD_DISTANCE_MEDIUM:
-		return Chunk.LODLevel.MEDIUM
-	elif min_distance <= LOAD_DISTANCE_LOW:
-		return Chunk.LODLevel.LOW
+	# Load and assign textures for each biome - SAME PATHS AS WORLDGENERATOR
+	# Forest biome textures (grass terrain)
+	var forest_albedo: Texture2D = ResourceLoader.load(FOREST_ALBEDO_PATH, "Texture2D")
+	if not forest_albedo:
+		print("ChunkManager: Failed to load forest albedo texture - using fallback")
+		forest_albedo = default_albedo
 	else:
-		return Chunk.LODLevel.UNLOADED 
+		print("ChunkManager: Successfully loaded forest albedo texture")
+		var image = forest_albedo.get_image()
+		if image:
+			print("  Forest texture size: ", image.get_width(), "x", image.get_height())
+		else:
+			print("  WARNING: Forest texture has no image data!")
+	
+	# Autumn biome textures (leaves terrain)
+	var autumn_albedo: Texture2D = ResourceLoader.load(AUTUMN_ALBEDO_PATH, "Texture2D")
+	if not autumn_albedo:
+		print("ChunkManager: Failed to load autumn albedo texture - using fallback")
+		autumn_albedo = default_albedo
+	else:
+		print("ChunkManager: Successfully loaded autumn albedo texture")
+		var image = autumn_albedo.get_image()
+		if image:
+			print("  Autumn texture size: ", image.get_width(), "x", image.get_height())
+		else:
+			print("  WARNING: Autumn texture has no image data!")
+	
+	# Snow biome textures
+	var snow_albedo: Texture2D = ResourceLoader.load(SNOW_ALBEDO_PATH, "Texture2D")
+	var snow_normal: Texture2D = ResourceLoader.load(SNOW_NORMAL_PATH, "Texture2D")
+	var snow_roughness: Texture2D = ResourceLoader.load(SNOW_ROUGHNESS_PATH, "Texture2D")
+	
+	if not snow_albedo:
+		print("ChunkManager: Failed to load snow albedo texture - using fallback")
+		snow_albedo = default_albedo
+	else:
+		print("ChunkManager: Successfully loaded snow albedo texture")
+	
+	if not snow_normal:
+		print("ChunkManager: Failed to load snow normal texture - using fallback")
+		snow_normal = default_normal
+	else:
+		print("ChunkManager: Successfully loaded snow normal texture")
+	
+	if not snow_roughness:
+		print("ChunkManager: Failed to load snow roughness texture - using fallback")
+		snow_roughness = default_roughness
+	else:
+		print("ChunkManager: Successfully loaded snow roughness texture")
+	
+	# Mountain biome textures (rock terrain)
+	var mountain_albedo: Texture2D = ResourceLoader.load(MOUNTAIN_ALBEDO_PATH, "Texture2D")
+	var mountain_roughness: Texture2D = ResourceLoader.load(MOUNTAIN_ROUGHNESS_PATH, "Texture2D")
+	
+	if not mountain_albedo:
+		print("ChunkManager: Failed to load mountain albedo texture - using fallback")
+		mountain_albedo = default_albedo
+	else:
+		print("ChunkManager: Successfully loaded mountain albedo texture")
+		
+	if not mountain_roughness:
+		print("ChunkManager: Failed to load mountain roughness texture - using fallback")
+		mountain_roughness = default_roughness
+	else:
+		print("ChunkManager: Successfully loaded mountain roughness texture")
+	
+	# Set shader parameters
+	cached_terrain_material.set_shader_parameter("forest_albedo", forest_albedo)
+	cached_terrain_material.set_shader_parameter("forest_normal", default_normal)
+	cached_terrain_material.set_shader_parameter("forest_roughness", default_roughness)
+	
+	cached_terrain_material.set_shader_parameter("autumn_albedo", autumn_albedo)
+	cached_terrain_material.set_shader_parameter("autumn_normal", default_normal)
+	cached_terrain_material.set_shader_parameter("autumn_roughness", default_roughness)
+	
+	cached_terrain_material.set_shader_parameter("snow_albedo", snow_albedo)
+	cached_terrain_material.set_shader_parameter("snow_normal", snow_normal)
+	cached_terrain_material.set_shader_parameter("snow_roughness", snow_roughness)
+	
+	cached_terrain_material.set_shader_parameter("mountain_albedo", mountain_albedo)
+	cached_terrain_material.set_shader_parameter("mountain_normal", default_normal)
+	cached_terrain_material.set_shader_parameter("mountain_roughness", mountain_roughness)
+	
+	# TEMPORARY: Override with test textures to verify shader works
+	var use_test_textures = false  # Changed to false to use real textures
+	if use_test_textures:
+		print("ChunkManager: Using test textures for debugging")
+		cached_terrain_material.set_shader_parameter("forest_albedo", test_forest)
+		cached_terrain_material.set_shader_parameter("autumn_albedo", test_autumn)
+		cached_terrain_material.set_shader_parameter("snow_albedo", test_snow)
+		cached_terrain_material.set_shader_parameter("mountain_albedo", test_mountain)
+	
+	# Set other shader parameters
+	cached_terrain_material.set_shader_parameter("texture_scale", 15.0)  # Tripled from 5.0 for even more detailed textures
+	cached_terrain_material.set_shader_parameter("autumn_texture_scale", 15.0)  # Tripled from 5.0
+	cached_terrain_material.set_shader_parameter("blend_sharpness", 2.0)
+	cached_terrain_material.set_shader_parameter("roughness_multiplier", 1.0)
+	cached_terrain_material.set_shader_parameter("normal_strength", 0.5)
+	
+	# Enable debug mode to test texture loading
+	cached_terrain_material.set_shader_parameter("debug_mode", 0.0)  # Changed to 0.0 to see blending
+	
+	print("ChunkManager: Created terrain blend material for chunks")
+	
+	# Debug: Verify shader parameters were set
+	print("ChunkManager: Verifying shader parameters:")
+	print("  forest_albedo: ", cached_terrain_material.get_shader_parameter("forest_albedo"))
+	print("  snow_albedo: ", cached_terrain_material.get_shader_parameter("snow_albedo"))
+	print("  texture_scale: ", cached_terrain_material.get_shader_parameter("texture_scale"))
+	print("  Shader resource: ", cached_terrain_material.shader)
+
+func _create_simple_biome_material() -> void:
+	"""Create a simple colored material that shows biomes using vertex colors."""
+	print("ChunkManager: Creating simple biome-colored material for testing")
+	
+	# Create a simple shader that uses vertex colors
+	var shader_code = """
+shader_type spatial;
+
+void vertex() {
+	// Pass vertex color to fragment shader
+	COLOR = COLOR;
+}
+
+void fragment() {
+	// Decode biome weights from vertex color
+	vec4 biome_weights = COLOR;
+	
+	// Define biome colors
+	vec3 forest_color = vec3(0.2, 0.6, 0.1);   // Green
+	vec3 autumn_color = vec3(0.8, 0.4, 0.1);   // Orange
+	vec3 snow_color = vec3(0.9, 0.9, 0.95);    // White
+	vec3 mountain_color = vec3(0.5, 0.45, 0.4); // Grey-brown
+	
+	// Blend colors based on weights
+	vec3 final_color = forest_color * biome_weights.r +
+					   autumn_color * biome_weights.g +
+					   snow_color * biome_weights.b +
+					   mountain_color * biome_weights.a;
+	
+	// Apply some basic shading
+	ALBEDO = final_color;
+	ROUGHNESS = 0.8;
+	METALLIC = 0.0;
+}
+"""
+	
+	var shader = Shader.new()
+	shader.code = shader_code
+	
+	cached_terrain_material = ShaderMaterial.new()
+	cached_terrain_material.shader = shader
+	
+	print("ChunkManager: Simple biome material created")
+
+func _create_default_texture(color: Color) -> ImageTexture:
+	"""Create a simple default texture with the given color."""
+	var image: Image = Image.create(64, 64, false, Image.FORMAT_RGB8)
+	
+	# Create a checkerboard pattern for debugging
+	for y in range(64):
+		for x in range(64):
+			var checker_color: Color
+			if (x / 8 + y / 8) % 2 == 0:
+				checker_color = color
+			else:
+				checker_color = color.darkened(0.3)
+			image.set_pixel(x, y, checker_color)
+	
+	return ImageTexture.create_from_image(image)
+
+func _create_default_normal_texture() -> ImageTexture:
+	"""Create a default normal map texture (neutral normal pointing up)."""
+	var image: Image = Image.create(4, 4, false, Image.FORMAT_RGB8)
+	image.fill(Color(0.5, 0.5, 1.0))  # Neutral normal map color
+	return ImageTexture.create_from_image(image)
+
+func _create_solid_color_texture(color: Color) -> ImageTexture:
+	"""Create a solid color texture for testing."""
+	var image: Image = Image.create(256, 256, false, Image.FORMAT_RGB8)
+	image.fill(color)
+	return ImageTexture.create_from_image(image) 

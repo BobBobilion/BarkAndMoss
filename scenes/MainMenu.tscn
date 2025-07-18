@@ -265,41 +265,6 @@ layout_mode = 2
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
 
-[node name="WorldSizeContainer" type="VBoxContainer" parent="CharacterSelectModal/VBoxContainer"]
-layout_mode = 2
-
-[node name="WorldSizeLabel" type="Label" parent="CharacterSelectModal/VBoxContainer/WorldSizeContainer"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.098, 0.145, 0.118, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 0
-theme_override_font_sizes/font_size = 18
-text = "World Size"
-horizontal_alignment = 1
-
-[node name="Spacer" type="Control" parent="CharacterSelectModal/VBoxContainer/WorldSizeContainer"]
-custom_minimum_size = Vector2(0, 10)
-layout_mode = 2
-
-[node name="WorldSizeButton" type="Button" parent="CharacterSelectModal/VBoxContainer/WorldSizeContainer"]
-custom_minimum_size = Vector2(200, 40)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 16
-text = "5x (Large)"
-
-[node name="WorldSizeDescription" type="Label" parent="CharacterSelectModal/VBoxContainer/WorldSizeContainer"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.204, 0.306, 0.255, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0)
-theme_override_constants/shadow_offset_x = 0
-theme_override_constants/shadow_offset_y = 0
-theme_override_font_sizes/font_size = 12
-text = "Larger worlds have more trees, animals, and resources to explore."
-horizontal_alignment = 1
-autowrap_mode = 2
-
 [node name="Spacer6" type="Control" parent="CharacterSelectModal/VBoxContainer"]
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
@@ -421,6 +386,27 @@ custom_minimum_size = Vector2(0, 35)
 layout_mode = 2
 value = 75.0
 
+[node name="Spacer3" type="Control" parent="SettingsModal/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="RenderLabel" type="Label" parent="SettingsModal/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 0
+theme_override_font_sizes/font_size = 22
+text = "Render Distance"
+
+[node name="RenderSlider" type="HSlider" parent="SettingsModal/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 45)
+layout_mode = 2
+min_value = 2.0
+max_value = 8.0
+step = 1.0
+value = 3.0
+
 [node name="Spacer2" type="Control" parent="SettingsModal/MarginContainer/VBoxContainer"]
 custom_minimum_size = Vector2(0, 35)
 layout_mode = 2
@@ -443,7 +429,6 @@ text = "Close"
 [connection signal="pressed" from="JoinModal/VBoxContainer/HBoxContainer/ConnectButton" to="." method="_on_connect_pressed"]
 [connection signal="gui_input" from="CharacterSelectModal/VBoxContainer/CharacterContainer/BarkPanel" to="." method="_on_bark_panel_clicked"]
 [connection signal="gui_input" from="CharacterSelectModal/VBoxContainer/CharacterContainer/MossPanel" to="." method="_on_moss_panel_clicked"]
-[connection signal="pressed" from="CharacterSelectModal/VBoxContainer/WorldSizeContainer/WorldSizeButton" to="." method="_on_world_size_pressed"]
 [connection signal="pressed" from="CharacterSelectModal/VBoxContainer/PlayButton" to="." method="_on_play_character_pressed"]
 [connection signal="pressed" from="CharacterSelectModal/VBoxContainer/BackButton" to="." method="_on_character_back_pressed"]
 [connection signal="pressed" from="SettingsModal/MarginContainer/VBoxContainer/HBoxContainer/CloseButton" to="." method="_on_settings_close_pressed"]
