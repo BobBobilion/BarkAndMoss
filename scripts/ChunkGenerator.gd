@@ -98,7 +98,8 @@ func _generate_objects(chunk_pos: Vector2i, terrain_data) -> Dictionary:
 			if not tree_assets.is_empty():
 				var world_constants := GameConstants.get_world_constants()
 				objects.trees.append({
-					"mesh_path": tree_assets[randi() % tree_assets.size()],
+					"scene_path": "res://scenes/Tree.tscn",  # Use Tree scene instead of mesh path
+					"mesh_path": tree_assets[randi() % tree_assets.size()],  # Store mesh for visuals
 					"position": local_pos,
 					"rotation": randf() * TAU,
 					"scale": world_constants.TREE_BASE_SCALE * randf_range(world_constants.TREE_MIN_SCALE, world_constants.TREE_MAX_SCALE)

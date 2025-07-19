@@ -25,6 +25,9 @@ func _ready() -> void:
 	# Set process mode to always so menu works when game is paused
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	
+	# Add to group for cleanup purposes
+	add_to_group("campfire_menu")
+	
 	# Start hidden
 	visible = false
 	is_open = false
@@ -117,9 +120,14 @@ func _create_recipe_slot(recipe_name: String, recipe_data: Dictionary, is_crafti
 	var vbox: VBoxContainer = VBoxContainer.new()
 	recipe_container.add_child(vbox)
 	
-	# Recipe name
+	# Recipe name with quantity if more than 1
 	var name_label: Label = Label.new()
-	name_label.text = recipe_data.get("name", recipe_name)
+	var display_name: String = recipe_data.get("name", recipe_name)
+	if is_crafting and recipe_data.has("quantity"):
+		var quantity: int = recipe_data.get("quantity", 1)
+		if quantity > 1:
+			display_name += " (x%d)" % quantity
+	name_label.text = display_name
 	name_label.add_theme_font_size_override("font_size", 18)
 	vbox.add_child(name_label)
 	
@@ -261,11 +269,19 @@ func _on_craft_button_pressed(recipe_name: String) -> void:
 		var required_count: int = materials[material_name]
 		player_inventory.remove_item_by_name(material_name, required_count)
 	
-	# Add crafted item to inventory
-	player_inventory.add_item(recipe_name, 1)
+	# Add crafted item to inventory (check for quantity field)
+	var quantity: int = recipe_data.get("quantity", 1)  # Default to 1 if no quantity specified
+	player_inventory.add_item(recipe_name, quantity)
+	
+	# Refresh hotbar if arrows were crafted to update bow arrow counter
+	if recipe_name == "Arrow":
+		_refresh_hotbar()
 	
 	# Play crafting sound/effect
-	print("CampfireMenu: Crafted %s!" % recipe_name)
+	if quantity > 1:
+		print("CampfireMenu: Crafted %d %s!" % [quantity, recipe_name])
+	else:
+		print("CampfireMenu: Crafted %s!" % recipe_name)
 	
 	# Emit signal
 	item_crafted.emit(recipe_name)
@@ -302,4 +318,13 @@ func _on_cook_button_pressed(input_item: String) -> void:
 func _on_background_input(event: InputEvent) -> void:
 	"""Handle clicks on background to close menu."""
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		close_menu() 
+		close_menu()
+
+
+func _refresh_hotbar() -> void:
+	"""Refresh hotbar visuals to update arrow counters."""
+	var hud := get_tree().get_first_node_in_group("hud")
+	if hud and hud.has_node("Hotbar"):
+		var hotbar := hud.get_node("Hotbar")
+		if hotbar and hotbar.has_method("refresh_visuals"):
+			hotbar.refresh_visuals() 

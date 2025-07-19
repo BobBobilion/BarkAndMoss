@@ -30,6 +30,9 @@ var selected_slot: int = 0
 # Changed to support quantities: Array of dictionaries with item_name and count
 var items: Array[Dictionary] = []
 
+# Player reference for accessing inventory (set by Player)
+var player: Node3D = null
+
 @onready var slot_container: HBoxContainer = $HotbarBackground/HBoxContainer
 
 # Add tooltip functionality (similar to inventory)
@@ -66,6 +69,14 @@ func _ready() -> void:
 	modulate = Color.WHITE  # Ensure it's not transparent
 	
 	select_slot(0) # Select the first slot by default
+	
+	# Set up periodic refresh timer for arrow count
+	var refresh_timer := Timer.new()
+	refresh_timer.wait_time = 1.0  # Refresh every second
+	refresh_timer.timeout.connect(_update_hotbar_visuals)
+	refresh_timer.autostart = true
+	add_child(refresh_timer)
+	
 	print("Hotbar: Ready! Created ", slots.size(), " slots with items: ", items)
 	print("Hotbar: Final visibility: ", visible, " modulate: ", modulate)
 	print("Hotbar: Slot container children: ", slot_container.get_child_count() if slot_container else "None")
@@ -184,6 +195,19 @@ func _create_slots() -> void:
 		count_label.visible = false  # Hidden by default
 		slot.add_child(count_label)
 		
+		# Add arrow count label for bow (bottom-right corner)
+		var arrow_count_label := Label.new()
+		arrow_count_label.name = "ArrowCountLabel"
+		arrow_count_label.text = ""
+		arrow_count_label.position = Vector2(slot_size.x - 20, slot_size.y - 16)  # Bottom-right
+		arrow_count_label.add_theme_font_size_override("font_size", FONT_SIZE_SLOT_NUMBER)
+		arrow_count_label.add_theme_color_override("font_color", Color.YELLOW)  # Yellow for arrows
+		arrow_count_label.add_theme_color_override("font_shadow_color", COLOR_TEXT_SHADOW)
+		arrow_count_label.add_theme_constant_override("shadow_offset_x", 1)
+		arrow_count_label.add_theme_constant_override("shadow_offset_y", 1)
+		arrow_count_label.visible = false  # Hidden by default
+		slot.add_child(arrow_count_label)
+		
 		# Add mouse event handlers for tooltip functionality
 		slot.mouse_entered.connect(_on_slot_mouse_entered.bind(i))
 		slot.mouse_exited.connect(_on_slot_mouse_exited)
@@ -213,6 +237,7 @@ func _update_hotbar_visuals() -> void:
 		var slot: Panel = slots[i]
 		var texture_rect: TextureRect = slot.get_child(0) as TextureRect
 		var count_label: Label = slot.get_node("CountLabel") as Label
+		var arrow_count_label: Label = slot.get_node("ArrowCountLabel") as Label
 		var style: StyleBoxFlat = slot.get_theme_stylebox("panel") as StyleBoxFlat
 		
 		# Show item icons using the centralized icon manager, or clear if slot is empty
@@ -228,9 +253,21 @@ func _update_hotbar_visuals() -> void:
 				count_label.visible = true
 			else:
 				count_label.visible = false
+			
+			# Show arrow count if item is bow
+			if item == "Bow":
+				var arrow_count: int = _get_arrow_count()
+				if arrow_count >= 0:  # Show even if 0 to indicate no arrows
+					arrow_count_label.text = str(arrow_count)
+					arrow_count_label.visible = true
+				else:
+					arrow_count_label.visible = false
+			else:
+				arrow_count_label.visible = false
 		else:
 			texture_rect.texture = null
 			count_label.visible = false
+			arrow_count_label.visible = false
 		
 		# Update selection highlight with enhanced rustic styling
 		if i == selected_slot:
@@ -362,3 +399,28 @@ func _clamp_tooltip_to_screen() -> void:
 		tooltip.global_position.x = 0
 	if tooltip_rect.position.y < 0:
 		tooltip.global_position.y = tooltip_rect.size.y + 10 
+
+
+func refresh_visuals() -> void:
+	"""Public method to refresh hotbar visuals - called when inventory changes."""
+	_update_hotbar_visuals()
+
+
+func set_player(p_player: Node3D) -> void:
+	"""Set the player reference for accessing inventory."""
+	player = p_player
+
+
+func _get_arrow_count() -> int:
+	"""Get the current arrow count from player inventory."""
+	if not player or not is_instance_valid(player):
+		return -1  # Invalid player
+	
+	if not player.has_method("get_inventory"):
+		return -1  # Player has no inventory method
+	
+	var inventory = player.get_inventory()
+	if not inventory or not inventory.has_method("get_item_count"):
+		return -1  # No valid inventory
+	
+	return inventory.get_item_count("Arrow") 

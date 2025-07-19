@@ -46,23 +46,31 @@ func _on_interacted(player: Node3D) -> void:
 
 
 func _process_corpse(human_player: Node3D) -> void:
-	"""Process the corpse to get meat (human with axe)."""
+	"""Process the corpse to get meat and feathers (human with axe)."""
 	# Check if the human has an axe equipped
 	if human_player.has_method("get_equipped_item") and human_player.get_equipped_item() == "Axe":
-		print("Processing bird corpse for meat")
+		print("Processing bird corpse for meat and feathers")
 		
 		# Play processing animation
 		if human_player.has_method("start_chopping_animation"):
 			human_player.start_chopping_animation()
 		
-		# Add raw meat to player's inventory
+		# Add raw meat and feathers to player's inventory
+		var success: bool = true
 		if human_player.has_method("add_item_to_inventory"):
-			if human_player.add_item_to_inventory("Raw Meat"):
-				print("Bird processed: gained Raw Meat")
-				# Remove the corpse after processing
-				queue_free()
-			else:
-				print("Inventory full - could not process corpse")
+			# Add raw meat
+			success = human_player.add_item_to_inventory("Raw Meat") and success
+			
+			# Add 2 feathers
+			for i in range(2):
+				success = human_player.add_item_to_inventory("Feather") and success
+		
+		if success:
+			print("Bird processed: gained Raw Meat and 2 Feathers")
+			# Remove the corpse after processing
+			queue_free()
+		else:
+			print("Inventory full - could not process corpse")
 	else:
 		print("Need an axe to process the corpse")
 

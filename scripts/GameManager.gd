@@ -12,7 +12,7 @@ signal game_ended()
 # --- Constants ---
 const PLAYER_SCENE_PATH: String = "res://scenes/Player.tscn"
 const DOG_SCENE_PATH: String = "res://scenes/Dog.tscn"
-const SPAWN_HEIGHT_OFFSET: float = 5.0  # Height above terrain to spawn players
+const SPAWN_HEIGHT_OFFSET: float = 10.0  # Increased from 5.0 to prevent falling through terrain
 
 # --- Properties ---
 var players: Dictionary = {}  # peer_id -> player_node
@@ -83,18 +83,78 @@ func spawn_initial_players() -> void:
 	print("GameManager: Initial players spawned.")
 
 func get_spawn_position() -> Vector3:
-	"""Get a valid spawn position near the origin."""
-	# Start at origin and find ground level
-	var spawn_pos := Vector3.ZERO
+	"""Get a safe spawn position near the campfire."""
+	# Try to find the campfire first
+	var campfire = _find_campfire()
+	if campfire:
+		# Use campfire's built-in spawn position method
+		var spawn_pos = campfire.get_spawn_position()
+		print("GameManager: Using campfire spawn position: ", spawn_pos)
+		return spawn_pos
 	
-	# Get terrain height from chunk manager
+	print("GameManager: Campfire not found, using fallback spawn calculation")
+	
+	# Fallback: spawn at new world spawn location (100, 0, 100) on terrain surface
+	var base_position = Vector3(100, 0, 100)  # Changed from (0, 0, 0) to (100, 0, 100)
 	if chunk_manager:
-		var height := chunk_manager.get_height_at_position(spawn_pos)
-		spawn_pos.y = height + SPAWN_HEIGHT_OFFSET
+		var terrain_height = chunk_manager.get_height_at_position(base_position)
+		print("GameManager: Terrain height at spawn location: ", terrain_height)
+		
+		# Validate terrain height before using it
+		if terrain_height < 0 or terrain_height > 500:
+			print("GameManager: WARNING - Suspicious terrain height (", terrain_height, "), using raycast")
+			
+			# Try raycast to find ground
+			var space_state: PhysicsDirectSpaceState3D = world_node.get_world_3d().direct_space_state
+			if space_state:
+				var from: Vector3 = Vector3(100, 1000, 100)  # Cast from very high
+				var to: Vector3 = Vector3(100, -100, 100)    # Cast down deep
+				var query = PhysicsRayQueryParameters3D.create(from, to)
+				query.collide_with_areas = false
+				query.collide_with_bodies = true
+				var result = space_state.intersect_ray(query)
+				
+				if result:
+					var ground_height = result.position.y
+					print("GameManager: Raycast found ground at: ", ground_height)
+					base_position.y = ground_height + SPAWN_HEIGHT_OFFSET
+					print("GameManager: Using raycast spawn position: ", base_position)
+					return base_position
+				else:
+					print("GameManager: Raycast found no ground! Using emergency position")
+					base_position = Vector3(100, 100, 100)  # High emergency position
+					print("GameManager: Using emergency spawn position: ", base_position)
+					return base_position
+		else:
+			# Terrain height seems reasonable
+			base_position.y = terrain_height + SPAWN_HEIGHT_OFFSET
+			print("GameManager: Using terrain-based spawn position: ", base_position, " (terrain: ", terrain_height, ")")
+			return base_position
 	else:
-		spawn_pos.y = SPAWN_HEIGHT_OFFSET
+		# Last resort: just use a high position at the new spawn coordinates
+		base_position = Vector3(100, 100, 100)  # Increased from 50 to 100 for safety
+		print("GameManager: Using emergency fallback spawn position (no chunk manager): ", base_position)
 	
-	return spawn_pos
+	return base_position
+
+
+func _find_campfire() -> Node:
+	"""Find the campfire in the world."""
+	# Look for campfire in the campfire group
+	var campfires = get_tree().get_nodes_in_group("campfire")
+	if not campfires.is_empty():
+		return campfires[0]
+	
+	# Fallback: search in Environment node
+	if world_node:
+		var environment = world_node.get_node_or_null("Environment")
+		if environment:
+			var campfire = environment.get_node_or_null("Campfire")
+			if campfire:
+				return campfire
+	
+	print("GameManager: WARNING - Campfire not found!")
+	return null
 
 func respawn_player(peer_id: int) -> void:
 	"""Respawn a player at a new position."""
@@ -148,8 +208,17 @@ func _spawn_player(peer_id: int) -> void:
 	# Set multiplayer authority
 	player.set_multiplayer_authority(peer_id)
 	
-	# Set spawn position
-	player.position = get_spawn_position()
+	# Set spawn position with character-specific adjustments
+	var base_spawn_pos = get_spawn_position() + Vector3(0, 5, 0)
+	
+	# Adjust spawn height for different character types due to different collision shapes
+	if character_type == "dog":
+		# Dog has lower collision box (0.29 units above origin) vs human (1.2+ units above origin)
+		# Add extra height to compensate for dog's lower collision shape
+		base_spawn_pos.y += 1.0  # Additional offset for dog to account for collision shape difference
+		print("GameManager: Adjusted dog spawn position by +1.0 for collision shape difference")
+	
+	player.position = base_spawn_pos
 	
 	# Add to world
 	if world_node:
@@ -310,6 +379,9 @@ func cleanup_game_state() -> void:
 	# Clear the players dictionary
 	players.clear()
 	
+	# Clean up campfire and its related UI
+	_cleanup_campfire()
+	
 	# Clean up world objects (trees, rocks, grass)
 	_cleanup_world_objects()
 	
@@ -336,6 +408,42 @@ func cleanup_game_state() -> void:
 	is_game_started = false
 	
 	print("GameManager: Game state cleaned up")
+
+
+func _cleanup_campfire() -> void:
+	"""Clean up campfire and its related UI instances."""
+	print("GameManager: Cleaning up campfire...")
+	
+	# Find and clean up any campfire instances
+	var all_campfires = get_tree().get_nodes_in_group("campfire")
+	for campfire in all_campfires:
+		if is_instance_valid(campfire):
+			print("GameManager: Removing campfire: ", campfire.name)
+			# Close any open campfire menus first
+			if campfire.has_method("close_menu"):
+				campfire.close_menu()
+			campfire.queue_free()
+	
+	# Also look for campfires in the Environment node as fallback
+	if world_node:
+		var environment = world_node.get_node_or_null("Environment")
+		if environment:
+			var campfire = environment.get_node_or_null("Campfire")
+			if campfire and is_instance_valid(campfire):
+				print("GameManager: Removing Environment campfire")
+				# Close any open campfire menus first
+				if campfire.has_method("close_menu"):
+					campfire.close_menu()
+				campfire.queue_free()
+	
+	# Clean up any campfire menu instances that might be floating around
+	var campfire_menus = get_tree().get_nodes_in_group("campfire_menu")
+	for menu in campfire_menus:
+		if is_instance_valid(menu):
+			print("GameManager: Removing campfire menu: ", menu.name)
+			menu.queue_free()
+	
+	print("GameManager: Campfire cleanup complete")
 
 
 func _cleanup_world_objects() -> void:

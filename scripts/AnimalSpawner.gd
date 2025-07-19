@@ -63,7 +63,7 @@ var animal_scenes: Dictionary = {
 }
 
 # --- Node References ---
-var world_generator: WorldGenerator
+var chunk_manager: ChunkManager
 var biome_manager: BiomeManagerClass
 var players: Array[Node3D] = []
 var spawn_parent: Node3D = null  # Parent node for spawned animals
@@ -80,22 +80,26 @@ func _ready() -> void:
 	# Add to group for cleanup purposes
 	add_to_group("animal_spawner")
 	
-	# Try to find the biome manager and spawn parent - they might not be ready yet during _ready()
+	# Try to find the biome manager, chunk manager, and spawn parent - they might not be ready yet during _ready()
 	_try_get_biome_manager()
+	_try_get_chunk_manager()
 	_find_spawn_parent()
 	
 	# Initialize timers
 	spawn_timer = SPAWN_CHECK_INTERVAL
 	despawn_timer = DESPAWN_CHECK_INTERVAL
-	
+
 
 func _process(delta: float) -> void:
 	"""Update the spawning and despawning systems."""
-	# Try to get biome manager and spawn parent if we don't have them yet
+	# Try to get biome manager, chunk manager, and spawn parent if we don't have them yet
 	if not biome_manager:
 		_try_get_biome_manager()
 		if not biome_manager:
 			return  # Can't spawn without biome manager
+	
+	if not chunk_manager:
+		_try_get_chunk_manager()
 	
 	if not spawn_parent:
 		_find_spawn_parent()
@@ -142,6 +146,8 @@ func _attempt_spawn_animals() -> void:
 	
 	# Update proximity tracking (cleanup already done in _process)
 	_update_proximity_tracking()
+	
+	var total_animals: int = _count_total_animals()
 	
 	# Try to spawn animals for each player's proximity area
 	for player in players:
@@ -224,8 +230,8 @@ func _find_valid_spawn_position(animal_type: String = "") -> Vector3:
 		# Check if position is valid (not too close to any player)
 		if _is_position_valid(spawn_position):
 			# Get terrain height at this position
-			if world_generator and world_generator.has_method("get_terrain_height_at_position"):
-				var terrain_height: float = world_generator.get_terrain_height_at_position(spawn_position)
+			if chunk_manager and chunk_manager.has_method("get_height_at_position"):
+				var terrain_height: float = chunk_manager.get_height_at_position(spawn_position)
 				
 				# Set appropriate height based on animal type
 				if animal_type == "bird":
@@ -235,11 +241,13 @@ func _find_valid_spawn_position(animal_type: String = "") -> Vector3:
 					# Ground animals spawn on terrain surface
 					spawn_position.y = terrain_height + TERRAIN_HEIGHT_OFFSET
 			else:
-				# Fallback heights
+				# Fallback heights - use player height as reference to avoid underground spawning
+				var fallback_height: float = _get_fallback_terrain_height(spawn_position)
+				
 				if animal_type == "bird":
-					spawn_position.y = 6.0  # Default flight height
+					spawn_position.y = fallback_height + randf_range(4.0, 8.0)  # Birds fly above fallback height
 				else:
-					spawn_position.y = 1.0  # Default ground height
+					spawn_position.y = fallback_height + TERRAIN_HEIGHT_OFFSET  # Ground animals on fallback surface
 			
 			return spawn_position
 	
@@ -590,8 +598,8 @@ func _find_valid_spawn_position_near_player(player: Node3D, animal_type: String 
 		# Check if position is valid (not too close to any player)
 		if _is_position_valid(spawn_position):
 			# Get terrain height at this position
-			if world_generator and world_generator.has_method("get_terrain_height_at_position"):
-				var terrain_height: float = world_generator.get_terrain_height_at_position(spawn_position)
+			if chunk_manager and chunk_manager.has_method("get_height_at_position"):
+				var terrain_height: float = chunk_manager.get_height_at_position(spawn_position)
 				
 				# Set appropriate height based on animal type
 				if animal_type == "bird":
@@ -601,11 +609,13 @@ func _find_valid_spawn_position_near_player(player: Node3D, animal_type: String 
 					# Ground animals spawn on terrain surface
 					spawn_position.y = terrain_height + TERRAIN_HEIGHT_OFFSET
 			else:
-				# Fallback heights
+				# Fallback heights - use player height as reference to avoid underground spawning
+				var fallback_height: float = _get_fallback_terrain_height(spawn_position)
+				
 				if animal_type == "bird":
-					spawn_position.y = 6.0  # Default flight height
+					spawn_position.y = fallback_height + randf_range(4.0, 8.0)  # Birds fly above fallback height
 				else:
-					spawn_position.y = 1.0  # Default ground height
+					spawn_position.y = fallback_height + TERRAIN_HEIGHT_OFFSET  # Ground animals on fallback surface
 			
 			return spawn_position
 	
@@ -661,18 +671,38 @@ func _check_for_despawns() -> void:
 				animal.queue_free()
 				animal_list.remove_at(i)
 
+
 func _try_get_biome_manager() -> void:
 	"""Try to get the biome manager from the game manager."""
 	var game_managers := get_tree().get_nodes_in_group("game_manager")
+	if game_managers.is_empty():
+		return
+	
+	var game_manager = game_managers[0]
+	if not game_manager.has_method("get_biome_manager"):
+		return
+	
+	biome_manager = game_manager.get_biome_manager()
+	# biome_manager can be null if chunk system not ready yet
+
+
+func _try_get_chunk_manager() -> void:
+	"""Try to get the chunk manager from the game manager."""
+	# First try to find it in the game manager
+	var game_managers := get_tree().get_nodes_in_group("game_manager")
 	if game_managers.size() > 0:
 		var game_manager = game_managers[0]
-		if game_manager.has_method("get_biome_manager"):
-			biome_manager = game_manager.get_biome_manager()
-			if biome_manager:
-				print("AnimalSpawner: Successfully found BiomeManager!")
-			else:
-				# Biome manager exists but returns null - chunk system not ready yet
-				pass
+		if "chunk_manager" in game_manager and game_manager.chunk_manager:
+			chunk_manager = game_manager.chunk_manager
+			return
+	
+	# Fallback: try to find ChunkManager directly in the scene tree
+	var all_nodes := get_tree().get_nodes_in_group("main")
+	for node in all_nodes:
+		if node.get_script() and node.get_script().get_global_name() == "ChunkManager":
+			chunk_manager = node
+			return
+
 
 func _find_spawn_parent() -> void:
 	"""Find a suitable parent node for spawning animals."""
@@ -680,7 +710,6 @@ func _find_spawn_parent() -> void:
 	var current_scene = get_tree().current_scene
 	if current_scene and current_scene is Node3D:
 		spawn_parent = current_scene as Node3D
-		print("AnimalSpawner: Using current_scene as spawn parent")
 		return
 	
 	# Fallback: try to find a Main node
@@ -688,45 +717,56 @@ func _find_spawn_parent() -> void:
 	if main_nodes.size() > 0:
 		spawn_parent = main_nodes[0] as Node3D
 		if spawn_parent:
-			print("AnimalSpawner: Using Main node as spawn parent")
 			return
 	
 	# Another fallback: use the parent of this AnimalSpawner
 	if get_parent() and get_parent() is Node3D:
 		spawn_parent = get_parent() as Node3D
-		print("AnimalSpawner: Using parent node as spawn parent")
 		return
 	
 	# Final fallback: use the current scene or create a fallback node
 	var fallback_scene = get_tree().current_scene
 	if fallback_scene and fallback_scene is Node3D:
 		spawn_parent = fallback_scene as Node3D
-		print("AnimalSpawner: Using current_scene as fallback spawn parent")
 	else:
 		# Last resort: create our own Node3D container
 		spawn_parent = Node3D.new()
 		spawn_parent.name = "AnimalContainer"
 		get_tree().current_scene.add_child(spawn_parent)
-		print("AnimalSpawner: Created new Node3D container as spawn parent")
 
 
 func _cleanup_invalid_players() -> void:
 	"""Remove invalid/destroyed players from tracking."""
 	for i in range(players.size() - 1, -1, -1):
 		if not is_instance_valid(players[i]) or players[i].is_queued_for_deletion():
-			print("AnimalSpawner: Removing invalid player reference")
 			players.remove_at(i)
 
 
 func clear_all_tracking() -> void:
 	"""Clear all animal and player tracking - used when returning to main menu."""
-	print("AnimalSpawner: Clearing all tracking data...")
-	
 	# Clear all animal tracking
 	current_animals.clear()
 	proximity_animals.clear()
 	
 	# Clear player tracking
 	players.clear()
+
+
+func _get_fallback_terrain_height(spawn_position: Vector3) -> float:
+	"""Get a fallback terrain height when world_generator is not available."""
+	# Strategy: Use the nearest player's Y position as a reference
+	var best_height: float = 5.0  # Conservative default height
+	var min_distance: float = INF
 	
-	print("AnimalSpawner: All tracking data cleared") 
+	for player in players:
+		if not is_instance_valid(player) or player.is_queued_for_deletion():
+			continue
+		
+		var distance: float = Vector2(spawn_position.x, spawn_position.z).distance_to(Vector2(player.global_position.x, player.global_position.z))
+		if distance < min_distance:
+			min_distance = distance
+			# Use the player's Y position as a base, but add some buffer for terrain variation
+			best_height = player.global_position.y + 2.0  # Add 2 meters buffer for terrain height differences
+	
+	# Ensure minimum height to avoid underground spawning
+	return max(best_height, 3.0)  # Never go below 3 meters height 

@@ -1,6 +1,14 @@
 class_name Player
 extends CharacterBody3D
 
+# --- Signals ---
+signal hunger_changed(new_hunger: int)
+
+# --- Player Stats ---
+@export var hunger: int = 100  # Max hunger is 100
+const MAX_HUNGER: int = 100
+const HUNGER_DECAY_RATE: float = 2.0  # Decay 1 hunger every 2 seconds
+
 # --- Script Preloads ---
 const MovementController = preload("res://scripts/components/movement_controller.gd")
 const CameraController = preload("res://scripts/components/camera_controller.gd")
@@ -15,12 +23,18 @@ const EquipmentController = preload("res://scripts/components/equipment_controll
 @onready var interaction_controller: InteractionController = $InteractionController
 @onready var equipment_controller: EquipmentController = $EquipmentController
 
-# --- Properties ---
+# --- Timers ---
+# Remove @onready since we create it manually in _ready()
+var hunger_decay_timer: Timer
+
+# --- State ---
 var hud_instance: Control
 var is_performing_action: bool = false
 var pending_interaction_target: Node = null
-var chop_timer: Timer
+var chop_timer: Timer = null
 var cached_closest_interactable: Node = null  # Cache the closest interactable
+
+# --- Engine Callbacks ---
 
 func _ready() -> void:
 	print("=== PLAYER READY STARTED ===")
@@ -28,6 +42,19 @@ func _ready() -> void:
 	print("Player: Scene file path: ", get_tree().current_scene.scene_file_path if get_tree().current_scene else "None")
 	print("Player: Multiplayer authority: ", is_multiplayer_authority())
 	print("Player: Has multiplayer peer: ", multiplayer.has_multiplayer_peer())
+	
+	# Set up hunger decay timer
+	hunger_decay_timer = Timer.new()
+	add_child(hunger_decay_timer)
+	hunger_decay_timer.wait_time = HUNGER_DECAY_RATE
+	hunger_decay_timer.timeout.connect(_on_hunger_decay)
+	hunger_decay_timer.autostart = true
+	print("Player: Hunger decay timer setup - wait_time: ", HUNGER_DECAY_RATE, " autostart: ", hunger_decay_timer.autostart)
+	print("Player: Timer started: ", hunger_decay_timer.is_stopped() == false)
+	
+	# Debug: Force start the timer explicitly to ensure it's running
+	hunger_decay_timer.start()
+	print("Player: Explicitly started hunger timer. Timer stopped?: ", hunger_decay_timer.is_stopped())
 	
 	# Wire up controller dependencies - using new camera hierarchy
 	var camera_node: Camera3D = $CameraRootOffset/HorizontalPivot/VerticalPivot/SpringArm3D/Camera3D
@@ -103,12 +130,21 @@ func _process(delta: float) -> void:
 	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 	camera_controller.process_camera(delta)
+	
+	# Debug: Check hunger timer status periodically
+	if int(Time.get_unix_time_from_system()) % 5 == 0 and Engine.get_process_frames() % 300 == 0:
+		print("Player: Debug - Hunger timer stopped?: ", hunger_decay_timer.is_stopped(), " Time left: ", hunger_decay_timer.time_left)
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Check if multiplayer peer exists before checking authority
 	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 	camera_controller._unhandled_input(event)
+	
+	# Debug: Test hunger decay manually with H key
+	if event is InputEventKey and event.pressed and event.keycode == KEY_H:
+		print("Player: Manual hunger decay test triggered!")
+		_on_hunger_decay()
 
 func handle_interaction() -> void:
 	# print("Player: Using InteractionController instance: ", interaction_controller.get_instance_id())  # Too spammy
@@ -233,33 +269,54 @@ func add_hud() -> void:
 	call_deferred("_add_test_items")
 
 func _connect_hotbar_signals() -> void:
-	"""Connect hotbar signals after the HUD is added to the scene tree."""
+	"""Connect hotbar and inventory signals after the HUD is added to the scene tree."""
 	print("Player: Connecting hotbar signals...")
 	if is_instance_valid(hud_instance) and hud_instance.has_node("Hotbar"):
 		var hotbar = hud_instance.get_node("Hotbar")
 		if hotbar and not hotbar.is_connected("selection_changed", equipment_controller.on_hotbar_selection_changed):
 			hotbar.connect("selection_changed", equipment_controller.on_hotbar_selection_changed)
 			print("Player: Hotbar signals connected successfully")
+			
+			# Set player reference in hotbar for arrow count display
+			if hotbar.has_method("set_player"):
+				hotbar.set_player(self)
+				print("Player: Set player reference in hotbar")
 		else:
 			print("Player: Error - Could not connect hotbar signals")
 	else:
 		print("Player: Error - HUD instance invalid or hotbar not found")
+	
+	# Connect inventory signals for food consumption
+	print("Player: Connecting inventory signals...")
+	if is_instance_valid(hud_instance) and hud_instance.has_node("Inventory"):
+		var inventory = hud_instance.get_node("Inventory")
+		if inventory and not inventory.is_connected("item_used", consume_food):
+			inventory.connect("item_used", consume_food)
+			print("Player: Inventory signals connected successfully")
+		else:
+			print("Player: Error - Could not connect inventory signals")
+	else:
+		print("Player: Error - Inventory not found in HUD")
+	
+	# Test hunger signal connection
+	call_deferred("test_hunger_signal")
 
 func _add_test_items() -> void:
 	if not OS.is_debug_build(): return
 	if is_instance_valid(hud_instance) and hud_instance.has_node("Inventory"):
 		var inventory: Node = hud_instance.get_node("Inventory")
 		if inventory.has_method("add_item"):
-			# Starting tools
-			inventory.add_item("Axe")  # Keep axe as starting tool
-			
 			# Starting crafting materials for bow
-			inventory.add_item("Wood", 3)
+			inventory.add_item("Wood", 2)
 			inventory.add_item("Hide", 3)
 			inventory.add_item("Sinew", 3)
 			
-			# Test items for cooking
+			# Add some feathers and arrows for testing bow
+			inventory.add_item("Feather", 1)
+			
+			# Test items for cooking and hunger testing
 			inventory.add_item("Raw Meat", 2)  # For testing cooking system
+			inventory.add_item("Cooked Meat", 3)  # For testing hunger system
 
 func add_item_to_inventory(item_name: String) -> bool:
 	if is_instance_valid(hud_instance) and hud_instance.has_node("Inventory"):
@@ -295,3 +352,55 @@ func _update_chunk_position() -> void:
 		var game_manager = game_managers[0]
 		if game_manager.has_method("update_player_chunk_position"):
 			game_manager.update_player_chunk_position(self)
+
+func _on_hunger_decay() -> void:
+	"""Handle hunger decay every 2 seconds."""
+	print("Player: _on_hunger_decay called! Current hunger: ", hunger)
+	
+	# Temporarily disable multiplayer check for debugging
+	# Only decay for authority player (in multiplayer)
+	#if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+	#	print("Player: Skipping hunger decay - not multiplayer authority")
+	#	return
+	
+	if hunger > 0:
+		hunger -= 1
+		hunger = max(0, hunger)  # Ensure hunger doesn't go below 0
+		hunger_changed.emit(hunger)
+		print("Player: Hunger decreased to: ", hunger, " - signal emitted")
+		
+		if hunger == 0:
+			print("Player: Hunger reached zero!")
+			# TODO: Implement starvation effects when hunger reaches 0
+	else:
+		print("Player: Hunger already at 0, no decay")
+
+
+func consume_food(food_name: String) -> void:
+	"""Handle food consumption and hunger restoration."""
+	if food_name == "Cooked Meat":
+		var old_hunger: int = hunger
+		hunger = min(MAX_HUNGER, hunger + 10)  # Restore 10 hunger, capped at 100
+		
+		if hunger != old_hunger:
+			hunger_changed.emit(hunger)
+			print("Player: Consumed cooked meat. Hunger: ", old_hunger, " -> ", hunger)
+
+
+func get_hunger() -> int:
+	"""Get current hunger level."""
+	return hunger
+
+
+func set_hunger(new_hunger: int) -> void:
+	"""Set hunger level (for multiplayer sync)."""
+	var old_hunger: int = hunger
+	hunger = clamp(new_hunger, 0, MAX_HUNGER)
+	if hunger != old_hunger:
+		hunger_changed.emit(hunger)
+
+func test_hunger_signal() -> void:
+	"""Test method to verify hunger signal is connected properly."""
+	print("Player: Testing hunger signal - current hunger: ", hunger)
+	hunger_changed.emit(hunger)
+	print("Player: Hunger signal emitted with value: ", hunger)

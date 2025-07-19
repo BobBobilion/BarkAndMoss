@@ -27,10 +27,15 @@ const CROSSHAIR_BORDER_WIDTH: int = 1
 @onready var hotbar: Control = $Hotbar
 @onready var inventory: Control = $Inventory
 
+# Hunger UI nodes (created programmatically)
+var hunger_bar: ProgressBar = null
+var hunger_label: Label = null
+
 # --- State ---
 var player: CharacterBody3D
 var current_interactable: Node = null
 var should_show_crosshair: bool = false  # Track if crosshair should be visible based on equipment
+var current_hunger: int = 100
 
 
 # --- Engine Callbacks ---
@@ -45,6 +50,7 @@ func _ready() -> void:
 	
 	# Initialize nodes
 	_setup_crosshair()
+	_setup_hunger_ui()
 	
 	# Ensure HUD renders on top of other UI elements
 	z_index = 100
@@ -116,6 +122,19 @@ func _find_player() -> void:
 			if not multiplayer.has_multiplayer_peer() or p.is_multiplayer_authority():
 				player = p
 				print("HUD: Assigned player = ", player.name)
+				
+				# Connect hunger signal
+				if player.has_signal("hunger_changed") and not player.is_connected("hunger_changed", update_hunger):
+					player.connect("hunger_changed", update_hunger)
+					print("HUD: Connected hunger signal successfully!")
+					# Initialize hunger display with current player hunger
+					if player.has_method("get_hunger"):
+						var initial_hunger = player.get_hunger()
+						print("HUD: Initial hunger value from player: ", initial_hunger)
+						update_hunger(initial_hunger)
+				else:
+					print("HUD: Failed to connect hunger signal - signal exists: ", player.has_signal("hunger_changed"), " already connected: ", player.is_connected("hunger_changed", update_hunger))
+				
 				return
 	print("HUD: No suitable player found!")
 
@@ -289,3 +308,91 @@ func reset_crosshair_to_default() -> void:
 	var style: StyleBoxFlat = crosshair.get_theme_stylebox("panel") as StyleBoxFlat
 	style.bg_color = CROSSHAIR_COLOR_DEFAULT
 	style.border_color = CROSSHAIR_BORDER_DEFAULT
+
+
+# --- Hunger System ---
+
+func update_hunger(hunger_value: int) -> void:
+	"""Update the hunger display with new value."""
+	print("HUD: update_hunger called with value: ", hunger_value)
+	current_hunger = clamp(hunger_value, 0, 100)
+	
+	if hunger_bar:
+		hunger_bar.value = current_hunger
+		print("HUD: Updated hunger bar to: ", current_hunger)
+		
+		# Change color based on hunger level
+		var style_box: StyleBoxFlat = hunger_bar.get_theme_stylebox("fill")
+		if style_box:
+			if current_hunger > 60:
+				style_box.bg_color = Color.GREEN
+			elif current_hunger > 30:
+				style_box.bg_color = Color.YELLOW
+			else:
+				style_box.bg_color = Color.RED
+	else:
+		print("HUD: Warning - hunger_bar is null!")
+	
+	if hunger_label:
+		hunger_label.text = "Hunger: %d" % current_hunger
+		print("HUD: Updated hunger label to: ", hunger_label.text)
+	else:
+		print("HUD: Warning - hunger_label is null!")
+	
+	print("HUD: Updated hunger display to ", current_hunger)
+
+
+func _setup_hunger_ui() -> void:
+	"""Initialize the hunger UI elements if they don't exist."""
+	# Always create hunger UI programmatically since it's not in the scene file
+	_create_hunger_ui()
+	
+	# Initialize with starting hunger value
+	update_hunger(current_hunger)
+
+
+func _create_hunger_ui() -> void:
+	"""Create hunger UI elements programmatically."""
+	# Create container for hunger UI
+	var hunger_container = VBoxContainer.new()
+	hunger_container.name = "HungerContainer"
+	hunger_container.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	hunger_container.position = Vector2(20, -80)  # Position near hotbar
+	add_child(hunger_container)
+	
+	# Create hunger label
+	var label = Label.new()
+	label.name = "HungerLabel"
+	label.text = "Hunger: 100"
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", Color.WHITE)
+	hunger_container.add_child(label)
+	hunger_label = label
+	
+	# Create hunger progress bar
+	var progress_bar = ProgressBar.new()
+	progress_bar.name = "HungerBar"
+	progress_bar.min_value = 0
+	progress_bar.max_value = 100
+	progress_bar.value = 100
+	progress_bar.custom_minimum_size = Vector2(120, 20)
+	progress_bar.show_percentage = false
+	
+	# Style the progress bar
+	var style_bg = StyleBoxFlat.new()
+	style_bg.bg_color = Color(0.2, 0.2, 0.2, 0.8)
+	style_bg.border_color = Color.BLACK
+	style_bg.border_width_left = 1
+	style_bg.border_width_right = 1
+	style_bg.border_width_top = 1
+	style_bg.border_width_bottom = 1
+	progress_bar.add_theme_stylebox_override("background", style_bg)
+	
+	var style_fill = StyleBoxFlat.new()
+	style_fill.bg_color = Color.GREEN
+	progress_bar.add_theme_stylebox_override("fill", style_fill)
+	
+	hunger_container.add_child(progress_bar)
+	hunger_bar = progress_bar
+	
+	print("HUD: Created hunger UI programmatically")

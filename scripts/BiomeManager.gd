@@ -33,15 +33,119 @@ class BiomeConfig:
 
 # --- Constants ---
 const BIOME_TRANSITION_DISTANCE: float = 5.0  # Reduced from 50.0 for extremely sharp transitions
-const NOISE_SCALE_ALTITUDE: float = 0.001      # Scale for altitude noise (further reduced for much larger mountain regions)
+const NOISE_SCALE_ALTITUDE: float = 0.002      # Scale for altitude noise (adjusted for Minecraft-like terrain)
 const NOISE_SCALE_TEMPERATURE: float = 0.0008  # Scale for temperature noise (further reduced for much larger temperature zones)
 const NOISE_SCALE_HUMIDITY: float = 0.001      # Scale for humidity noise (further reduced for much larger humidity zones)
-const MAX_MOUNTAIN_HEIGHT: float = 300.0       # Maximum mountain height - DRAMATICALLY INCREASED for towering peaks
-const BASE_TERRAIN_HEIGHT: float = 35.0        # Base terrain level - INCREASED for deeper/higher hills across all biomes
+const MAX_MOUNTAIN_HEIGHT: float = 200.0       # Reference height for terrain calculations - terrain can exceed this
+const BASE_TERRAIN_HEIGHT: float = 50.0        # Base terrain level - Standard rolling hills height
 
-# --- Biome Configuration Dictionary ---
-# Centralized configuration for all biome properties
-# Note: Using static var instead of const to allow runtime modification for debugging/tuning
+# --- Tree Asset Paths by Category ---
+const TREE_ASSETS_NORMAL: Array[String] = [
+	# BirchTree normal variants (1-5)
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_1.obj",
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_2.obj", 
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_3.obj",
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_4.obj",
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_5.obj",
+	# CommonTree normal variants (1-5)
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_1.obj",
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_2.obj",
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_3.obj", 
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_4.obj",
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_5.obj",
+	# PineTree normal variants (1-3)
+	"res://assets/trees/UltimatePack/OBJ/PineTree_1.obj",
+	"res://assets/trees/UltimatePack/OBJ/PineTree_2.obj",
+	"res://assets/trees/UltimatePack/OBJ/PineTree_3.obj"
+]
+
+const TREE_ASSETS_AUTUMN: Array[String] = [
+	# BirchTree autumn variants (1-5)
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_Autumn_1.obj",
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_Autumn_2.obj",
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_Autumn_3.obj", 
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_Autumn_4.obj",
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_Autumn_5.obj",
+	# CommonTree autumn variants (1-5)
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_Autumn_1.obj",
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_Autumn_2.obj",
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_Autumn_3.obj",
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_Autumn_4.obj", 
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_Autumn_5.obj",
+	# PineTree autumn variants (1-3)
+	"res://assets/trees/UltimatePack/OBJ/PineTree_Autumn_1.obj",
+	"res://assets/trees/UltimatePack/OBJ/PineTree_Autumn_2.obj",
+	"res://assets/trees/UltimatePack/OBJ/PineTree_Autumn_3.obj"
+]
+
+const TREE_ASSETS_SNOW: Array[String] = [
+	# BirchTree snow variants (1-5)
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_Snow_1.obj",
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_Snow_2.obj",
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_Snow_3.obj",
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_Snow_4.obj", 
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_Snow_5.obj",
+	# CommonTree snow variants (1-5)
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_Snow_1.obj",
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_Snow_2.obj",
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_Snow_3.obj",
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_Snow_4.obj",
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_Snow_5.obj",
+	# PineTree snow variants (1-3)
+	"res://assets/trees/UltimatePack/OBJ/PineTree_Snow_1.obj",
+	"res://assets/trees/UltimatePack/OBJ/PineTree_Snow_2.obj", 
+	"res://assets/trees/UltimatePack/OBJ/PineTree_Snow_3.obj"
+]
+
+const TREE_ASSETS_DEAD: Array[String] = [
+	# BirchTree dead variants (1-5)
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_Dead_1.obj",
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_Dead_2.obj",
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_Dead_3.obj",
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_Dead_4.obj",
+	"res://assets/trees/UltimatePack/OBJ/BirchTree_Dead_5.obj",
+	# CommonTree dead variants (1-5)
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_Dead_1.obj",
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_Dead_2.obj",
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_Dead_3.obj",
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_Dead_4.obj",
+	"res://assets/trees/UltimatePack/OBJ/CommonTree_Dead_5.obj"
+]
+
+# --- Rock Asset Paths by Category ---
+const ROCK_ASSETS_NORMAL: Array[String] = [
+	"res://assets/trees/UltimatePack/OBJ/Rock_1.obj",
+	"res://assets/trees/UltimatePack/OBJ/Rock_2.obj", 
+	"res://assets/trees/UltimatePack/OBJ/Rock_3.obj",
+	"res://assets/trees/UltimatePack/OBJ/Rock_4.obj",
+	"res://assets/trees/UltimatePack/OBJ/Rock_5.obj",
+	"res://assets/trees/UltimatePack/OBJ/Rock_6.obj",
+	"res://assets/trees/UltimatePack/OBJ/Rock_7.obj"
+]
+
+const ROCK_ASSETS_MOSS: Array[String] = [
+	"res://assets/trees/UltimatePack/OBJ/Rock_Moss_1.obj",
+	"res://assets/trees/UltimatePack/OBJ/Rock_Moss_2.obj",
+	"res://assets/trees/UltimatePack/OBJ/Rock_Moss_3.obj",
+	"res://assets/trees/UltimatePack/OBJ/Rock_Moss_4.obj",
+	"res://assets/trees/UltimatePack/OBJ/Rock_Moss_5.obj", 
+	"res://assets/trees/UltimatePack/OBJ/Rock_Moss_6.obj",
+	"res://assets/trees/UltimatePack/OBJ/Rock_Moss_7.obj"
+]
+
+const ROCK_ASSETS_SNOW: Array[String] = [
+	"res://assets/trees/UltimatePack/OBJ/Rock_Snow_1.obj",
+	"res://assets/trees/UltimatePack/OBJ/Rock_Snow_2.obj",
+	"res://assets/trees/UltimatePack/OBJ/Rock_Snow_3.obj",
+	"res://assets/trees/UltimatePack/OBJ/Rock_Snow_4.obj",
+	"res://assets/trees/UltimatePack/OBJ/Rock_Snow_5.obj",
+	"res://assets/trees/UltimatePack/OBJ/Rock_Snow_6.obj",
+	"res://assets/trees/UltimatePack/OBJ/Rock_Snow_7.obj"
+]
+
+
+# --- Biome Settings Configuration Dictionary ---
+# Centralized place for all biome settings - can be modified at runtime for debugging/tuning
 static var BIOME_SETTINGS: Dictionary = {
 	BiomeType.MOUNTAIN: {
 		"name": "Mountain",
@@ -168,110 +272,6 @@ static var BIOME_DETECTION: Dictionary = {
 	"autumn_humidity": 0.5          # Humidity factor for autumn biome
 }
 
-# --- Tree Asset Paths by Category ---
-const TREE_ASSETS_NORMAL: Array[String] = [
-	# BirchTree normal variants (1-5)
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_1.obj",
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_2.obj", 
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_3.obj",
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_4.obj",
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_5.obj",
-	# CommonTree normal variants (1-5)
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_1.obj",
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_2.obj",
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_3.obj", 
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_4.obj",
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_5.obj",
-	# PineTree normal variants (1-3)
-	"res://assets/trees/UltimatePack/OBJ/PineTree_1.obj",
-	"res://assets/trees/UltimatePack/OBJ/PineTree_2.obj",
-	"res://assets/trees/UltimatePack/OBJ/PineTree_3.obj"
-]
-
-const TREE_ASSETS_AUTUMN: Array[String] = [
-	# BirchTree autumn variants (1-5)
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_Autumn_1.obj",
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_Autumn_2.obj",
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_Autumn_3.obj", 
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_Autumn_4.obj",
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_Autumn_5.obj",
-	# CommonTree autumn variants (1-5)
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_Autumn_1.obj",
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_Autumn_2.obj",
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_Autumn_3.obj",
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_Autumn_4.obj", 
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_Autumn_5.obj",
-	# PineTree autumn variants (1-3)
-	"res://assets/trees/UltimatePack/OBJ/PineTree_Autumn_1.obj",
-	"res://assets/trees/UltimatePack/OBJ/PineTree_Autumn_2.obj",
-	"res://assets/trees/UltimatePack/OBJ/PineTree_Autumn_3.obj"
-]
-
-const TREE_ASSETS_SNOW: Array[String] = [
-	# BirchTree snow variants (1-5)
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_Snow_1.obj",
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_Snow_2.obj",
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_Snow_3.obj",
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_Snow_4.obj", 
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_Snow_5.obj",
-	# CommonTree snow variants (1-5)
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_Snow_1.obj",
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_Snow_2.obj",
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_Snow_3.obj",
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_Snow_4.obj",
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_Snow_5.obj",
-	# PineTree snow variants (1-3)
-	"res://assets/trees/UltimatePack/OBJ/PineTree_Snow_1.obj",
-	"res://assets/trees/UltimatePack/OBJ/PineTree_Snow_2.obj", 
-	"res://assets/trees/UltimatePack/OBJ/PineTree_Snow_3.obj"
-]
-
-const TREE_ASSETS_DEAD: Array[String] = [
-	# BirchTree dead variants (1-5)
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_Dead_1.obj",
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_Dead_2.obj",
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_Dead_3.obj",
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_Dead_4.obj",
-	"res://assets/trees/UltimatePack/OBJ/BirchTree_Dead_5.obj",
-	# CommonTree dead variants (1-5)
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_Dead_1.obj",
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_Dead_2.obj",
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_Dead_3.obj",
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_Dead_4.obj",
-	"res://assets/trees/UltimatePack/OBJ/CommonTree_Dead_5.obj"
-]
-
-# --- Rock Asset Paths by Category ---
-const ROCK_ASSETS_NORMAL: Array[String] = [
-	"res://assets/trees/UltimatePack/OBJ/Rock_1.obj",
-	"res://assets/trees/UltimatePack/OBJ/Rock_2.obj", 
-	"res://assets/trees/UltimatePack/OBJ/Rock_3.obj",
-	"res://assets/trees/UltimatePack/OBJ/Rock_4.obj",
-	"res://assets/trees/UltimatePack/OBJ/Rock_5.obj",
-	"res://assets/trees/UltimatePack/OBJ/Rock_6.obj",
-	"res://assets/trees/UltimatePack/OBJ/Rock_7.obj"
-]
-
-const ROCK_ASSETS_MOSS: Array[String] = [
-	"res://assets/trees/UltimatePack/OBJ/Rock_Moss_1.obj",
-	"res://assets/trees/UltimatePack/OBJ/Rock_Moss_2.obj",
-	"res://assets/trees/UltimatePack/OBJ/Rock_Moss_3.obj",
-	"res://assets/trees/UltimatePack/OBJ/Rock_Moss_4.obj",
-	"res://assets/trees/UltimatePack/OBJ/Rock_Moss_5.obj", 
-	"res://assets/trees/UltimatePack/OBJ/Rock_Moss_6.obj",
-	"res://assets/trees/UltimatePack/OBJ/Rock_Moss_7.obj"
-]
-
-const ROCK_ASSETS_SNOW: Array[String] = [
-	"res://assets/trees/UltimatePack/OBJ/Rock_Snow_1.obj",
-	"res://assets/trees/UltimatePack/OBJ/Rock_Snow_2.obj",
-	"res://assets/trees/UltimatePack/OBJ/Rock_Snow_3.obj",
-	"res://assets/trees/UltimatePack/OBJ/Rock_Snow_4.obj",
-	"res://assets/trees/UltimatePack/OBJ/Rock_Snow_5.obj",
-	"res://assets/trees/UltimatePack/OBJ/Rock_Snow_6.obj",
-	"res://assets/trees/UltimatePack/OBJ/Rock_Snow_7.obj"
-]
-
 # --- Properties ---
 var biome_configs: Dictionary = {}
 var noise_altitude: FastNoiseLite
@@ -384,21 +384,53 @@ func get_biome_blend_weights(world_pos: Vector3) -> Dictionary:
 
 
 func get_terrain_height_at_position(world_pos: Vector3) -> float:
-	"""Calculate terrain height at position including biome-specific variations."""
-	var base_height: float = noise_altitude.get_noise_2d(world_pos.x, world_pos.z) * BASE_TERRAIN_HEIGHT
-	var altitude_factor: float = _get_altitude_factor(world_pos)
+	"""Calculate terrain height at position using Minecraft-style multi-layer noise."""
+	# Get noise values from all layers - use much larger offset to completely avoid origin artifacts
+	var x: float = world_pos.x + 50000.0  # Increased offset to avoid origin artifacts and (0,0) spikes
+	var z: float = world_pos.z + 50000.0  # Increased offset to avoid origin artifacts and (0,0) spikes
 	
-	# Add mountain elevation
-	if altitude_factor > 0.5:
-		var mountain_height: float = pow((altitude_factor - 0.5) * 2.0, 2.0) * MAX_MOUNTAIN_HEIGHT
-		base_height += mountain_height
-		
-		# Add dramatic cliff-like features in mountains - ENHANCED for more dramatic terrain
-		var cliff_noise: float = noise_temperature.get_noise_2d(world_pos.x * 0.05, world_pos.z * 0.05)
-		if cliff_noise > 0.3:  # Lower threshold for more frequent cliffs
-			base_height += cliff_noise * 60.0  # Tripled cliff height for dramatic terrain features
+	# Get raw noise values (-1 to 1)
+	var continentalness: float = noise_continentalness.get_noise_2d(x, z)
+	var erosion: float = noise_erosion.get_noise_2d(x, z)
+	var peaks_valleys: float = noise_peaks_valleys.get_noise_2d(x, z)
+	var base_noise: float = noise_altitude.get_noise_2d(x, z)
 	
-	return base_height
+	# FULL TERRAIN HEIGHT CALCULATION WITH PROPER VARIATION
+	var base_height: float = BASE_TERRAIN_HEIGHT  # Use the 50.0 constant
+	
+	# Continental influence - determines if this is ocean, land, or mountain
+	var continental_factor: float = (continentalness + 1.0) * 0.5  # Convert -1,1 to 0,1
+	
+	# Erosion affects height dramatically
+	var erosion_factor: float = (erosion + 1.0) * 0.5  # Convert -1,1 to 0,1
+	
+	# Peaks and valleys create dramatic height variation
+	var peaks_factor: float = peaks_valleys  # Keep -1 to 1 range for valleys/peaks
+	
+	# Base terrain variation
+	var base_variation: float = base_noise * 40.0  # Increased from 30.0
+	
+	# Calculate continental height (0 = sea level, 1 = high continental)
+	var continental_height: float = continental_factor * MAX_MOUNTAIN_HEIGHT * 0.6
+	
+	# Erosion reduces height (inverted - high erosion = lower terrain)
+	var erosion_height: float = (1.0 - erosion_factor) * MAX_MOUNTAIN_HEIGHT * 0.4
+	
+	# Peaks create dramatic spikes and valleys
+	var peaks_height: float = peaks_factor * MAX_MOUNTAIN_HEIGHT * 0.8
+	
+	# Combine all factors
+	var final_height: float = base_height + base_variation + continental_height + erosion_height + peaks_height
+	
+	# Debug: Check final height at origin occasionally
+	if abs(world_pos.x) < 1.0 and abs(world_pos.z) < 1.0:
+		print("Debug terrain at origin: base=", base_height, " variation=", base_variation, " continental=", continental_height, " erosion=", erosion_height, " peaks=", peaks_height, " FINAL=", final_height)
+	
+	# No height clamping - allow unlimited terrain height generation
+	# Previously: final_height = clamp(final_height, 0.0, MAX_MOUNTAIN_HEIGHT + BASE_TERRAIN_HEIGHT)
+	final_height = max(final_height, 0.0)  # Only prevent negative heights (underground terrain)
+	
+	return final_height
 
 
 func get_terrain_material_for_biome(biome_type: BiomeType) -> StandardMaterial3D:
@@ -550,14 +582,19 @@ func _initialize_noise_generators() -> void:
 	# Use a base seed that can be randomized but ensures consistent patterns
 	var base_seed: int = world_seed
 	
-	# Altitude noise - controls mountain distribution
+	# Altitude noise - NOW USING MINECRAFT-STYLE PERLIN WITH MULTIPLE OCTAVES
+	# This is the main terrain height generator
 	noise_altitude = FastNoiseLite.new()
 	noise_altitude.seed = base_seed
-	noise_altitude.frequency = NOISE_SCALE_ALTITUDE
-	noise_altitude.noise_type = FastNoiseLite.TYPE_PERLIN
-	noise_altitude.fractal_octaves = 4
+	noise_altitude.frequency = NOISE_SCALE_ALTITUDE * 0.5  # Lower frequency for larger features
+	noise_altitude.noise_type = FastNoiseLite.TYPE_PERLIN  # Changed back to Perlin from Cellular
+	noise_altitude.fractal_type = FastNoiseLite.FRACTAL_FBM  # Fractal Brownian Motion like Minecraft
+	noise_altitude.fractal_octaves = 8  # Minecraft typically uses 8-16 octaves
+	noise_altitude.fractal_gain = 0.5  # Standard gain for FBM
+	noise_altitude.fractal_lacunarity = 2.0  # Standard lacunarity (frequency multiplier per octave)
+	noise_altitude.fractal_weighted_strength = 0.0  # Standard FBM, not weighted
 	
-	# Temperature noise - controls hot/cold regions
+	# Temperature noise - controls hot/cold regions (for biome variation)
 	noise_temperature = FastNoiseLite.new()
 	noise_temperature.seed = base_seed + 1000
 	noise_temperature.frequency = NOISE_SCALE_TEMPERATURE 
@@ -572,6 +609,61 @@ func _initialize_noise_generators() -> void:
 	noise_humidity.frequency = NOISE_SCALE_HUMIDITY
 	noise_humidity.noise_type = FastNoiseLite.TYPE_CELLULAR
 	noise_humidity.fractal_octaves = 2
+	
+	# Initialize additional noise generators for Minecraft-style terrain
+	_initialize_minecraft_noise_layers()
+
+
+# New member variables for Minecraft-style terrain generation
+var noise_continentalness: FastNoiseLite  # Large-scale terrain features (continents vs oceans)
+var noise_erosion: FastNoiseLite  # Controls terrain smoothness/roughness
+var noise_peaks_valleys: FastNoiseLite  # Creates variation between peaks and valleys
+var noise_mountain_ridge: FastNoiseLite  # For sharp mountain ridges
+
+
+func _initialize_minecraft_noise_layers() -> void:
+	"""Initialize additional noise layers for Minecraft-style terrain generation."""
+	var base_seed: int = world_seed
+	
+	# Continentalness - determines large-scale elevation (ocean floor vs highlands)
+	noise_continentalness = FastNoiseLite.new()
+	noise_continentalness.seed = base_seed + 3000
+	noise_continentalness.frequency = 0.0002  # Very low frequency for continent-sized features
+	noise_continentalness.noise_type = FastNoiseLite.TYPE_PERLIN
+	noise_continentalness.fractal_type = FastNoiseLite.FRACTAL_FBM
+	noise_continentalness.fractal_octaves = 4
+	noise_continentalness.fractal_gain = 0.5
+	noise_continentalness.fractal_lacunarity = 2.5
+	
+	# Erosion - affects terrain roughness
+	noise_erosion = FastNoiseLite.new()
+	noise_erosion.seed = base_seed + 4000
+	noise_erosion.frequency = 0.0008  # Medium frequency
+	noise_erosion.noise_type = FastNoiseLite.TYPE_PERLIN
+	noise_erosion.fractal_type = FastNoiseLite.FRACTAL_FBM
+	noise_erosion.fractal_octaves = 5
+	noise_erosion.fractal_gain = 0.45
+	noise_erosion.fractal_lacunarity = 2.0
+	
+	# Peaks and Valleys - creates local height variation
+	noise_peaks_valleys = FastNoiseLite.new()
+	noise_peaks_valleys.seed = base_seed + 5000
+	noise_peaks_valleys.frequency = 0.001  # Medium-high frequency
+	noise_peaks_valleys.noise_type = FastNoiseLite.TYPE_PERLIN
+	noise_peaks_valleys.fractal_type = FastNoiseLite.FRACTAL_RIDGED  # Ridged for more dramatic peaks
+	noise_peaks_valleys.fractal_octaves = 6
+	noise_peaks_valleys.fractal_gain = 0.5
+	noise_peaks_valleys.fractal_lacunarity = 2.0
+	
+	# Mountain ridge noise - for sharp mountain peaks
+	noise_mountain_ridge = FastNoiseLite.new()
+	noise_mountain_ridge.seed = base_seed + 6000
+	noise_mountain_ridge.frequency = 0.002
+	noise_mountain_ridge.noise_type = FastNoiseLite.TYPE_PERLIN
+	noise_mountain_ridge.fractal_type = FastNoiseLite.FRACTAL_RIDGED
+	noise_mountain_ridge.fractal_octaves = 4
+	noise_mountain_ridge.fractal_gain = 0.6
+	noise_mountain_ridge.fractal_lacunarity = 2.0
 
 
 func _create_biome_configurations() -> void:
@@ -601,18 +693,25 @@ func _create_biome_configurations() -> void:
 
 
 func _get_altitude_factor(world_pos: Vector3) -> float:
-	"""Get altitude factor (0-1) at world position."""
-	return (noise_altitude.get_noise_2d(world_pos.x, world_pos.z) + 1.0) * 0.5
+	"""Get altitude factor (0-1) at world position using standard Perlin noise."""
+	# Get raw Perlin noise with offset to avoid origin artifacts
+	var raw_noise: float = noise_altitude.get_noise_2d(world_pos.x + 50000.0, world_pos.z + 50000.0)
+	
+	# Normalize to 0-1 range
+	var normalized: float = (raw_noise + 1.0) * 0.5
+	
+	# No power transformation - let the height calculation handle non-linearity
+	return normalized
 
 
 func _get_temperature_factor(world_pos: Vector3) -> float:
 	"""Get temperature factor (0-1) at world position."""
-	return (noise_temperature.get_noise_2d(world_pos.x, world_pos.z) + 1.0) * 0.5
+	return (noise_temperature.get_noise_2d(world_pos.x + 50000.0, world_pos.z + 50000.0) + 1.0) * 0.5
 
 
 func _get_humidity_factor(world_pos: Vector3) -> float:
 	"""Get humidity factor (0-1) at world position."""
-	return (noise_humidity.get_noise_2d(world_pos.x, world_pos.z) + 1.0) * 0.5
+	return (noise_humidity.get_noise_2d(world_pos.x + 50000.0, world_pos.z + 50000.0) + 1.0) * 0.5
 
 
 func _create_terrain_material(biome_type: BiomeType, settings: Dictionary) -> StandardMaterial3D:

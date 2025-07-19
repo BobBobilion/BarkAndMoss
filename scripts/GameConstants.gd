@@ -124,16 +124,17 @@ const CRAFTING_RECIPES := {
 		},
 		"icon": "res://assets/ui/icons/bow.png"
 	},
+	"Arrow": {
+		"name": "Arrow",
+		"description": "Sharp projectiles for the bow",
+		"materials": {
+			"Wood": 1,
+			"Feather": 1
+		},
+		"quantity": 3,
+		"icon": "res://assets/ui/icons/arrow.png"
+	}
 	# Future recipes can be added here:
-	# "Arrow": {
-	# 	"name": "Arrow",
-	# 	"description": "Ammunition for the bow",
-	# 	"materials": {
-	# 		"Wood": 1,
-	# 		"Stone": 1
-	# 	},
-	# 	"icon": "res://assets/ui/icons/arrow.png"
-	# },
 	# "Spear": {
 	# 	"name": "Spear",
 	# 	"description": "A long-range melee weapon",
@@ -353,11 +354,13 @@ const ROLES := {
 const ITEMS := {
 	"AXE": "Axe",
 	"BOW": "Bow",
+	"ARROW": "Arrow",
 	"WOOD": "Wood",
 	"SINEW": "Sinew",
 	"RAW_MEAT": "Raw Meat",
 	"COOKED_MEAT": "Cooked Meat",
 	"HIDE": "Hide",
+	"FEATHER": "Feather",
 	"EMPTY_SLOT": ""
 }
 
@@ -373,6 +376,7 @@ const ITEM_ICONS := {
 	"Raw Meat": "res://assets/ui/icons/raw_meat.png",
 	"Cooked Meat": "res://assets/ui/icons/cooked_meat.png",
 	"Hide": "res://assets/ui/icons/hide.png",
+	"Feather": "res://assets/ui/icons/feather.png",
 	"Arrow": "res://assets/ui/icons/arrow.png"
 }
 
@@ -384,6 +388,7 @@ const ITEM_DESCRIPTIONS := {
 	"Raw Meat": "A bit too chewy to eat. If only I had a way to cook it...",
 	"Cooked Meat": "A hearty meal that'll keep me going. Restores hunger when consumed.",
 	"Hide": "Tough animal hide from a deer. Essential material for crafting leather goods and armor.",
+	"Feather": "A light bird feather. Soft and aerodynamic, perfect for fletching arrows.",
 	"Arrow": "Sharp projectile for the bow. Handle with care."
 }
 
@@ -396,6 +401,7 @@ const ITEM_FALLBACK_COLORS := {
 	"Raw Meat": Color(0.8, 0.3, 0.3),     # Red raw meat
 	"Cooked Meat": Color(0.5, 0.3, 0.1),  # Dark brown cooked
 	"Hide": Color(0.7, 0.5, 0.3),         # Tan/brown leather hide
+	"Feather": Color(0.9, 0.9, 0.9),      # Light gray/white feather
 	"Arrow": Color(0.7, 0.7, 0.7)         # Gray metal/wood
 }
 

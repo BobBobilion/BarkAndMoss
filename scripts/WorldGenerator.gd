@@ -712,7 +712,7 @@ func _get_surface_position(world_pos: Vector3) -> Vector3:
 	"""Returns the surface position at a given world coordinate using raycast."""
 	# Cast ray downward from high above to find terrain surface
 	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
-	var max_height: float = biome_manager.MAX_MOUNTAIN_HEIGHT + biome_manager.BASE_TERRAIN_HEIGHT + 100.0  # Account for dramatically increased terrain heights
+	var max_height: float = 2000.0  # High enough to be above any possible terrain height
 	var from: Vector3 = Vector3(world_pos.x, max_height, world_pos.z)
 	var to: Vector3 = Vector3(world_pos.x, -50.0, world_pos.z)
 	

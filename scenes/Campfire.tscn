@@ -33,9 +33,11 @@ offsets = PackedFloat32Array(0, 0.2, 0.6, 1)
 colors = PackedColorArray(1, 1, 0.2, 1, 1, 0.5, 0, 1, 1, 0, 0, 0.8, 0.2, 0, 0, 0)
 
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_1b37d"]
+height = 3.81396
 radius = 1.64648
 
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_interaction"]
+height = 20.6489
 radius = 12.0977
 
 [node name="Campfire" type="StaticBody3D"]
@@ -92,7 +94,7 @@ collision_layer = 4
 collision_mask = 2
 
 [node name="InteractionShape" type="CollisionShape3D" parent="InteractionArea"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0930176, 0)
 shape = SubResource("CylinderShape3D_1b37d")
 
 [node name="SafeZone" type="Area3D" parent="."]
@@ -100,7 +102,7 @@ collision_layer = 0
 collision_mask = 0
 
 [node name="SafeZoneShape" type="CollisionShape3D" parent="SafeZone"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.83032, 0)
 shape = SubResource("CylinderShape3D_interaction")
 
 [node name="CookingTimer" type="Timer" parent="."]

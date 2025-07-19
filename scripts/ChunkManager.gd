@@ -151,7 +151,7 @@ func _process_generated_data() -> void:
 	for chunk_pos in data_copy:
 		if active_chunks.has(chunk_pos):
 			var chunk = active_chunks[chunk_pos]
-			print("ChunkManager: Loading data for chunk at ", chunk_pos)
+		
 			chunk.load_data(data_copy[chunk_pos])
 		else:
 			print("ChunkManager: Warning - no active chunk for generated data at ", chunk_pos)

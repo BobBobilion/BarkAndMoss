@@ -64,6 +64,18 @@ func _find_node_by_name(node: Node, target_name: String) -> Node3D:
 	return null
 
 # --- Public Methods ---
+func _has_arrows() -> bool:
+	"""Check if player has arrows available in inventory."""
+	var player_inventory = null
+	if player_body and player_body.has_method("get_inventory"):
+		player_inventory = player_body.get_inventory()
+	
+	if not player_inventory or not player_inventory.has_method("get_item_count"):
+		return false
+	
+	return player_inventory.get_item_count("Arrow") > 0
+
+
 func handle_equipment_input(delta: float, closest_interactable: Node) -> String:
 	var action_to_perform: String = ""
 	equipped_item = get_equipped_item_from_hud()
@@ -75,14 +87,18 @@ func handle_equipment_input(delta: float, closest_interactable: Node) -> String:
 				# Processing corpses should be done with the interact key (E), not attack
 				action_to_perform = "chop"
 			"Bow":
-				_start_bow_charge()
+				# Only start charging if arrows are available
+				if _has_arrows():
+					_start_bow_charge()
+				else:
+					print("Cannot use bow - no arrows available!")
 			_:
 				action_to_perform = "punch_right" # Default unarmed attack
 
-	if Input.is_action_pressed("attack") and equipped_item == "Bow":
+	if Input.is_action_pressed("attack") and equipped_item == "Bow" and is_charging_bow:
 		_update_bow_charge(delta)
 
-	if Input.is_action_just_released("attack") and equipped_item == "Bow":
+	if Input.is_action_just_released("attack") and equipped_item == "Bow" and is_charging_bow:
 		_shoot_arrow()
 		_stop_bow_charge()
 		
@@ -226,6 +242,35 @@ func _shoot_arrow() -> void:
 		# Don't shoot - just stop charging and return to normal stance
 		_stop_bow_charge()
 		return
+	
+	# Get player inventory (simplified since we checked arrows before charging)
+	var player_inventory = player_body.get_inventory() if player_body and player_body.has_method("get_inventory") else null
+	
+	if not player_inventory:
+		print("Cannot access player inventory!")
+		_stop_bow_charge()
+		return
+	
+	# Final safety check for arrows (edge case: arrows removed while charging)
+	var arrow_count: int = player_inventory.get_item_count("Arrow") if player_inventory.has_method("get_item_count") else 0
+	if arrow_count <= 0:
+		print("No arrows available! (arrows were removed while charging)")
+		_stop_bow_charge()
+		return
+	
+	# Consume 1 arrow from inventory
+	if not player_inventory.remove_item_by_name("Arrow", 1):
+		print("Failed to consume arrow from inventory!")
+		_stop_bow_charge()
+		return
+	
+	print("Consumed 1 arrow. Arrows remaining: ", player_inventory.get_item_count("Arrow"))
+	
+	# Update hotbar to show new arrow count
+	if is_instance_valid(hud_instance) and hud_instance.has_node("Hotbar"):
+		var hotbar = hud_instance.get_node("Hotbar")
+		if hotbar and hotbar.has_method("refresh_visuals"):
+			hotbar.refresh_visuals()
 	
 	var charge_percentage: float = bow_charge_level / BOW_CHARGE_TIME
 	var arrow_power: float = lerp(BOW_MIN_POWER, BOW_MAX_POWER, charge_percentage)

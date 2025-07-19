@@ -437,8 +437,18 @@ func _on_item_crafted(item_name: String) -> void:
 
 func _on_item_cooked(item_name: String) -> void:
 	"""Handle item cooked event from menu."""
-	print("Campfire: Item cooking started - ", item_name)
-	# Cooking is already started by the menu calling start_cooking() 
+	print("Campfire: Item cooked - ", item_name)
+	# Could add particle effects or sounds here
+	# The menu handles the actual cooking logic
+
+
+func close_menu() -> void:
+	"""Close any open campfire menu - used during cleanup."""
+	if campfire_menu_instance and is_instance_valid(campfire_menu_instance):
+		print("Campfire: Closing campfire menu for cleanup")
+		campfire_menu_instance.close_menu()
+		campfire_menu_instance.queue_free()
+		campfire_menu_instance = null
 
 # --- Debug Methods ---
 func _on_campfire_interactable_entered(area: Area3D) -> void:

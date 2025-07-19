@@ -6,6 +6,7 @@ extends Control
 var chunk_manager: ChunkManager = null
 var update_timer: float = 0.0
 const UPDATE_INTERVAL: float = 0.5
+var show_chunk_borders: bool = true  # Toggle for chunk borders
 
 # --- Engine Callbacks ---
 func _ready() -> void:
@@ -38,6 +39,11 @@ func _input(event: InputEvent) -> void:
 	"""Handle debug toggle input."""
 	if event.is_action_pressed("ui_page_down"):  # F3 key
 		visible = !visible
+	
+	# Toggle chunk borders with F4
+	if event.is_action_pressed("ui_home") and visible:  # F4 key
+		show_chunk_borders = !show_chunk_borders
+		_update_chunk_border_visibility()
 
 func _process(delta: float) -> void:
 	"""Update debug display."""
@@ -71,7 +77,8 @@ func _update_display() -> void:
 	# Basic stats
 	text += "Active Chunks: %d\n" % chunk_manager.active_chunks.size()
 	text += "Generation Queue: %d\n" % chunk_manager.chunks_to_generate.size()
-	text += "Generated Data: %d\n\n" % chunk_manager.generated_chunk_data.size()
+	text += "Generated Data: %d\n" % chunk_manager.generated_chunk_data.size()
+	text += "Chunk Borders: %s (F4 to toggle)\n\n" % ("ON" if show_chunk_borders else "OFF")
 	
 	# Player positions
 	if chunk_manager.player_tracker:
@@ -96,7 +103,7 @@ func _update_display() -> void:
 	info_label.text = text
 
 func _get_local_player() -> Node3D:
-	"""Get the local player node."""
+	"""Find the local player in the scene."""
 	# In single player mode (no multiplayer peer), any player is the local player
 	if not multiplayer.has_multiplayer_peer():
 		# Try human player first
@@ -107,6 +114,10 @@ func _get_local_player() -> Node3D:
 		var dog_players = get_tree().get_nodes_in_group("dog_player")
 		if dog_players.size() > 0:
 			return dog_players[0]
+		# Try generic player
+		var players = get_tree().get_nodes_in_group("player")
+		if players.size() > 0:
+			return players[0]
 	
 	# Multiplayer mode - find authority player
 	# Try to find local player
@@ -119,4 +130,27 @@ func _get_local_player() -> Node3D:
 		if node.is_multiplayer_authority():
 			return node
 	
-	return null 
+	# Try generic player
+	for node in get_tree().get_nodes_in_group("player"):
+		if node.is_multiplayer_authority():
+			return node
+	
+	return null
+
+
+func _update_chunk_border_visibility() -> void:
+	"""Update the visibility of chunk borders for all active chunks."""
+	if not chunk_manager:
+		return
+		
+	for chunk_pos in chunk_manager.active_chunks:
+		var chunk = chunk_manager.active_chunks[chunk_pos]
+		if is_instance_valid(chunk) and chunk.has_method("set"):
+			chunk.set("show_borders", show_chunk_borders)
+			# If chunk is already loaded, rebuild borders
+			if chunk.current_state == Chunk.State.LOADED:
+				if show_chunk_borders and not chunk.border_mesh_instance:
+					chunk._build_chunk_borders()
+				elif not show_chunk_borders and chunk.border_mesh_instance:
+					chunk.border_mesh_instance.queue_free()
+					chunk.border_mesh_instance = null 
