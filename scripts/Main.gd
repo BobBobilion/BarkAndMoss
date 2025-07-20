@@ -23,11 +23,13 @@ func _ready() -> void:
 	# Keep the game running on the server even if the window loses focus.
 	# In Godot 4, we set the process mode to always process
 	set_process_mode(Node.PROCESS_MODE_ALWAYS)
+	
 
 	# --- Setup Multiplayer Spawner ---
 	# This node is responsible for replicating instances across the network.
 	multiplayer_spawner = MultiplayerSpawner.new()
 	multiplayer_spawner.name = "MultiplayerSpawner"
+	multiplayer_spawner.process_mode = Node.PROCESS_MODE_ALWAYS  # Continue during pause
 	# The root path determines where spawned objects are added as children.
 	multiplayer_spawner.set_spawn_path(".") # Spawn players as children of Main
 	

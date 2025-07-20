@@ -27,9 +27,16 @@ var _mutex := Mutex.new()
 var _semaphore := Semaphore.new()
 var _is_running := true
 
+# Resume handling
+var _is_resuming := false
+var _resume_delay_timer := 0.0
+const RESUME_DELAY := 0.3  # Wait a bit after resume before processing chunks
+
 # --- Engine Callbacks ---
 func _ready() -> void:
 	name = "ChunkManager"
+	# Set process mode to pausable so chunk processing stops during pause
+	process_mode = Node.PROCESS_MODE_PAUSABLE
 	_setup_subsystems()
 	_start_generation_threads()
 
@@ -50,6 +57,22 @@ func _process(_delta: float) -> void:
 	# Skip processing if shutting down
 	if not _is_running:
 		return
+	
+	# Skip if paused
+	if get_tree().paused:
+		_is_resuming = true
+		_resume_delay_timer = 0.0
+		return
+	
+	# Handle resume delay to prevent processing spike
+	if _is_resuming:
+		_resume_delay_timer += _delta
+		if _resume_delay_timer < RESUME_DELAY:
+			return  # Wait before processing chunks
+		else:
+			_is_resuming = false
+			print("ChunkManager: Resuming chunk processing after delay")
+	
 	_process_generated_data()
 
 # --- Public Methods ---

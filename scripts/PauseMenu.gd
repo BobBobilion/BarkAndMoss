@@ -88,26 +88,32 @@ func show_pause_menu() -> void:
 	if is_paused:
 		return
 		
+	print("PauseMenu: Starting pause sequence...")
 	
 	is_paused = true
 	show()
 	
-	# Pause the game - this stops all processing except UI
-	get_tree().paused = true
-	
-	# Set process mode to always so this menu still works when paused
-	process_mode = Node.PROCESS_MODE_ALWAYS
+	# Set process mode to when_paused so this menu works during pause
+	process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 	
 	# Release mouse capture so player can interact with menu
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	
-	# Focus the resume button for keyboard navigation
+	# Focus the resume button for keyboard navigation BEFORE pausing
+	# This prevents any input race conditions
 	resume_button.grab_focus()
 	
-	# Apply render distance setting asynchronously to avoid blocking the UI
-	# This defers the potentially expensive chunk system operations
-	if settings_loaded:
-		call_deferred("_apply_render_distance_deferred")
+	# Small delay to ensure UI is fully set up before pausing
+	await get_tree().process_frame
+	
+	# Pause the game AFTER setting up UI to avoid race conditions
+	# This stops all processing except PROCESS_MODE_ALWAYS and PROCESS_MODE_WHEN_PAUSED nodes
+	get_tree().paused = true
+	
+	print("PauseMenu: Game paused successfully")
+	
+	# Don't apply render distance when showing pause menu - it's already applied at startup
+	# This was causing the freeze when first opening the pause menu
 
 
 func hide_pause_menu() -> void:
@@ -119,6 +125,7 @@ func hide_pause_menu() -> void:
 	if not is_paused:
 		return
 		
+	print("PauseMenu: Starting resume sequence...")
 	
 	is_paused = false
 	hide()
@@ -126,11 +133,12 @@ func hide_pause_menu() -> void:
 	# Also hide settings modal if it's open
 	settings_modal.hide()
 	
-	# Resume the game
-	get_tree().paused = false
-	
-	# Restore mouse capture for gameplay
+	# Restore mouse capture for gameplay BEFORE resuming to avoid input lag
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	
+	# Use call_deferred to resume the game after current frame
+	# This prevents the chunk system from processing a backlog immediately
+	call_deferred("_resume_game_deferred")
 
 
 func toggle_pause_menu() -> void:
@@ -159,6 +167,7 @@ func _on_settings_pressed() -> void:
 
 func _on_quit_to_menu_pressed() -> void:
 	"""Handle quit to main menu button press."""
+	print("PauseMenu: Quit to menu button pressed")
 	
 	confirmation_dialog.dialog_text = "Are you sure you want to quit to the main menu?\nAny unsaved progress will be lost."
 	confirmation_dialog.popup_centered()
@@ -168,6 +177,7 @@ func _on_quit_to_menu_pressed() -> void:
 
 func _on_quit_game_pressed() -> void:
 	"""Handle quit game button press."""
+	print("PauseMenu: Quit game button pressed")
 	
 	confirmation_dialog.dialog_text = "Are you sure you want to quit the game?\nAny unsaved progress will be lost."
 	confirmation_dialog.popup_centered()
@@ -365,9 +375,6 @@ func _save_settings() -> void:
 	
 
 
-func _apply_render_distance_deferred() -> void:
-	"""Apply render distance setting asynchronously to avoid blocking the pause menu."""
-	SettingsManager.apply_render_distance_setting(int(render_slider.value))
 
 
 func _cleanup_persistent_ui() -> void:
@@ -386,6 +393,12 @@ func _cleanup_persistent_ui() -> void:
 	var hud_layer = viewport.get_node_or_null("HUDLayer")
 	if hud_layer:
 		hud_layer.queue_free()
+
+
+func _resume_game_deferred() -> void:
+	"""Deferred function to resume the game after UI updates."""
+	get_tree().paused = false
+	print("PauseMenu: Game resumed successfully")
 	
 	
 

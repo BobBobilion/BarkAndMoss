@@ -40,6 +40,9 @@ func _ready() -> void:
 	"""Initialize the cloud manager and generate clouds."""
 	add_to_group("cloud_manager")
 	
+	# Set process mode to pausable so cloud updates stop during pause
+	process_mode = Node.PROCESS_MODE_PAUSABLE
+	
 	# Check if spawning is enabled
 	if not enable_spawning:
 		return

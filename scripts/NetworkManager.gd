@@ -35,6 +35,9 @@ var discovery_check_counter: int = 0  # For periodic status checks
 
 func _ready() -> void:
 	"""Connects multiplayer signals."""
+	# Set process mode to always so networking continues during pause
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connection_failed.connect(_on_connection_failed)
@@ -44,6 +47,7 @@ func _ready() -> void:
 	reconnection_timer = Timer.new()
 	reconnection_timer.wait_time = 5.0  # Try reconnect every 5 seconds
 	reconnection_timer.timeout.connect(_attempt_reconnection)
+	reconnection_timer.process_mode = Node.PROCESS_MODE_ALWAYS  # Continue during pause
 	add_child(reconnection_timer)
 	
 	# Don't start discovery server automatically - only when hosting
@@ -529,6 +533,7 @@ func _start_discovery_listener(code: String) -> void:
 	var timer = Timer.new()
 	timer.wait_time = 0.1
 	timer.timeout.connect(_check_discovery_response.bind(udp, code, timer))
+	timer.process_mode = Node.PROCESS_MODE_ALWAYS  # Continue during pause
 	add_child(timer)
 	timer.start()
 	
@@ -603,6 +608,7 @@ func _start_discovery_server() -> void:
 	timer.name = "DiscoveryTimer"
 	timer.wait_time = 0.1
 	timer.timeout.connect(_check_discovery_requests.bind(udp, timer))
+	timer.process_mode = Node.PROCESS_MODE_ALWAYS  # Continue during pause
 	add_child(timer)
 	timer.start()
 	
@@ -612,6 +618,7 @@ func _start_discovery_server() -> void:
 	var status_timer = Timer.new()
 	status_timer.name = "DiscoveryStatusTimer"
 	status_timer.wait_time = 5.0  # Check every 5 seconds
+	status_timer.process_mode = Node.PROCESS_MODE_ALWAYS  # Continue during pause
 	status_timer.timeout.connect(func():
 		if is_host and lobby_code != "":
 			var packet_count = udp.get_available_packet_count()

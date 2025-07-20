@@ -15,8 +15,32 @@ var tracked_players: Dictionary = {} # { id: player_node } for multiplayer track
 var load_distance: int = GameConstants.RENDER_DISTANCE.DEFAULT
 var unload_distance: int = GameConstants.RENDER_DISTANCE.DEFAULT + GameConstants.RENDER_DISTANCE.UNLOAD_OFFSET
 
+# Resume handling
+var _resume_delay_timer := 0.0
+var _is_resuming := false
+const RESUME_DELAY := 0.5  # Wait half a second after resume before chunk updates
+
 # --- Engine Callbacks ---
+func _ready() -> void:
+	# Set process mode to pausable so chunk calculations stop during pause
+	process_mode = Node.PROCESS_MODE_PAUSABLE
+
 func _process(delta: float) -> void:
+	# Skip processing if paused to avoid accumulating updates
+	if get_tree().paused:
+		_is_resuming = true
+		_resume_delay_timer = 0.0
+		return
+	
+	# Handle resume delay to prevent chunk calculation spike
+	if _is_resuming:
+		_resume_delay_timer += delta
+		if _resume_delay_timer < RESUME_DELAY:
+			return  # Wait before resuming chunk updates
+		else:
+			_is_resuming = false
+			print("PlayerTracker: Resuming chunk updates after delay")
+		
 	_update_timer += delta
 	if _update_timer >= UPDATE_INTERVAL:
 		_update_timer = 0.0

@@ -68,8 +68,10 @@ func _input(event: InputEvent) -> void:
 		
 	# Handle escape key to toggle pause menu
 	if event.is_action_pressed("ui_cancel"):
-		toggle_pause()
-		get_viewport().set_input_as_handled()
+		# Only handle pause for the local player
+		if not multiplayer.has_multiplayer_peer() or _has_local_player_authority():
+			toggle_pause()
+			get_viewport().set_input_as_handled()
 
 
 # --- Public Methods ---
@@ -87,7 +89,7 @@ func pause_game() -> void:
 	if is_game_paused:
 		return
 		
-	print("PauseManager: Pausing game...")
+	print("PauseManager: Pausing game... (peer id: ", multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else "single-player", ")")
 	is_game_paused = true
 	
 	# Create and show pause menu if it doesn't exist
@@ -339,3 +341,11 @@ func force_cleanup() -> void:
 		var pause_layer = viewport.get_node_or_null("PauseLayer")
 		if pause_layer:
 			pause_layer.queue_free() 
+
+
+func _has_local_player_authority() -> bool:
+	"""Check if any registered player has multiplayer authority."""
+	for player in players:
+		if is_instance_valid(player) and player.is_multiplayer_authority():
+			return true
+	return false

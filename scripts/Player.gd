@@ -75,6 +75,11 @@ func _ready() -> void:
 	# Configure MultiplayerSynchronizer for animations
 	_configure_multiplayer_sync()
 	
+	# Ensure MultiplayerSynchronizer continues during pause
+	var sync = $MultiplayerSynchronizer
+	if sync:
+		sync.process_mode = Node.PROCESS_MODE_ALWAYS
+	
 	# Network sync is handled by MultiplayerSynchronizer in the scene
 	# No need for additional NetworkSyncController
 	

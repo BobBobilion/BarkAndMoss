@@ -122,6 +122,11 @@ func _ready() -> void:
 	# Configure MultiplayerSynchronizer for animations
 	_configure_multiplayer_sync()
 	
+	# Ensure MultiplayerSynchronizer continues during pause
+	var sync = $MultiplayerSynchronizer
+	if sync:
+		sync.process_mode = Node.PROCESS_MODE_ALWAYS
+	
 	# For remote instances, try setting up animations again after a short delay
 	# This ensures the scene tree is fully ready
 	if not is_multiplayer_authority():

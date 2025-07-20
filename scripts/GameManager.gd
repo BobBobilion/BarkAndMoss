@@ -29,6 +29,9 @@ func _ready() -> void:
 	# Add to groups for easy finding
 	add_to_group("game_manager")
 	
+	# Ensure GameManager continues during pause to handle multiplayer
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	
 	# Set up multiplayer signals
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
