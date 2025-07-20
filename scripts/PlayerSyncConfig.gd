@@ -13,3 +13,9 @@ func _init() -> void:
 
 	# Sync visibility
 	add_property(NodePath(".:visible"), true)
+	
+	# Sync velocity for smoother interpolation
+	add_property(NodePath(".:velocity"), false)  # Don't spawn with velocity
+	
+	# Set replication interval for smoother updates (30Hz)
+	replication_interval = 1.0 / 30.0

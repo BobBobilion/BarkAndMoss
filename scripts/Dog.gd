@@ -106,7 +106,7 @@ func _ready() -> void:
 			PauseManager.register_player(self)
 	else:
 		# This is a networked copy of another player. Disable its camera.
-		camera.enabled = false
+		camera.current = false
 	
 	# Add to group for identification
 	add_to_group("dog_player")
@@ -121,6 +121,14 @@ func _ready() -> void:
 	
 	# Configure MultiplayerSynchronizer for animations
 	_configure_multiplayer_sync()
+	
+	# Add network sync controller for better movement synchronization
+	if multiplayer.has_multiplayer_peer():
+		var NetworkSyncController = preload("res://scripts/components/network_sync_controller.gd")
+		var network_sync_controller = NetworkSyncController.new()
+		network_sync_controller.name = "NetworkSyncController"
+		add_child(network_sync_controller)
+		print("Dog: Added NetworkSyncController for better movement sync")
 
 
 func _exit_tree() -> void:

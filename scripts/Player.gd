@@ -15,6 +15,7 @@ const CameraController = preload("res://scripts/components/camera_controller.gd"
 const AnimationController = preload("res://scripts/components/animation_controller.gd")
 const InteractionController = preload("res://scripts/components/interaction_controller.gd")
 const EquipmentController = preload("res://scripts/components/equipment_controller.gd")
+const NetworkSyncController = preload("res://scripts/components/network_sync_controller.gd")
 
 # --- Components ---
 @onready var movement_controller: MovementController = $MovementController
@@ -22,6 +23,7 @@ const EquipmentController = preload("res://scripts/components/equipment_controll
 @onready var animation_controller: AnimationController = $AnimationController
 @onready var interaction_controller: InteractionController = $InteractionController
 @onready var equipment_controller: EquipmentController = $EquipmentController
+var network_sync_controller: NetworkSyncController
 
 # --- Timers ---
 # Remove @onready since we create it manually in _ready()
@@ -72,6 +74,13 @@ func _ready() -> void:
 	
 	# Configure MultiplayerSynchronizer for animations
 	_configure_multiplayer_sync()
+	
+	# Add network sync controller for better movement synchronization
+	if has_multiplayer:
+		network_sync_controller = NetworkSyncController.new()
+		network_sync_controller.name = "NetworkSyncController"
+		add_child(network_sync_controller)
+		print("Player: Added NetworkSyncController for better movement sync")
 	
 	# Set collision layers and mask for proper terrain interaction
 	collision_layer = 2      # Player is on layer 2

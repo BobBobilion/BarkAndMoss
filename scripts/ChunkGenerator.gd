@@ -76,11 +76,17 @@ func _generate_objects(chunk_pos: Vector2i, terrain_data) -> Dictionary:
 	var objects := { "trees": [], "rocks": [], "grass": [] }
 	var chunk_world_pos := Vector3(chunk_pos.x * Chunk.CHUNK_SIZE.x, 0, chunk_pos.y * Chunk.CHUNK_SIZE.y)
 
+	# Create a deterministic RNG based on world seed and chunk position
+	var chunk_rng = RandomNumberGenerator.new()
+	# Combine world seed with chunk position for unique but deterministic seed per chunk
+	var chunk_seed = world_seed + (chunk_pos.x * 73856093) + (chunk_pos.y * 19349663)
+	chunk_rng.seed = chunk_seed
+
 	# Generate trees based on biome density
 	var tree_base_count := 10  # Base number of tree spawn attempts per chunk
 	for i in range(tree_base_count):
-		var local_x := randf() * Chunk.CHUNK_SIZE.x
-		var local_z := randf() * Chunk.CHUNK_SIZE.y
+		var local_x := chunk_rng.randf() * Chunk.CHUNK_SIZE.x
+		var local_z := chunk_rng.randf() * Chunk.CHUNK_SIZE.y
 		var local_pos := Vector3(local_x, 0, local_z)
 		var world_pos := chunk_world_pos + local_pos
 		
@@ -93,23 +99,23 @@ func _generate_objects(chunk_pos: Vector2i, terrain_data) -> Dictionary:
 		var tree_density := biome_manager.get_tree_density_for_biome(biome)
 		
 		# Spawn tree based on biome density
-		if randf() < tree_density:
+		if chunk_rng.randf() < tree_density:
 			var tree_assets := biome_manager.get_tree_assets_for_biome(biome)
 			if not tree_assets.is_empty():
 				var world_constants := GameConstants.get_world_constants()
 				objects.trees.append({
 					"scene_path": "res://scenes/Tree.tscn",  # Use Tree scene instead of mesh path
-					"mesh_path": tree_assets[randi() % tree_assets.size()],  # Store mesh for visuals
+					"mesh_path": tree_assets[chunk_rng.randi() % tree_assets.size()],  # Store mesh for visuals
 					"position": local_pos,
-					"rotation": randf() * TAU,
-					"scale": world_constants.TREE_BASE_SCALE * randf_range(world_constants.TREE_MIN_SCALE, world_constants.TREE_MAX_SCALE)
+					"rotation": chunk_rng.randf() * TAU,
+					"scale": world_constants.TREE_BASE_SCALE * chunk_rng.randf_range(world_constants.TREE_MIN_SCALE, world_constants.TREE_MAX_SCALE)
 				})
 	
 	# Generate rocks based on biome density
 	var rock_base_count := 8  # Base number of rock spawn attempts per chunk
 	for i in range(rock_base_count):
-		var local_x := randf() * Chunk.CHUNK_SIZE.x
-		var local_z := randf() * Chunk.CHUNK_SIZE.y
+		var local_x := chunk_rng.randf() * Chunk.CHUNK_SIZE.x
+		var local_z := chunk_rng.randf() * Chunk.CHUNK_SIZE.y
 		var local_pos := Vector3(local_x, 0, local_z)
 		var world_pos := chunk_world_pos + local_pos
 		
@@ -122,15 +128,15 @@ func _generate_objects(chunk_pos: Vector2i, terrain_data) -> Dictionary:
 		var rock_density := biome_manager.get_rock_density_for_biome(biome)
 		
 		# Spawn rock based on biome density
-		if randf() < rock_density:
+		if chunk_rng.randf() < rock_density:
 			var rock_assets := biome_manager.get_rock_assets_for_biome(biome)
 			if not rock_assets.is_empty():
 				var world_constants := GameConstants.get_world_constants()
 				objects.rocks.append({
-					"mesh_path": rock_assets[randi() % rock_assets.size()],
+					"mesh_path": rock_assets[chunk_rng.randi() % rock_assets.size()],
 					"position": local_pos,
-					"rotation": randf() * TAU,
-					"scale": randf_range(world_constants.ROCK_MIN_SCALE, world_constants.ROCK_MAX_SCALE)
+					"rotation": chunk_rng.randf() * TAU,
+					"scale": chunk_rng.randf_range(world_constants.ROCK_MIN_SCALE, world_constants.ROCK_MAX_SCALE)
 				})
 	
 	# TODO: Add grass generation here if needed

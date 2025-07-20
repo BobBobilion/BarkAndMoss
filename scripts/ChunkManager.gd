@@ -55,6 +55,7 @@ func _process(_delta: float) -> void:
 # --- Public Methods ---
 func initialize(world: Node3D, seed: int) -> void:
 	world_node = world
+	print("ChunkManager: Initializing with world seed: ", seed)
 	chunk_generator.initialize(seed)
 
 func get_height_at_position(world_pos: Vector3) -> float:
