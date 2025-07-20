@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://bpv8qx2narlt5"]
 
-[ext_resource type="Script" path="res://scripts/PauseMenu.gd" id="1_pausemenu_script"]
+[ext_resource type="Script" uid="uid://cgb3nefvdsna5" path="res://scripts/PauseMenu.gd" id="1_pausemenu_script"]
 [ext_resource type="Theme" uid="uid://cyoxrwsnvsuny" path="res://ui/bark_moss_theme.tres" id="2_theme"]
 
 [node name="PauseMenu" type="Control"]
@@ -256,4 +256,4 @@ Any unsaved progress will be lost."
 [connection signal="pressed" from="CenterContainer/MenuPanel/VBoxContainer/SettingsButton" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="CenterContainer/MenuPanel/VBoxContainer/QuitToMenuButton" to="." method="_on_quit_to_menu_pressed"]
 [connection signal="pressed" from="CenterContainer/MenuPanel/VBoxContainer/QuitGameButton" to="." method="_on_quit_game_pressed"]
-[connection signal="pressed" from="SettingsModal/MarginContainer/VBoxContainer/HBoxContainer/CloseButton" to="." method="_on_settings_close_pressed"] 
+[connection signal="pressed" from="SettingsModal/MarginContainer/VBoxContainer/HBoxContainer/CloseButton" to="." method="_on_settings_close_pressed"]

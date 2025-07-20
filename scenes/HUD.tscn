@@ -1,10 +1,10 @@
-[gd_scene load_steps=6 format=3 uid="uid://b9hj2k3l4m5n7"]
+[gd_scene load_steps=6 format=3 uid="uid://cahj2k3l4m5n7"]
 
-[ext_resource type="Script" path="res://scripts/Hotbar.gd" id="1_5vfxu"]
-[ext_resource type="Script" path="res://scripts/HUD.gd" id="2_6wfxu"]
+[ext_resource type="Script" uid="uid://cfglpi148mjkp" path="res://scripts/Hotbar.gd" id="1_5vfxu"]
+[ext_resource type="Script" uid="uid://h517syid3w4p" path="res://scripts/HUD.gd" id="2_6wfxu"]
 [ext_resource type="PackedScene" uid="uid://bv5n6m8uao2p4" path="res://scenes/Inventory.tscn" id="3_inventory"]
 [ext_resource type="Theme" uid="uid://cyoxrwsnvsuny" path="res://ui/bark_moss_theme.tres" id="4_theme"]
-[ext_resource type="PackedScene" uid="uid://day_night_controls" path="res://scenes/DayNightControls.tscn" id="5_day_night_controls"]
+[ext_resource type="PackedScene" uid="uid://cursiuu8rbelp" path="res://scenes/DayNightControls.tscn" id="5_day_night_controls"]
 
 [node name="HUD" type="Control"]
 layout_mode = 3
@@ -90,4 +90,4 @@ mouse_filter = 2
 visible = false
 
 [node name="DayNightControls" parent="." instance=ExtResource("5_day_night_controls")]
-visible = false 
+visible = false

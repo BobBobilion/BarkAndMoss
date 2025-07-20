@@ -293,8 +293,10 @@ func _init():
 
 func set_world_seed(seed_value: int) -> void:
 	"""Set the world generation seed."""
+	print("BiomeManager: Setting world seed from ", world_seed, " to ", seed_value)
 	world_seed = seed_value
 	_initialize_noise_generators()
+	print("BiomeManager: Noise generators re-initialized with seed: ", seed_value)
 
 func get_biome_at_position(world_pos: Vector3) -> BiomeType:
 	"""Determine the primary biome type at a given world position."""

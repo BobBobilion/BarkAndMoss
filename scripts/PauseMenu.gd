@@ -6,6 +6,9 @@ extends Control
 # --- Constants ---
 const MAIN_MENU_SCENE_PATH: String = "res://scenes/MainMenu.tscn"
 
+# --- Preloads ---
+const SettingsManager = preload("res://scripts/SettingsManager.gd")
+
 # --- Node References ---
 @onready var resume_button: Button = $CenterContainer/MenuPanel/VBoxContainer/ResumeButton
 @onready var settings_button: Button = $CenterContainer/MenuPanel/VBoxContainer/SettingsButton
@@ -36,6 +39,7 @@ signal quit_game_requested
 
 # --- Properties ---
 var is_paused: bool = false
+var settings_loaded: bool = false  # Track if settings have been loaded to avoid redundant work
 
 
 # --- Engine Callbacks ---
@@ -102,10 +106,19 @@ func show_pause_menu() -> void:
 	
 	# Focus the resume button for keyboard navigation
 	resume_button.grab_focus()
+	
+	# Apply render distance setting asynchronously to avoid blocking the UI
+	# This defers the potentially expensive chunk system operations
+	if settings_loaded:
+		call_deferred("_apply_render_distance_deferred")
 
 
 func hide_pause_menu() -> void:
-	"""Hide the pause menu and resume the game."""
+	"""
+	Hide the pause menu and resume the game.
+	WARNING: This sets mouse mode to CAPTURED for gameplay.
+	Do NOT use this when quitting to main menu - handle cleanup manually instead.
+	"""
 	if not is_paused:
 		return
 		
@@ -175,8 +188,10 @@ func _on_settings_close_pressed() -> void:
 
 
 func _on_volume_changed(value: float) -> void:
-	"""Handle master volume slider changes. Updates the effective volumes for music and SFX."""
-	GameConstants.SettingsManager.apply_master_volume_setting(value)
+	"""
+	Handles master volume slider changes. Updates the effective volumes for music and SFX.
+	"""
+	SettingsManager.apply_master_volume_setting(value)
 	# Update the label text with percentage
 	_update_volume_label_text()
 	# Update effective volumes by applying the master multiplier
@@ -184,31 +199,40 @@ func _on_volume_changed(value: float) -> void:
 
 
 func _on_music_volume_changed(value: float) -> void:
-	"""Handle music volume slider changes. Updates effective music volume."""
-	GameConstants.SettingsManager.apply_music_volume_setting(value)
+	"""
+	Handles music volume slider changes. Updates effective music volume.
+	"""
+	SettingsManager.apply_music_volume_setting(value)
 	# Update the label text with percentage
 	_update_volume_label_text()
 	_update_effective_volumes()
 
 
 func _on_sfx_volume_changed(value: float) -> void:
-	"""Handle SFX volume slider changes. Updates effective SFX volume."""
-	GameConstants.SettingsManager.apply_sfx_volume_setting(value)
+	"""
+	Handles SFX volume slider changes. Updates effective SFX volume.
+	"""
+	SettingsManager.apply_sfx_volume_setting(value)
 	# Update the label text with percentage
 	_update_volume_label_text()
 	_update_effective_volumes()
 
 
 func _on_render_distance_changed(value: float) -> void:
-	"""Handle render distance slider changes. Updates chunk loading distance."""
+	"""
+	Handles render distance slider changes. Updates chunk loading distance.
+	"""
 	var distance_int = int(value)
-	GameConstants.SettingsManager.apply_render_distance_setting(distance_int)
+	# Apply render distance immediately when user changes it manually
+	SettingsManager.apply_render_distance_setting(distance_int)
 	# Update the label text
 	_update_volume_label_text()
 
 
 func _update_effective_volumes() -> void:
-	"""Updates the effective volumes using master * specific multipliers."""
+	"""
+	Updates the effective volumes using master * specific multipliers.
+	"""
 	var master_volume = volume_slider.value
 	var music_volume = music_slider.value
 	var sfx_volume = sfx_slider.value
@@ -218,8 +242,8 @@ func _update_effective_volumes() -> void:
 	var effective_sfx = (master_volume / 100.0) * (sfx_volume / 100.0) * 100.0
 	
 	# Apply the effective volumes to audio buses
-	GameConstants.SettingsManager.apply_effective_music_volume(effective_music)
-	GameConstants.SettingsManager.apply_effective_sfx_volume(effective_sfx)
+	SettingsManager.apply_effective_music_volume(effective_music)
+	SettingsManager.apply_effective_sfx_volume(effective_sfx)
 
 
 func _update_volume_label_text() -> void:
@@ -254,11 +278,16 @@ func _quit_to_main_menu() -> void:
 	"""Quit to the main menu."""
 	print("PauseMenu: Quitting to main menu...")
 	
-	# Hide the pause menu first
-	hide_pause_menu()
+	# Don't call hide_pause_menu() as it sets mouse to captured
+	# Instead, handle pause menu cleanup directly
+	is_paused = false
+	hide()
+	settings_modal.hide()
+	get_tree().paused = false
 	
-	# Ensure mouse is visible for main menu (override hide_pause_menu's captured mode)
+	# Ensure mouse is visible for main menu
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	print("PauseMenu: Set mouse mode to visible for main menu")
 	
 	# Clean up game state - find and cleanup GameManager
 	var game_managers = get_tree().get_nodes_in_group("game_manager")
@@ -304,29 +333,34 @@ func _quit_game() -> void:
 
 func _load_settings() -> void:
 	"""Load saved settings from the config file and apply them."""
-	var settings = GameConstants.SettingsManager.load_settings()
+	var settings = SettingsManager.load_settings()
 	
 	# Apply volume settings
 	volume_slider.value = settings.get("master_volume", 75.0)
 	music_slider.value = settings.get("music_volume", 75.0)
 	sfx_slider.value = settings.get("sfx_volume", 75.0)
 	
-	# Apply render distance setting
+	# Apply render distance setting to UI
 	render_slider.value = float(settings.get("render_distance", GameConstants.RENDER_DISTANCE.DEFAULT))
 	
 	# Update label texts
 	_update_volume_label_text()
 	
-	GameConstants.SettingsManager.apply_master_volume_setting(volume_slider.value)
-	GameConstants.SettingsManager.apply_music_volume_setting(music_slider.value)
-	GameConstants.SettingsManager.apply_sfx_volume_setting(sfx_slider.value)
-	GameConstants.SettingsManager.apply_render_distance_setting(int(render_slider.value))
+	# Apply audio settings immediately (these are lightweight)
+	SettingsManager.apply_master_volume_setting(volume_slider.value)
+	SettingsManager.apply_music_volume_setting(music_slider.value)
+	SettingsManager.apply_sfx_volume_setting(sfx_slider.value)
 	_update_effective_volumes()
+	
+	# DON'T apply render distance during initial load - this can cause chunk system work
+	# We'll apply it later when the menu is first shown (deferred)
+	
+	settings_loaded = true
 
 
 func _save_settings() -> void:
 	"""Save current settings to the config file."""
-	GameConstants.SettingsManager.save_all_settings(
+	SettingsManager.save_all_settings(
 		volume_slider.value,
 		music_slider.value,
 		sfx_slider.value,
@@ -335,6 +369,13 @@ func _save_settings() -> void:
 	)
 	
 	print("PauseMenu: Settings saved")
+
+
+func _apply_render_distance_deferred() -> void:
+	"""Apply render distance setting asynchronously to avoid blocking the pause menu."""
+	print("PauseMenu: Applying render distance setting asynchronously...")
+	SettingsManager.apply_render_distance_setting(int(render_slider.value))
+	print("PauseMenu: Render distance applied successfully")
 
 
 func _cleanup_persistent_ui() -> void:

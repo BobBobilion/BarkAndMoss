@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://vnrnx4wd8cs8"]
 
-[ext_resource type="Script" path="res://scripts/Lobby.gd" id="1_lobby_script"]
+[ext_resource type="Script" uid="uid://btnai2yjktg5n" path="res://scripts/Lobby.gd" id="1_lobby_script"]
 
 [node name="Lobby" type="Control"]
 layout_mode = 3
@@ -11,60 +11,129 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_lobby_script")
 
-[node name="PlayerListLabel" type="Label" parent="."]
+[node name="Background" type="ColorRect" parent="."]
 layout_mode = 1
-anchors_preset = 2
-anchor_top = 1.0
+anchors_preset = 15
+anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 50.0
-offset_top = -450.0
-offset_right = 500.0
-offset_bottom = -300.0
-grow_vertical = 0
-text = "Players Connected:"
-autowrap_mode = 2
+color = Color(0.1, 0.1, 0.15, 1)
 
-[node name="ChooseHumanButton" type="Button" parent="."]
+[node name="BackButton" type="Button" parent="."]
+layout_mode = 1
+anchors_preset = 0
+anchor_left = 0.0
+anchor_top = 0.0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 120.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 18
+text = "← Back"
+
+[node name="Title" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 50.0
+offset_right = 300.0
+offset_bottom = 120.0
+grow_horizontal = 2
+theme_override_font_sizes/font_size = 48
+text = "Choose Your Character to Join"
+horizontal_alignment = 1
+
+[node name="CharacterSelection" type="HBoxContainer" parent="."]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -250.0
-offset_top = -25.0
-offset_right = -100.0
-offset_bottom = 25.0
+offset_left = -400.0
+offset_top = -150.0
+offset_right = 400.0
+offset_bottom = 50.0
 grow_horizontal = 2
 grow_vertical = 2
-text = "Choose Human"
+theme_override_constants/separation = 50
+alignment = 1
 
-[node name="ChooseDogButton" type="Button" parent="."]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = 100.0
-offset_top = -25.0
-offset_right = 250.0
-offset_bottom = 25.0
-grow_horizontal = 2
-grow_vertical = 2
-text = "Choose Dog"
+[node name="HumanCard" type="PanelContainer" parent="CharacterSelection"]
+layout_mode = 2
+custom_minimum_size = Vector2(300, 350)
 
-[node name="StartGameButton" type="Button" parent="."]
+[node name="VBox" type="VBoxContainer" parent="CharacterSelection/HumanCard"]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="CharacterIcon" type="ColorRect" parent="CharacterSelection/HumanCard/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(200, 200)
+size_flags_horizontal = 4
+color = Color(0.6, 0.6, 0.8, 1)
+
+[node name="Label" type="Label" parent="CharacterSelection/HumanCard/VBox/CharacterIcon"]
 layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -75.0
-offset_top = 100.0
-offset_right = 75.0
-offset_bottom = 150.0
-grow_horizontal = 2
-grow_vertical = 2
-text = "Start Game" 
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_font_sizes/font_size = 72
+text = "👤"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CharacterName" type="Label" parent="CharacterSelection/HumanCard/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Human"
+horizontal_alignment = 1
+
+[node name="ChooseHumanButton" type="Button" parent="CharacterSelection/HumanCard/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(200, 50)
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Select Human"
+
+[node name="DogCard" type="PanelContainer" parent="CharacterSelection"]
+layout_mode = 2
+custom_minimum_size = Vector2(300, 350)
+
+[node name="VBox" type="VBoxContainer" parent="CharacterSelection/DogCard"]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="CharacterIcon" type="ColorRect" parent="CharacterSelection/DogCard/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(200, 200)
+size_flags_horizontal = 4
+color = Color(0.8, 0.6, 0.4, 1)
+
+[node name="Label" type="Label" parent="CharacterSelection/DogCard/VBox/CharacterIcon"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_font_sizes/font_size = 72
+text = "🐕"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CharacterName" type="Label" parent="CharacterSelection/DogCard/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Dog"
+horizontal_alignment = 1
+
+[node name="ChooseDogButton" type="Button" parent="CharacterSelection/DogCard/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(200, 50)
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
+text = "Select Dog"
+
+

@@ -13,8 +13,10 @@ var world_seed: int
 # --- Public Methods ---
 func initialize(seed: int) -> void:
 	world_seed = seed
+	print("ChunkGenerator: Initializing with world seed: ", world_seed)
 	biome_manager = BiomeManagerClass.new()
 	biome_manager.set_world_seed(world_seed)
+	print("ChunkGenerator: BiomeManager initialized with seed: ", world_seed)
 	_initialize_noise_generators()
 
 func generate_chunk_data(chunk_pos: Vector2i) -> Dictionary:

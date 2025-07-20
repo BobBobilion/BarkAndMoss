@@ -1,5 +1,5 @@
 class_name Campfire
-extends StaticBody3D
+extends RigidBody3D
 
 # Campfire states
 enum CampfireState {
@@ -46,20 +46,20 @@ func _ready() -> void:
 	"""Initialize the campfire system."""
 	print("Campfire: Initializing...")
 	
-	# Set up signal connections (only if not already connected)
-	if not cooking_timer.timeout.is_connected(_on_cooking_timer_timeout):
-		cooking_timer.timeout.connect(_on_cooking_timer_timeout)
-	if not interaction_area.area_entered.is_connected(_on_interaction_area_entered):
-		interaction_area.area_entered.connect(_on_interaction_area_entered)
-	if not interaction_area.area_exited.is_connected(_on_interaction_area_exited):
-		interaction_area.area_exited.connect(_on_interaction_area_exited)
+	# Set up signal connections
+	if not cooking_timer.timeout.is_connected(Callable(self, "_on_cooking_timer_timeout")):
+		cooking_timer.timeout.connect(Callable(self, "_on_cooking_timer_timeout"))
+	if not interaction_area.area_entered.is_connected(Callable(self, "_on_interaction_area_entered")):
+		interaction_area.area_entered.connect(Callable(self, "_on_interaction_area_entered"))
+	if not interaction_area.area_exited.is_connected(Callable(self, "_on_interaction_area_exited")):
+		interaction_area.area_exited.connect(Callable(self, "_on_interaction_area_exited"))
 	
-	# Connect the CampfireInteractable signals for debugging
+	# Connect the CampfireInteractable signals
 	if campfire_interactable:
-		if not campfire_interactable.area_entered.is_connected(_on_campfire_interactable_entered):
-			campfire_interactable.area_entered.connect(_on_campfire_interactable_entered)
-		if not campfire_interactable.area_exited.is_connected(_on_campfire_interactable_exited):
-			campfire_interactable.area_exited.connect(_on_campfire_interactable_exited)
+		if not campfire_interactable.area_entered.is_connected(Callable(self, "_on_campfire_interactable_entered")):
+			campfire_interactable.area_entered.connect(Callable(self, "_on_campfire_interactable_entered"))
+		if not campfire_interactable.area_exited.is_connected(Callable(self, "_on_campfire_interactable_exited")):
+			campfire_interactable.area_exited.connect(Callable(self, "_on_campfire_interactable_exited"))
 	
 	# Initialize campfire state
 	_update_campfire_state()

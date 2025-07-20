@@ -17,6 +17,8 @@ const FADE_OUT_DURATION: float = 1.0
 # --- State ---
 var chop_count: int = 0
 var is_chopped: bool = false
+var tree_id: String = ""
+var is_network_synced: bool = false
 
 
 # --- Engine Callbacks ---
@@ -25,6 +27,22 @@ func _ready() -> void:
 	"""Connects signals and initializes the node."""
 	# Add this node to the interactable group so the Player can detect it
 	add_to_group("interactable")
+	
+	# Generate unique tree ID and register with WorldStateManager
+	if tree_id == "":
+		tree_id = _generate_tree_id()
+	
+	# Check if this tree was already chopped using the new WorldStateManager
+	var world_state_manager = get_node("/root/WorldStateManager")
+	if world_state_manager and world_state_manager.world_state.has("chopped_trees"):
+		# Check if this tree position is in the chopped trees list
+		var chopped_trees = world_state_manager.world_state.chopped_trees
+		for chopped_pos in chopped_trees:
+			# Check if this tree's position matches a chopped tree (with some tolerance for floating point errors)
+			if global_position.distance_to(chopped_pos) < 1.0:
+				print("TreeStump: Tree at ", global_position, " was already chopped, converting to stump")
+				_chop_tree_networked()
+				break
 	
 	# The parser is failing to find the Interactable type, so we resort to duck-typing.
 	# We know from the scene setup that this node has the 'interacted' signal.
@@ -48,6 +66,10 @@ func take_damage(damage_amount: int, damager: Node3D = null):
 	chop_count += damage_amount
 	print("Tree chopped ", chop_count, "/", MAX_CHOPS, " times | Damager: ", damager.name if damager else "None")
 	
+	# Only the host processes tree chopping to avoid desync
+	if not multiplayer.is_server():
+		return
+	
 	if chop_count >= MAX_CHOPS:
 		print("Tree fully chopped! Calling _chop_tree with damager: ", damager.name if damager else "None")
 		_chop_tree(damager)
@@ -66,7 +88,16 @@ func _chop_tree(chopper: Node3D = null) -> void:
 	Rewards the player who chopped it with wood.
 	This is the most robust implementation for fading materials.
 	"""
+	if is_chopped:
+		return
+		
 	is_chopped = true
+	
+	# Sync tree removal to all clients
+	if multiplayer.is_server() and not is_network_synced:
+		var world_state_manager = get_node("/root/WorldStateManager")
+		if world_state_manager:
+			world_state_manager.record_tree_chopped(global_position)
 	
 	# Reward the player who chopped the tree with wood
 	print("TreeStump: Attempting to reward wood. Chopper: ", chopper.name if chopper else "None")
@@ -128,4 +159,51 @@ func _chop_tree(chopper: Node3D = null) -> void:
 					tween.tween_property(material_instance, "albedo_color", end_color, FADE_OUT_DURATION)
 
 	# 3. Queue Free after the entire animation is complete.
-	tween.tween_callback(queue_free) 
+	tween.tween_callback(queue_free)
+
+func _chop_tree_networked() -> void:
+	"""Chop tree without giving rewards (for network sync)."""
+	if is_chopped:
+		return
+		
+	is_chopped = true
+	is_network_synced = true
+	
+	# Same visual effect as normal chopping but without rewards
+	# Disable interaction and future physics checks immediately to prevent re-triggering.
+	if is_instance_valid(interactable):
+		interactable.set_deferred("monitoring", false)
+		interactable.set_deferred("monitorable", false)
+	collision_shape.set_deferred("disabled", true)
+	
+	# --- Create a new Tween for the animation ---
+	var tween: Tween = create_tween().set_parallel(true)
+	
+	# 1. Random Fall Animation
+	var fall_direction := Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+	var rotation_axis: Vector3 = fall_direction.cross(Vector3.UP)
+	tween.tween_property(visuals, "rotation", visuals.rotation + rotation_axis * (PI / 2), FADE_OUT_DURATION).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_IN)
+	
+	# 2. Fade Out Animation
+	for node in visuals.get_children():
+		if node is MeshInstance3D:
+			var mesh_instance := node as MeshInstance3D
+			if not mesh_instance.mesh:
+				continue
+
+			for i in range(mesh_instance.mesh.get_surface_count()):
+				var material = mesh_instance.get_active_material(i)
+				if material is StandardMaterial3D:
+					var material_instance = material.duplicate() as StandardMaterial3D
+					mesh_instance.set_surface_override_material(i, material_instance)
+					material_instance.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+					var end_color := Color(material_instance.albedo_color, 0.0)
+					tween.tween_property(material_instance, "albedo_color", end_color, FADE_OUT_DURATION)
+
+	# 3. Queue Free after the entire animation is complete.
+	tween.tween_callback(queue_free)
+
+func _generate_tree_id() -> String:
+	"""Generate a unique tree ID based on position."""
+	var pos_string = "tree_%.0f_%.0f_%.0f" % [global_position.x, global_position.y, global_position.z]
+	return pos_string 

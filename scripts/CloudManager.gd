@@ -3,6 +3,9 @@
 class_name CloudManager
 extends Node3D
 
+# Exports
+@export var enable_spawning: bool = false
+
 # Cloud generation constants (static values)
 const CLOUD_HEIGHT_MIN: float = 200.0  # Minimum cloud height - much higher in sky
 const CLOUD_HEIGHT_MAX: float = 350.0  # Maximum cloud height - much higher in sky
@@ -35,8 +38,11 @@ var player_character: CharacterBody3D
 
 func _ready() -> void:
 	"""Initialize the cloud manager and generate clouds."""
-	print("CloudManager: Initializing cloud system...")
 	add_to_group("cloud_manager")
+	
+	# Check if spawning is enabled
+	if not enable_spawning:
+		return
 	
 	# Calculate dynamic values based on current world scale
 	cloud_spawn_radius = max(100.0, 300.0 * GameConstants.get_world_scale_multiplier())
@@ -51,12 +57,12 @@ func _ready() -> void:
 	
 	# Find player for potential culling (optional)
 	call_deferred("_find_player")
-	
-	print("CloudManager: Generated ", cloud_instances.size(), " large, high-altitude clouds for natural sun filtering")
 
 
 func _process(delta: float) -> void:
 	"""Update cloud positions for realistic movement."""
+	if not enable_spawning:
+		return
 	_update_cloud_movement(delta)
 
 
@@ -74,15 +80,13 @@ func _load_cloud_model() -> void:
 				if mesh_instance is MeshInstance3D:
 					cloud_model = mesh_instance.mesh
 			temp_instance.queue_free()
-		print("CloudManager: Loaded cloud model successfully")
 	else:
-		print("CloudManager: Warning - Cloud model not found at ", CLOUD_MODEL_PATH)
+		pass
 
 
 func _generate_clouds() -> void:
 	"""Generate clouds around the world with realistic distribution."""
 	var clouds_to_generate = cloud_count
-	print("CloudManager: Generating ", clouds_to_generate, " clouds...")
 	
 	for i in range(clouds_to_generate):
 		var cloud_position = _get_random_cloud_position()
@@ -167,7 +171,7 @@ func _update_cloud_movement(delta: float) -> void:
 		cloud.position.z = world_center.z + sin(angle) * current_distance
 		
 		# Add subtle vertical bobbing
-		cloud.position.y += sin(Time.get_time_dict_from_system().second * 0.01 + i) * 0.02
+		cloud.position.y += sin(Time.get_time_dict_from_system()['second'] * 0.01 + i) * 0.02
 
 
 # --- Utility Functions ---
@@ -190,7 +194,6 @@ func get_cloud_count() -> int:
 
 func regenerate_clouds() -> void:
 	"""Regenerate all clouds (useful when world size changes)."""
-	print("CloudManager: Regenerating clouds for new world size...")
 	
 	# Clear existing clouds
 	for cloud in cloud_instances:
@@ -206,6 +209,4 @@ func regenerate_clouds() -> void:
 	movement_radius = cloud_spawn_radius * 0.8
 	
 	# Generate new clouds with updated world size
-	_generate_clouds()
-	
-	print("CloudManager: Cloud regeneration complete - ", cloud_instances.size(), " large, high-altitude clouds") 
+	_generate_clouds() 

@@ -110,6 +110,23 @@ layout_mode = 2
 size_flags_horizontal = 4
 placeholder_text = "127.0.0.1"
 
+[node name="OrLabel" type="Label" parent="JoinModal/VBoxContainer"]
+layout_mode = 2
+text = "OR"
+horizontal_alignment = 1
+
+[node name="CodeLabel" type="Label" parent="JoinModal/VBoxContainer"]
+layout_mode = 2
+text = "Enter lobby code:"
+horizontal_alignment = 1
+
+[node name="CodeInput" type="LineEdit" parent="JoinModal/VBoxContainer"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+placeholder_text = "ABC123"
+max_length = 6
+
 [node name="Spacer2" type="Control" parent="JoinModal/VBoxContainer"]
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
@@ -125,7 +142,12 @@ text = "Cancel"
 [node name="ConnectButton" type="Button" parent="JoinModal/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Connect"
+text = "Connect (IP)"
+
+[node name="JoinByCodeButton" type="Button" parent="JoinModal/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Join (Code)"
 
 [node name="CharacterSelectModal" type="PanelContainer" parent="."]
 visible = false

@@ -162,6 +162,67 @@ func _generate_world() -> void:
 	terrain_generation_complete.emit()
 	print("WorldGenerator: World generation complete!")
 
+	# After generating, apply the current world state for late-joining players.
+	_apply_world_state()
+
+
+func _apply_world_state() -> void:
+	"""
+	Applies the authoritative world state from WorldStateManager to this client's
+	newly generated world. This is crucial for late-joining players.
+	"""
+	if not is_instance_valid(WorldStateManager):
+		print("WorldGenerator: WorldStateManager not found. Cannot apply world state.")
+		return
+	
+	var state = WorldStateManager.world_state
+	
+	# Apply chopped tree state
+	var chopped_trees = state.get("chopped_trees", [])
+	for tree_pos in chopped_trees:
+		_replace_tree_with_stump_at(tree_pos)
+		
+	# Apply mined rock state (assuming similar logic)
+	var mined_rocks = state.get("mined_rocks", [])
+	for rock_pos in mined_rocks:
+		_remove_rock_at(rock_pos)
+
+
+func _replace_tree_with_stump_at(position: Vector3) -> void:
+	"""Finds a tree at a given position and replaces it with a stump."""
+	# This requires a reliable way to find the tree.
+	# The best approach is to iterate through tree instances and check positions.
+	# Note: This can be slow if there are many trees.
+	# A better system might use a spatial hash or query.
+	
+	var tree_to_remove: Node = null
+	for tree in get_tree().get_nodes_in_group("trees"):
+		if tree.global_position.distance_to(position) < 0.1: # Use a small tolerance
+			tree_to_remove = tree
+			break
+			
+	if is_instance_valid(tree_to_remove):
+		var stump_scene = preload("res://scenes/TreeStump.tscn")
+		var stump = stump_scene.instantiate()
+		stump.global_position = tree_to_remove.global_position
+		# Ensure the stump is added to the correct parent (e.g., the world node)
+		get_parent().add_child(stump) 
+		tree_to_remove.queue_free()
+		print("WorldGenerator: Replaced late-join tree with stump at ", position)
+
+
+func _remove_rock_at(position: Vector3) -> void:
+	"""Finds and removes a rock at a given position."""
+	var rock_to_remove: Node = null
+	for rock in get_tree().get_nodes_in_group("rocks"):
+		if rock.global_position.distance_to(position) < 0.1:
+			rock_to_remove = rock
+			break
+			
+	if is_instance_valid(rock_to_remove):
+		rock_to_remove.queue_free()
+		print("WorldGenerator: Removed late-join rock at ", position)
+
 
 func _generate_terrain() -> void:
 	"""Creates biome-based terrain using procedural mesh generation with noise."""

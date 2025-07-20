@@ -1,4 +1,3 @@
-class_name PlayerTracker
 extends Node
 
 # --- Signals ---
@@ -10,6 +9,7 @@ const UPDATE_INTERVAL := 0.2
 # --- Properties ---
 var player_positions: Dictionary = {} # { id: Vector3 }
 var _update_timer := 0.0
+var tracked_players: Dictionary = {} # { id: player_node } for multiplayer tracking
 
 # Configurable render distance settings
 var load_distance: int = GameConstants.RENDER_DISTANCE.DEFAULT
@@ -20,6 +20,7 @@ func _process(delta: float) -> void:
 	_update_timer += delta
 	if _update_timer >= UPDATE_INTERVAL:
 		_update_timer = 0.0
+		_update_tracked_players()
 		_calculate_required_chunks()
 
 # --- Public Methods ---
@@ -32,6 +33,18 @@ func remove_player(id: int) -> void:
 func clear_all_players() -> void:
 	"""Clear all player tracking - used when returning to main menu."""
 	player_positions.clear()
+	tracked_players.clear()
+
+func register_multiplayer_player(player_id: int, player_node: Node3D) -> void:
+	"""Register a multiplayer player for chunk tracking."""
+	tracked_players[player_id] = player_node
+	print("PlayerTracker: Registered multiplayer player ", player_id)
+
+func unregister_multiplayer_player(player_id: int) -> void:
+	"""Unregister a multiplayer player."""
+	tracked_players.erase(player_id)
+	player_positions.erase(player_id)
+	print("PlayerTracker: Unregistered multiplayer player ", player_id)
 
 func set_render_distance(distance: int) -> void:
 	"""Set the render distance for chunk loading/unloading."""
@@ -81,4 +94,15 @@ func _get_lod_for_distance(d: float) -> Chunk.LOD:
 	if d <= high_threshold: return Chunk.LOD.HIGH
 	if d <= medium_threshold: return Chunk.LOD.MEDIUM
 	if d <= low_threshold: return Chunk.LOD.LOW
-	return Chunk.LOD.NONE 
+	return Chunk.LOD.NONE
+
+func _update_tracked_players() -> void:
+	"""Update positions of all tracked multiplayer players."""
+	for player_id in tracked_players:
+		var player_node = tracked_players[player_id]
+		if is_instance_valid(player_node):
+			player_positions[player_id] = player_node.global_position
+		else:
+			# Clean up invalid player references
+			tracked_players.erase(player_id)
+			player_positions.erase(player_id) 

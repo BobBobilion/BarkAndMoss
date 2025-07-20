@@ -50,9 +50,11 @@ func setup(p_player_body: CharacterBody3D, p_adventurer_model: Node3D, p_camera:
 	
 	call_deferred("_set_initial_tool_visibility")
 
-func set_hud(p_hud: Control):
-	self.hud_instance = p_hud
-	call_deferred("_set_initial_tool_visibility")
+
+func set_hud_reference(hud: Control) -> void:
+	"""Set the HUD reference so we can access the hotbar for equipped items."""
+	hud_instance = hud
+
 
 func _find_node_by_name(node: Node, target_name: String) -> Node3D:
 	if node.name == target_name:
@@ -62,6 +64,7 @@ func _find_node_by_name(node: Node, target_name: String) -> Node3D:
 		if result:
 			return result
 	return null
+
 
 # --- Public Methods ---
 func _has_arrows() -> bool:
@@ -91,7 +94,8 @@ func handle_equipment_input(delta: float, closest_interactable: Node) -> String:
 				if _has_arrows():
 					_start_bow_charge()
 				else:
-					print("Cannot use bow - no arrows available!")
+					# Could add a UI notification here instead of print
+					pass
 			_:
 				action_to_perform = "punch_right" # Default unarmed attack
 
@@ -121,8 +125,6 @@ func on_hotbar_selection_changed(slot_index: int, item_name: String) -> void:
 		# Reset crosshair when switching away from bow
 		if is_instance_valid(hud_instance) and hud_instance.has_method("reset_crosshair_to_default"):
 			hud_instance.reset_crosshair_to_default()
-	
-	print("Equipment changed to: ", item_name)
 
 func _update_tool_visibility(item: String) -> void:
 	# Hide all tools first
@@ -149,35 +151,24 @@ func toggle_axe_hitbox(is_enabled: bool):
 		axe_model.set_hitbox_enabled(is_enabled)
 
 func _on_axe_hit(body: Node3D):
-	# Log every axe hit with detailed information
-	print("🪓 AXE HIT! Target: ", body.name, " | Type: ", body.get_class(), " | Groups: ", body.get_groups())
-	print("   -> Player body reference: ", player_body.name if player_body else "None")
-	
 	# Handle hitting animals - instant kill with axe
 	if body.is_in_group("animals") and body.has_method("take_damage"):
-		print("   -> Dealing fatal damage to ", body.name)
 		body.take_damage(100.0)  # Instant kill for animals
 		return
 	
 	# Handle hitting corpses - process them
 	if body.is_in_group("corpses"):
-		print("   -> Processing corpse: ", body.name)
 		_process_corpse_with_axe(body)
 		return
 	
 	# Handle other objects that can take damage (like trees)
 	if body.has_method("take_damage"):
-		print("   -> Dealing 1 damage to ", body.name, " | Groups: ", body.get_groups())
 		# Pass the player reference for trees so they can reward the chopper with wood
 		# Check for TreeStump (the actual node name in the scene)
 		if body.is_in_group("interactable") or "TreeStump" in body.name or "Tree" in body.name:
-			print("   -> Detected as tree, passing player reference")
 			body.take_damage(1, player_body)
 		else:
-			print("   -> Detected as non-tree, using default damage")
 			body.take_damage(1) # Default damage for other objects (animals, etc.)
-	else:
-		print("   -> Target has no take_damage method")
 
 func _process_corpse_with_axe(corpse: Node3D) -> void:
 	"""Process a corpse when hit with the axe."""
@@ -201,8 +192,6 @@ func _start_bow_charge() -> void:
 	# Update crosshair to show loading state (red)
 	if is_instance_valid(hud_instance) and hud_instance.has_method("update_bow_charge_crosshair"):
 		hud_instance.update_bow_charge_crosshair(true, false)  # Charging but not ready
-	
-	print("Started gun-aim bow charging")
 
 func _update_bow_charge(delta: float) -> void:
 	"""Update bow charge level while maintaining gun-aim stance."""
@@ -212,8 +201,6 @@ func _update_bow_charge(delta: float) -> void:
 		
 		# Check if we just reached the minimum draw time
 		if previous_charge < BOW_MIN_DRAW_TIME and bow_charge_level >= BOW_MIN_DRAW_TIME:
-			print("Bow ready to fire! (", BOW_MIN_DRAW_TIME, " seconds reached)")
-			
 			# Update crosshair to show ready state (green)
 			if is_instance_valid(hud_instance) and hud_instance.has_method("update_bow_charge_crosshair"):
 				hud_instance.update_bow_charge_crosshair(true, true)  # Charging and ready
@@ -238,7 +225,6 @@ func _shoot_arrow() -> void:
 	"""Shoot an arrow from the bow position with proper trajectory calculation."""
 	# Check if minimum draw time has been met
 	if bow_charge_level < BOW_MIN_DRAW_TIME:
-		print("Bow not drawn long enough! Need ", BOW_MIN_DRAW_TIME, " seconds, only had ", bow_charge_level)
 		# Don't shoot - just stop charging and return to normal stance
 		_stop_bow_charge()
 		return
@@ -247,24 +233,19 @@ func _shoot_arrow() -> void:
 	var player_inventory = player_body.get_inventory() if player_body and player_body.has_method("get_inventory") else null
 	
 	if not player_inventory:
-		print("Cannot access player inventory!")
 		_stop_bow_charge()
 		return
 	
 	# Final safety check for arrows (edge case: arrows removed while charging)
 	var arrow_count: int = player_inventory.get_item_count("Arrow") if player_inventory.has_method("get_item_count") else 0
 	if arrow_count <= 0:
-		print("No arrows available! (arrows were removed while charging)")
 		_stop_bow_charge()
 		return
 	
 	# Consume 1 arrow from inventory
 	if not player_inventory.remove_item_by_name("Arrow", 1):
-		print("Failed to consume arrow from inventory!")
 		_stop_bow_charge()
 		return
-	
-	print("Consumed 1 arrow. Arrows remaining: ", player_inventory.get_item_count("Arrow"))
 	
 	# Update hotbar to show new arrow count
 	if is_instance_valid(hud_instance) and hud_instance.has_node("Hotbar"):
@@ -301,7 +282,6 @@ func _shoot_arrow() -> void:
 		spawn_position += bow_left * 0.15  # 0.15 meters to the left
 	else:
 		# Fallback to camera position if bow model is not available
-		print("Warning: Bow model not found, falling back to camera spawn position")
 		spawn_position = camera.global_position + shoot_direction * 0.5
 	
 	# Create and configure the arrow
@@ -318,7 +298,6 @@ func _shoot_arrow() -> void:
 	arrow.launch(shoot_direction, arrow_speed * arrow_power)
 	
 	_stop_bow_charge()
-	print("Arrow shot from bow position with gun-aim animation: ", spawn_position)
 
 func _stop_bow_charge() -> void:
 	"""Stop bow charging and return to normal stance."""
@@ -336,8 +315,6 @@ func _stop_bow_charge() -> void:
 	# Reset crosshair to default color
 	if is_instance_valid(hud_instance) and hud_instance.has_method("reset_crosshair_to_default"):
 		hud_instance.reset_crosshair_to_default()
-	
-	print("Stopped gun-aim bow charging and returned zoom to normal")
 
 func _stop_aiming() -> void:
 	"""Stop aiming and ensure gun-aim animations are properly ended."""
@@ -353,7 +330,9 @@ func get_equipped_item_from_hud() -> String:
 	if is_instance_valid(hud_instance) and hud_instance.has_node("Hotbar"):
 		var hotbar = hud_instance.get_node("Hotbar")
 		if hotbar and hotbar.has_method("get_selected_item"):
-			return hotbar.get_selected_item()
+			var item = hotbar.get_selected_item()
+			return item
+	
 	return ""
 
 func _get_interaction_prompt(interactable: Node) -> String:

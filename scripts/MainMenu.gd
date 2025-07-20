@@ -8,6 +8,9 @@ const LOBBY_SCENE_PATH: String = "res://scenes/Lobby.tscn"
 const MAIN_SCENE_PATH: String = "res://scenes/Main.tscn"
 const LOADING_SCENE_PATH: String = "res://scenes/LoadingScreen.tscn"
 
+# --- Preloads ---
+const SettingsManager = preload("res://scripts/SettingsManager.gd")
+
 # --- Node References ---
 # Main menu buttons
 @onready var play_button: Button = $VBoxContainer/PlayButton
@@ -28,8 +31,10 @@ const LOADING_SCENE_PATH: String = "res://scenes/LoadingScreen.tscn"
 
 # Join modal elements
 @onready var ip_input: LineEdit = $JoinModal/VBoxContainer/IPInput
+@onready var code_input: LineEdit = $JoinModal/VBoxContainer/CodeInput
 @onready var cancel_button: Button = $JoinModal/VBoxContainer/HBoxContainer/CancelButton
 @onready var connect_button: Button = $JoinModal/VBoxContainer/HBoxContainer/ConnectButton
+@onready var join_by_code_button: Button = $JoinModal/VBoxContainer/HBoxContainer/JoinByCodeButton
 
 # Settings modal elements
 @onready var volume_slider: HSlider = $SettingsModal/MarginContainer/VBoxContainer/VolumeSlider
@@ -44,18 +49,28 @@ const LOADING_SCENE_PATH: String = "res://scenes/LoadingScreen.tscn"
 
 # --- State Variables ---
 var selected_character: String = ""  # "bark" or "moss"
+var is_hosting: bool = false  # Flag to prevent connection logic from interfering
+var is_connecting: bool = false  # Flag to track active connection attempts
 
 
 # --- Engine Callbacks ---
 
 func _ready() -> void:
 	"""Initializes the main menu, connects signals, and loads settings."""
+	# Ensure mouse is visible for main menu (safety check for scene transitions)
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	print("MainMenu: Set mouse mode to visible")
+	
 	# Clean up any leftover UI from previous scenes
 	if PauseManager:
 		PauseManager.force_cleanup()
 	
 	# Clean up leftover UI layers
 	_cleanup_leftover_ui()
+	
+	# Reset hosting flag
+	is_hosting = false
+	is_connecting = false
 	
 	# Hide modals initially
 	character_select_modal.hide()
@@ -78,6 +93,9 @@ func _ready() -> void:
 	music_slider.value_changed.connect(_on_music_volume_changed)
 	sfx_slider.value_changed.connect(_on_sfx_volume_changed)
 	render_slider.value_changed.connect(_on_render_distance_changed)
+	
+	# Connect join modal signals (not defined in .tscn)
+	join_by_code_button.pressed.connect(_on_join_by_code_pressed)
 	
 	# Load saved settings
 	_load_settings()
@@ -161,18 +179,38 @@ func _on_play_character_pressed() -> void:
 	
 	print("Starting game with character: ", selected_character)
 	
+	# Set flag to indicate we're hosting
+	is_hosting = true
+	is_connecting = false  # Cancel any pending connection attempts
+	
 	# Clean up any leftover game state before starting new game
 	_ensure_clean_game_state()
 	
-	# Set up networking
+	# Set up networking FIRST
 	NetworkManager.host_game()
+	print("MainMenu: host_game() called, players should contain host")
+	print("MainMenu: NetworkManager.players = ", NetworkManager.players)
 	
-	# Claim the chosen role
+	# Display lobby code in character selection modal
+	var lobby_code = NetworkManager.get_lobby_code()
+	if lobby_code != "":
+		print("MainMenu: Lobby code generated: ", lobby_code)
+		# Create or update lobby code display
+		_show_lobby_code_in_modal(lobby_code)
+	
+	# Wait a frame to ensure host is registered
+	await get_tree().process_frame
+	print("MainMenu: After wait, NetworkManager.players = ", NetworkManager.players)
+	
+	# Claim the chosen role AFTER networking is set up
 	var role: String = "human" if selected_character == "moss" else "dog"
 	NetworkManager.claim_role(role)
+	print("MainMenu: claim_role() called")
 	
 	# Start the game
+	print("MainMenu: About to call _transition_to_loading_screen()")
 	_transition_to_loading_screen(role)
+	print("MainMenu: _transition_to_loading_screen() returned - this shouldn't print if scene changed")
 
 
 func _update_character_selection_ui() -> void:
@@ -306,6 +344,8 @@ func _on_character_back_pressed() -> void:
 	Handles the back button in the character selection modal. Hides the modal.
 	"""
 	selected_character = ""  # Reset selection when going back
+	is_hosting = false  # Reset hosting flag
+	is_connecting = false  # Reset connecting flag
 	character_select_modal.hide()
 
 
@@ -349,8 +389,10 @@ func _on_join_cancel_pressed() -> void:
 	"""
 	Handles the cancel button in the join modal. Hides the modal.
 	"""
+	is_connecting = false  # Stop any pending connection
 	join_modal.hide()
 	ip_input.text = ""
+	code_input.text = ""
 
 
 func _on_connect_pressed() -> void:
@@ -365,6 +407,129 @@ func _on_connect_pressed() -> void:
 	print("Attempting to join game at: ", ip)
 	NetworkManager.join_game(ip)
 	get_tree().change_scene_to_file(LOBBY_SCENE_PATH)
+
+func _on_join_by_code_pressed() -> void:
+	"""
+	Handles the join by code button in the join modal. Attempts to join
+	a game using the provided lobby code.
+	"""
+	var code: String = code_input.text.strip_edges().to_upper()
+	if code.is_empty():
+		print("No lobby code provided")
+		return
+	
+	if code.length() != 6:
+		print("Invalid lobby code length: ", code.length())
+		return
+	
+	print("MainMenu: Attempting to join game with code: ", code)
+	
+	# Set connecting flag
+	is_connecting = true
+	
+	# Connect to NetworkManager's connection failed signal
+	if not NetworkManager.connection_failed.is_connected(_on_connection_failed):
+		NetworkManager.connection_failed.connect(_on_connection_failed)
+	
+	# For debugging - check if code looks like an IP address (for testing)
+	if _is_ip_address(code):
+		print("MainMenu: Code looks like IP address, trying direct connection")
+		NetworkManager.join_game(code)
+		_wait_for_actual_connection()
+	else:
+		print("MainMenu: Using discovery system for lobby code")
+		NetworkManager.join_game_by_code(code)
+		# Don't wait for connection here - let discovery complete first
+		# The discovery process will call join_game() when it finds the host
+		# We'll detect the connection via peer_connected signal
+		_wait_for_discovery_connection()
+
+func _wait_for_discovery_connection() -> void:
+	"""Wait for discovery to find host and establish connection."""
+	# Connect to multiplayer peer_connected signal to know when we actually connect
+	if not multiplayer.peer_connected.is_connected(_on_discovery_peer_connected):
+		multiplayer.peer_connected.connect(_on_discovery_peer_connected)
+	
+	# Also set a timeout for discovery
+	var timeout_timer = Timer.new()
+	timeout_timer.wait_time = 20.0  # Give discovery 20 seconds
+	timeout_timer.one_shot = true
+	timeout_timer.timeout.connect(func(): 
+		if is_connecting:
+			print("MainMenu: Discovery timeout")
+			_on_connection_failed("Discovery timeout - could not find host")
+			if multiplayer.peer_connected.is_connected(_on_discovery_peer_connected):
+				multiplayer.peer_connected.disconnect(_on_discovery_peer_connected)
+		timeout_timer.queue_free()
+	)
+	add_child(timeout_timer)
+	timeout_timer.start()
+
+func _on_discovery_peer_connected(id: int) -> void:
+	"""Called when we actually connect to a peer after discovery."""
+	print("MainMenu: Connected to peer ID: ", id)
+	# Disconnect the signal since we only need it once
+	if multiplayer.peer_connected.is_connected(_on_discovery_peer_connected):
+		multiplayer.peer_connected.disconnect(_on_discovery_peer_connected)
+	
+	# Only proceed if we're still in connecting state and this is the server
+	if is_connecting and id == 1:  # Server ID is always 1
+		print("MainMenu: Successfully connected to server, transitioning to lobby")
+		is_connecting = false
+		get_tree().change_scene_to_file(LOBBY_SCENE_PATH)
+
+func _wait_for_actual_connection() -> void:
+	"""Wait for actual connection when using direct IP."""
+	var wait_time = 0.0
+	var max_wait_time = 10.0  # Timeout for direct connection
+	
+	while wait_time < max_wait_time:
+		await get_tree().create_timer(0.1).timeout
+		wait_time += 0.1
+		
+		# Stop if we're now hosting or scene is changing
+		if is_hosting or not is_connecting:
+			print("MainMenu: Canceling connection attempt (hosting=%s, connecting=%s)" % [is_hosting, is_connecting])
+			return
+		
+		# Check for actual connection to server
+		if multiplayer.has_multiplayer_peer():
+			var peer = multiplayer.get_multiplayer_peer()
+			var status = peer.get_connection_status()
+			
+			# For clients, we need to verify we're connected to the server (ID 1)
+			if status == MultiplayerPeer.CONNECTION_CONNECTED:
+				# Additional check - see if we have any connected peers
+				var connected_peers = peer.get_peers()
+				if connected_peers.size() > 0:
+					print("MainMenu: Connected to %d peers: %s" % [connected_peers.size(), connected_peers])
+					print("MainMenu: Successfully connected, transitioning to lobby")
+					is_connecting = false
+					get_tree().change_scene_to_file(LOBBY_SCENE_PATH)
+					return
+				else:
+					# Status says connected but no peers - wait more
+					if int(wait_time * 10) % 10 == 0:  # Log every second
+						print("MainMenu: Status CONNECTED but no peers yet (", wait_time, "s)")
+			elif int(wait_time * 10) % 10 == 0:  # Log every second
+				print("MainMenu: Connection status: ", status, " (", wait_time, "s)")
+		else:
+			if int(wait_time * 10) % 10 == 0:  # Log every second
+				print("MainMenu: No multiplayer peer yet (", wait_time, "s)")
+	
+	print("MainMenu: Connection timeout after ", wait_time, " seconds")
+	_on_connection_failed("Connection timeout")
+
+func _on_connection_failed(reason: String) -> void:
+	"""Handle connection failure when joining by code."""
+	print("Connection failed: ", reason)
+	# Could show an error dialog here
+
+func _is_ip_address(text: String) -> bool:
+	"""Check if text looks like an IP address (for testing purposes)."""
+	var ip_regex = RegEx.new()
+	ip_regex.compile("^(\\d{1,3}\\.){3}\\d{1,3}$")
+	return ip_regex.search(text) != null
 
 
 # --- Settings Modal Handlers ---
@@ -381,7 +546,7 @@ func _on_volume_changed(value: float) -> void:
 	"""
 	Handles master volume slider changes. Updates the effective volumes for music and SFX.
 	"""
-	GameConstants.SettingsManager.apply_master_volume_setting(value)
+	SettingsManager.apply_master_volume_setting(value)
 	# Update the label text with percentage
 	_update_volume_label_text()
 	# Update effective volumes by applying the master multiplier
@@ -392,7 +557,7 @@ func _on_music_volume_changed(value: float) -> void:
 	"""
 	Handles music volume slider changes. Updates effective music volume.
 	"""
-	GameConstants.SettingsManager.apply_music_volume_setting(value)
+	SettingsManager.apply_music_volume_setting(value)
 	# Update the label text with percentage
 	_update_volume_label_text()
 	_update_effective_volumes()
@@ -402,7 +567,7 @@ func _on_sfx_volume_changed(value: float) -> void:
 	"""
 	Handles SFX volume slider changes. Updates effective SFX volume.
 	"""
-	GameConstants.SettingsManager.apply_sfx_volume_setting(value)
+	SettingsManager.apply_sfx_volume_setting(value)
 	# Update the label text with percentage
 	_update_volume_label_text()
 	_update_effective_volumes()
@@ -413,7 +578,7 @@ func _on_render_distance_changed(value: float) -> void:
 	Handles render distance slider changes. Updates chunk loading distance.
 	"""
 	var distance_int = int(value)
-	GameConstants.SettingsManager.apply_render_distance_setting(distance_int)
+	SettingsManager.apply_render_distance_setting(distance_int)
 	# Update the label text
 	_update_volume_label_text()
 
@@ -441,8 +606,8 @@ func _update_effective_volumes() -> void:
 	var effective_sfx = (master_volume / 100.0) * (sfx_volume / 100.0) * 100.0
 	
 	# Apply the effective volumes to audio buses
-	GameConstants.SettingsManager.apply_effective_music_volume(effective_music)
-	GameConstants.SettingsManager.apply_effective_sfx_volume(effective_sfx)
+	SettingsManager.apply_effective_music_volume(effective_music)
+	SettingsManager.apply_effective_sfx_volume(effective_sfx)
 
 
 
@@ -454,7 +619,7 @@ func _load_settings() -> void:
 	"""
 	Loads saved settings from the config file and applies them.
 	"""
-	var settings = GameConstants.SettingsManager.load_settings()
+	var settings = SettingsManager.load_settings()
 	
 	# Apply volume settings
 	volume_slider.value = settings.get("master_volume", 75.0)
@@ -467,10 +632,10 @@ func _load_settings() -> void:
 	# Update label texts
 	_update_volume_label_text()
 	
-	GameConstants.SettingsManager.apply_master_volume_setting(volume_slider.value)
-	GameConstants.SettingsManager.apply_music_volume_setting(music_slider.value)
-	GameConstants.SettingsManager.apply_sfx_volume_setting(sfx_slider.value)
-	GameConstants.SettingsManager.apply_render_distance_setting(int(render_slider.value))
+	SettingsManager.apply_master_volume_setting(volume_slider.value)
+	SettingsManager.apply_music_volume_setting(music_slider.value)
+	SettingsManager.apply_sfx_volume_setting(sfx_slider.value)
+	SettingsManager.apply_render_distance_setting(int(render_slider.value))
 	_update_effective_volumes()
 
 
@@ -479,7 +644,7 @@ func _save_settings() -> void:
 	Saves current settings to the config file.
 	"""
 	# Save all settings including render distance
-	GameConstants.SettingsManager.save_all_settings(
+	SettingsManager.save_all_settings(
 		volume_slider.value,
 		music_slider.value,
 		sfx_slider.value,
@@ -498,9 +663,15 @@ func _ensure_clean_game_state() -> void:
 	if PauseManager:
 		PauseManager.force_cleanup()
 	
-	# Force disconnect from any existing network sessions
-	if NetworkManager:
+	# Only disconnect from network if we're connected to someone else's game
+	# Don't disconnect if we're hosting or about to host a new game
+	if NetworkManager and multiplayer.has_multiplayer_peer() and not NetworkManager.is_host:
+		print("MainMenu: Disconnecting from existing game before hosting new one")
 		NetworkManager.disconnect_from_game()
+	elif NetworkManager and NetworkManager.is_host:
+		print("MainMenu: Already hosting - keeping existing multiplayer peer")
+	else:
+		print("MainMenu: No existing multiplayer connection to clean up")
 	
 	# Clean up any leftover UI layers
 	_cleanup_leftover_ui()
@@ -552,7 +723,55 @@ func _transition_to_loading_screen(character_role: String) -> void:
 	"""Transition to the loading screen with character role information."""
 	print("MainMenu: Transitioning to loading screen for role: %s" % character_role)
 	
+	# Clear all flags to prevent lingering async code from interfering
+	is_connecting = false
+	is_hosting = false
+	
 	# Change to loading screen - the LoadingScreen will get character role from NetworkManager
 	var error: Error = get_tree().change_scene_to_file(LOADING_SCENE_PATH)
 	if error != OK:
 		printerr("MainMenu: Failed to change scene to LoadingScreen.tscn (error: %d)" % error)
+
+func _show_lobby_code_in_modal(code: String) -> void:
+	"""Display the lobby code in the character selection modal."""
+	# Check if lobby code label already exists
+	var lobby_code_label = character_select_modal.get_node_or_null("VBoxContainer/LobbyCodeLabel")
+	
+	if not lobby_code_label:
+		# Create new label
+		lobby_code_label = Label.new()
+		lobby_code_label.name = "LobbyCodeLabel"
+		lobby_code_label.add_theme_font_size_override("font_size", 24)
+		lobby_code_label.add_theme_color_override("font_color", Color(0.918, 0.878, 0.835, 1))
+		lobby_code_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		
+		# Insert it at the top of the VBoxContainer
+		var vbox = character_select_modal.get_node("VBoxContainer")
+		vbox.add_child(lobby_code_label)
+		vbox.move_child(lobby_code_label, 0)  # Move to top
+		
+		# Add some spacing
+		var spacer = Control.new()
+		spacer.custom_minimum_size = Vector2(0, 10)
+		vbox.add_child(spacer)
+		vbox.move_child(spacer, 1)
+		
+		# Add test code info
+		var test_label = Label.new()
+		test_label.name = "TestCodeLabel"
+		test_label.add_theme_font_size_override("font_size", 14)
+		test_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+		test_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		test_label.text = "(Other players can use 'TEST' to connect on same machine)"
+		vbox.add_child(test_label)
+		vbox.move_child(test_label, 2)
+		
+		# Add more spacing
+		var spacer2 = Control.new()
+		spacer2.custom_minimum_size = Vector2(0, 10)
+		vbox.add_child(spacer2)
+		vbox.move_child(spacer2, 3)
+	
+	# Update the text
+	lobby_code_label.text = "Lobby Code: " + code
+	lobby_code_label.visible = true

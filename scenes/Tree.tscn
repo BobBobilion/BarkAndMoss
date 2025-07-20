@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://bqs7g2w2w2g2"]
 
-[ext_resource type="Script" path="res://scripts/TreeStump.gd" id="1_1ydeu"]
-[ext_resource type="Script" path="res://scripts/Interactable.gd" id="2_wfrqj"]
+[ext_resource type="Script" uid="uid://cuu8lp6minotj" path="res://scripts/TreeStump.gd" id="1_1ydeu"]
+[ext_resource type="Script" uid="uid://bbh1pyej32pbs" path="res://scripts/Interactable.gd" id="2_wfrqj"]
 
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_abcde"]
 height = 6.0
@@ -27,4 +27,4 @@ interaction_prompt = "Chop Tree"
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Interactable"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
-shape = SubResource("CylinderShape3D_abcde") 
+shape = SubResource("CylinderShape3D_abcde")

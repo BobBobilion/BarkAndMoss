@@ -1,6 +1,13 @@
 class_name AnimalSpawner
 extends Node
 
+# --- Exports ---
+@export var enable_spawning: bool = false
+
+# --- Multiplayer State ---
+var spawned_animals: Dictionary = {}  # {animal_id: animal_node}
+var is_host: bool = false
+
 # --- Imports ---
 const BiomeManagerClass = preload("res://scripts/BiomeManager.gd")
 
@@ -80,6 +87,12 @@ func _ready() -> void:
 	# Add to group for cleanup purposes
 	add_to_group("animal_spawner")
 	
+	# Check if we're the host
+	is_host = NetworkManager and NetworkManager.is_host
+	
+	# Note: Animal spawning is now handled locally by AnimalSpawner
+	# WorldStateManager only handles basic world state (seed, trees, rocks)
+	
 	# Try to find the biome manager, chunk manager, and spawn parent - they might not be ready yet during _ready()
 	_try_get_biome_manager()
 	_try_get_chunk_manager()
@@ -92,6 +105,10 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	"""Update the spawning and despawning systems."""
+	# Check if spawning is enabled
+	if not enable_spawning:
+		return
+	
 	# Try to get biome manager, chunk manager, and spawn parent if we don't have them yet
 	if not biome_manager:
 		_try_get_biome_manager()
@@ -176,18 +193,44 @@ func _try_spawn_animal(animal_type: String, animal_data: Dictionary) -> void:
 		if randf() > biome_preference:
 			continue  # This biome isn't preferred, try different location
 		
-		# Spawn the animal
-		var animal_scene: PackedScene = animal_data.scene
-		var animal: Node3D = animal_scene.instantiate()
-		
-		# Add to the scene
-		spawn_parent.add_child(animal)
-		animal.global_position = spawn_position
-		
-		# Track the spawned animal
-		if not current_animals.has(animal_type):
-			current_animals[animal_type] = []
-		current_animals[animal_type].append(animal)
+		# Only host spawns animals, then syncs to clients
+		if NetworkManager and NetworkManager.is_host:
+			# Generate unique animal ID for tracking
+			var animal_id = _generate_animal_id(animal_type)
+			
+			# Spawn locally on host
+			var animal_scene: PackedScene = animal_data.scene
+			var animal: Node3D = animal_scene.instantiate()
+			
+			# Set animal ID for tracking
+			if animal.has_method("set_animal_id"):
+				animal.set_animal_id(animal_id)
+			else:
+				# Set as a meta property if no method exists
+				animal.set_meta("animal_id", animal_id)
+			
+			# Add to the scene
+			spawn_parent.add_child(animal)
+			animal.global_position = spawn_position
+			
+			# Track the spawned animal locally
+			spawned_animals[animal_id] = animal
+			if not current_animals.has(animal_type):
+				current_animals[animal_type] = []
+			current_animals[animal_type].append(animal)
+		elif not NetworkManager:
+			# Single player mode - spawn normally
+			var animal_scene: PackedScene = animal_data.scene
+			var animal: Node3D = animal_scene.instantiate()
+			
+			# Add to the scene
+			spawn_parent.add_child(animal)
+			animal.global_position = spawn_position
+			
+			# Track the spawned animal
+			if not current_animals.has(animal_type):
+				current_animals[animal_type] = []
+			current_animals[animal_type].append(animal)
 		
 		# Successfully spawned animal
 		return  # Successfully spawned
@@ -769,4 +812,10 @@ func _get_fallback_terrain_height(spawn_position: Vector3) -> float:
 			best_height = player.global_position.y + 2.0  # Add 2 meters buffer for terrain height differences
 	
 	# Ensure minimum height to avoid underground spawning
-	return max(best_height, 3.0)  # Never go below 3 meters height 
+	return max(best_height, 3.0)  # Never go below 3 meters height
+
+# --- Multiplayer Signal Handlers ---
+
+func _generate_animal_id(animal_type: String) -> String:
+	"""Generate a unique ID for an animal."""
+	return animal_type + "_" + str(Time.get_unix_time_from_system()) + "_" + str(randi()) 

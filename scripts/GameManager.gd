@@ -67,7 +67,23 @@ func start_game() -> void:
 
 func spawn_initial_players() -> void:
 	"""Spawn players based on their selected character types."""
-	print("GameManager: spawn_initial_players called (is_server: %s)" % multiplayer.is_server())
+	print("GameManager: spawn_initial_players called")
+	print("GameManager: Has multiplayer peer: ", multiplayer.has_multiplayer_peer())
+	print("GameManager: Current players dictionary: ", players.keys())
+	
+	# Handle single player mode (no multiplayer peer)
+	if not multiplayer.has_multiplayer_peer():
+		print("GameManager: No multiplayer peer - running in single player mode")
+		# In single player, spawn a default human player with ID 1
+		var single_player_id = 1
+		players[single_player_id] = {"role": "human"}  # Default to human in single player
+		_spawn_player(single_player_id)
+		return
+	
+	# Multiplayer mode - check if we're server and get player info
+	var is_server_mode = multiplayer.is_server()
+	print("GameManager: Multiplayer mode - is_server: ", is_server_mode)
+	print("GameManager: Multiplayer peer count: ", multiplayer.get_peers().size())
 	
 	# Always spawn the local player
 	var local_id: int = multiplayer.get_unique_id()
@@ -75,11 +91,19 @@ func spawn_initial_players() -> void:
 	_spawn_player(local_id)
 	
 	# If we're the server and have connected players, spawn them too
-	if multiplayer.is_server():
-		for peer_id in multiplayer.get_peers():
+	if is_server_mode:
+		var peer_list = multiplayer.get_peers()
+		print("GameManager: Server spawning peers: ", peer_list)
+		for peer_id in peer_list:
 			print("GameManager: Spawning connected player: %d" % peer_id)
 			_spawn_player(peer_id)
+		
+		# After spawning all players, sync their positions to all clients
+		await get_tree().process_frame
+		_sync_all_player_positions()
 
+	print("GameManager: Final players count: ", players.size())
+	print("GameManager: Final players dictionary: ", players.keys())
 	print("GameManager: Initial players spawned.")
 
 func get_spawn_position() -> Vector3:
@@ -185,6 +209,13 @@ func _spawn_player(peer_id: int) -> void:
 		print("GameManager: Player %d already spawned" % peer_id)
 		return
 	
+	# Handle both multiplayer and single player modes
+	var is_multiplayer = multiplayer.has_multiplayer_peer()
+	if not is_multiplayer:
+		print("GameManager: Single player mode - spawning local player")
+	else:
+		print("GameManager: Multiplayer mode - spawning player %d" % peer_id)
+	
 	# Get character type from NetworkManager (default to human if not selected)
 	var character_type: String = "human"  # Default fallback
 	if NetworkManager.players.has(peer_id):
@@ -205,8 +236,37 @@ func _spawn_player(peer_id: int) -> void:
 	var player := player_scene.instantiate()
 	player.name = "Player_%d" % peer_id
 	
-	# Set multiplayer authority
-	player.set_multiplayer_authority(peer_id)
+	# Set multiplayer authority only in multiplayer mode
+	if is_multiplayer:
+		player.set_multiplayer_authority(peer_id)
+		print("GameManager: Set multiplayer authority for player %d" % peer_id)
+	else:
+		print("GameManager: Single player mode - skipping multiplayer authority setup")
+	
+	# Add to world first
+	if world_node:
+		world_node.add_child(player)
+	else:
+		add_child(player)
+	
+	# Wait a frame to ensure the node is fully in the scene tree
+	await get_tree().process_frame
+	
+	# Debug: Check player node structure
+	print("GameManager: Player node children:")
+	for child in player.get_children():
+		print("  - ", child.name, " (", child.get_class(), ")")
+	
+	# Also set authority on the MultiplayerSynchronizer if it exists (only in multiplayer mode)
+	if is_multiplayer:
+		var multiplayer_sync = player.get_node_or_null("MultiplayerSynchronizer")
+		if multiplayer_sync:
+			print("GameManager: Setting authority on MultiplayerSynchronizer for player %d" % peer_id)
+			multiplayer_sync.set_multiplayer_authority(peer_id)
+		else:
+			print("GameManager: Warning - MultiplayerSynchronizer not found for player %d" % peer_id)
+	else:
+		print("GameManager: Single player mode - skipping MultiplayerSynchronizer setup")
 	
 	# Set spawn position with character-specific adjustments
 	var base_spawn_pos = get_spawn_position() + Vector3(0, 5, 0)
@@ -220,14 +280,12 @@ func _spawn_player(peer_id: int) -> void:
 	
 	player.position = base_spawn_pos
 	
-	# Add to world
-	if world_node:
-		world_node.add_child(player)
-	else:
-		add_child(player)
-	
 	# Track player
 	players[peer_id] = player
+	
+	# Register player with PlayerTracker for chunk loading
+	if chunk_manager and chunk_manager.player_tracker:
+		chunk_manager.player_tracker.register_multiplayer_player(peer_id, player)
 	
 	# Register player with chunk manager for chunk loading
 	if chunk_manager:
@@ -261,7 +319,7 @@ func _on_peer_disconnected(id: int) -> void:
 		
 		# Remove from chunk manager tracking
 		if chunk_manager and chunk_manager.player_tracker:
-			chunk_manager.player_tracker.remove_player(id)
+			chunk_manager.player_tracker.unregister_multiplayer_player(id)
 
 # --- Public Methods for Chunk System ---
 func get_chunk_manager() -> ChunkManager:
@@ -544,3 +602,15 @@ func _find_chunk_nodes_recursive(node: Node, chunk_list: Array) -> void:
 	
 	for child in node.get_children():
 		_find_chunk_nodes_recursive(child, chunk_list)
+
+func _sync_all_player_positions() -> void:
+	"""Sync all player positions to all clients (server only)."""
+	if not multiplayer.is_server():
+		return
+	
+	for peer_id in players:
+		var player = players[peer_id]
+		if is_instance_valid(player):
+			# Player synchronization is now handled by Godot's built-in MultiplayerSynchronizer
+			# The MultiplayerSynchronizer on each player handles automatic state sync
+			print("GameManager: Player %d position synced via MultiplayerSynchronizer" % peer_id)

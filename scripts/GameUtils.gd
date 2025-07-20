@@ -2,8 +2,7 @@
 # Utility functions and error handling patterns for the Bark & Moss game
 # This file contains reusable utility functions to improve code robustness
 
-class_name GameUtils
-extends RefCounted
+extends Node
 
 # =============================================================================
 # ERROR HANDLING UTILITIES

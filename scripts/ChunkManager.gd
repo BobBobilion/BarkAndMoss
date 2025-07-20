@@ -45,8 +45,6 @@ func _exit_tree() -> void:
 	# Now safely wait for all threads to finish
 	for thread in generation_threads:
 		thread.wait_to_finish()
-	
-	print("ChunkManager: All threads cleaned up successfully")
 
 func _process(_delta: float) -> void:
 	# Skip processing if shutting down
@@ -74,7 +72,6 @@ func get_terrain_material() -> ShaderMaterial:
 
 func cleanup() -> void:
 	"""Clean up the chunk manager when returning to main menu."""
-	print("ChunkManager: Starting cleanup...")
 	
 	# Stop all processing
 	_is_running = false
@@ -99,17 +96,15 @@ func cleanup() -> void:
 	# Clear player tracking if player_tracker exists
 	if player_tracker:
 		player_tracker.clear_all_players()
-	
-	print("ChunkManager: Cleanup complete")
 
 # --- Private Methods ---
 func _setup_subsystems() -> void:
 	chunk_generator = ChunkGenerator.new()
 	add_child(chunk_generator)
 	
-	player_tracker = PlayerTracker.new()
+	# PlayerTracker is an autoload singleton, reference it directly
+	player_tracker = PlayerTracker
 	player_tracker.required_chunks_changed.connect(_on_required_chunks_changed)
-	add_child(player_tracker)
 
 func _start_generation_threads() -> void:
 	var thread_count = OS.get_processor_count() - 1
@@ -146,15 +141,13 @@ func _process_generated_data() -> void:
 	generated_chunk_data.clear()
 	_mutex.unlock()
 	
-	print("ChunkManager: Processing ", data_copy.size(), " generated chunks")
-	
 	for chunk_pos in data_copy:
 		if active_chunks.has(chunk_pos):
 			var chunk = active_chunks[chunk_pos]
 		
 			chunk.load_data(data_copy[chunk_pos])
 		else:
-			print("ChunkManager: Warning - no active chunk for generated data at ", chunk_pos)
+			pass
 
 func _on_required_chunks_changed(required_chunks: Dictionary) -> void:
 	# Skip processing if chunk manager is being cleaned up
@@ -199,7 +192,6 @@ func _on_required_chunks_changed(required_chunks: Dictionary) -> void:
 func _create_terrain_material() -> void:
 	"""Create the terrain blend material using the same logic as WorldGenerator."""
 	if not chunk_generator or not chunk_generator.biome_manager:
-		print("ChunkManager: Cannot create terrain material - chunk generator not ready")
 		return
 	
 	# First, let's create a simple colored material for testing
@@ -218,7 +210,6 @@ func _create_terrain_material() -> void:
 		_create_simple_biome_material()
 		return
 	
-	print("ChunkManager: Successfully loaded terrain blend shader")
 	cached_terrain_material.shader = terrain_shader
 	
 	# Create default textures for fallback
@@ -236,28 +227,24 @@ func _create_terrain_material() -> void:
 	# Forest biome textures (grass terrain)
 	var forest_albedo: Texture2D = ResourceLoader.load(FOREST_ALBEDO_PATH, "Texture2D")
 	if not forest_albedo:
-		print("ChunkManager: Failed to load forest albedo texture - using fallback")
 		forest_albedo = default_albedo
 	else:
-		print("ChunkManager: Successfully loaded forest albedo texture")
 		var image = forest_albedo.get_image()
 		if image:
-			print("  Forest texture size: ", image.get_width(), "x", image.get_height())
+			pass
 		else:
-			print("  WARNING: Forest texture has no image data!")
+			pass
 	
 	# Autumn biome textures (leaves terrain)
 	var autumn_albedo: Texture2D = ResourceLoader.load(AUTUMN_ALBEDO_PATH, "Texture2D")
 	if not autumn_albedo:
-		print("ChunkManager: Failed to load autumn albedo texture - using fallback")
 		autumn_albedo = default_albedo
 	else:
-		print("ChunkManager: Successfully loaded autumn albedo texture")
 		var image = autumn_albedo.get_image()
 		if image:
-			print("  Autumn texture size: ", image.get_width(), "x", image.get_height())
+			pass
 		else:
-			print("  WARNING: Autumn texture has no image data!")
+			pass
 	
 	# Snow biome textures
 	var snow_albedo: Texture2D = ResourceLoader.load(SNOW_ALBEDO_PATH, "Texture2D")
@@ -265,38 +252,33 @@ func _create_terrain_material() -> void:
 	var snow_roughness: Texture2D = ResourceLoader.load(SNOW_ROUGHNESS_PATH, "Texture2D")
 	
 	if not snow_albedo:
-		print("ChunkManager: Failed to load snow albedo texture - using fallback")
 		snow_albedo = default_albedo
 	else:
-		print("ChunkManager: Successfully loaded snow albedo texture")
+		pass
 	
 	if not snow_normal:
-		print("ChunkManager: Failed to load snow normal texture - using fallback")
 		snow_normal = default_normal
 	else:
-		print("ChunkManager: Successfully loaded snow normal texture")
+		pass
 	
 	if not snow_roughness:
-		print("ChunkManager: Failed to load snow roughness texture - using fallback")
 		snow_roughness = default_roughness
 	else:
-		print("ChunkManager: Successfully loaded snow roughness texture")
+		pass
 	
 	# Mountain biome textures (rock terrain)
 	var mountain_albedo: Texture2D = ResourceLoader.load(MOUNTAIN_ALBEDO_PATH, "Texture2D")
 	var mountain_roughness: Texture2D = ResourceLoader.load(MOUNTAIN_ROUGHNESS_PATH, "Texture2D")
 	
 	if not mountain_albedo:
-		print("ChunkManager: Failed to load mountain albedo texture - using fallback")
 		mountain_albedo = default_albedo
 	else:
-		print("ChunkManager: Successfully loaded mountain albedo texture")
+		pass
 		
 	if not mountain_roughness:
-		print("ChunkManager: Failed to load mountain roughness texture - using fallback")
 		mountain_roughness = default_roughness
 	else:
-		print("ChunkManager: Successfully loaded mountain roughness texture")
+		pass
 	
 	# Set shader parameters
 	cached_terrain_material.set_shader_parameter("forest_albedo", forest_albedo)
@@ -318,7 +300,6 @@ func _create_terrain_material() -> void:
 	# TEMPORARY: Override with test textures to verify shader works
 	var use_test_textures = false  # Changed to false to use real textures
 	if use_test_textures:
-		print("ChunkManager: Using test textures for debugging")
 		cached_terrain_material.set_shader_parameter("forest_albedo", test_forest)
 		cached_terrain_material.set_shader_parameter("autumn_albedo", test_autumn)
 		cached_terrain_material.set_shader_parameter("snow_albedo", test_snow)
@@ -334,18 +315,14 @@ func _create_terrain_material() -> void:
 	# Enable debug mode to test texture loading
 	cached_terrain_material.set_shader_parameter("debug_mode", 0.0)  # Changed to 0.0 to see blending
 	
-	print("ChunkManager: Created terrain blend material for chunks")
-	
 	# Debug: Verify shader parameters were set
-	print("ChunkManager: Verifying shader parameters:")
-	print("  forest_albedo: ", cached_terrain_material.get_shader_parameter("forest_albedo"))
-	print("  snow_albedo: ", cached_terrain_material.get_shader_parameter("snow_albedo"))
-	print("  texture_scale: ", cached_terrain_material.get_shader_parameter("texture_scale"))
-	print("  Shader resource: ", cached_terrain_material.shader)
+	# Debug: Verify shader parameters were set
+	# Debug: Verify shader parameters were set
+	# Debug: Verify shader parameters were set
+	# Debug: Verify shader parameters were set
 
 func _create_simple_biome_material() -> void:
 	"""Create a simple colored material that shows biomes using vertex colors."""
-	print("ChunkManager: Creating simple biome-colored material for testing")
 	
 	# Create a simple shader that uses vertex colors
 	var shader_code = """
@@ -385,7 +362,7 @@ void fragment() {
 	cached_terrain_material = ShaderMaterial.new()
 	cached_terrain_material.shader = shader
 	
-	print("ChunkManager: Simple biome material created")
+	# Removed: print("ChunkManager: Simple biome material created")
 
 func _create_default_texture(color: Color) -> ImageTexture:
 	"""Create a simple default texture with the given color."""

@@ -31,11 +31,15 @@ const CROSSHAIR_BORDER_WIDTH: int = 1
 var hunger_bar: ProgressBar = null
 var hunger_label: Label = null
 
+# Seed UI nodes (created programmatically)
+var seed_label: Label = null
+
 # --- State ---
 var player: CharacterBody3D
 var current_interactable: Node = null
 var should_show_crosshair: bool = false  # Track if crosshair should be visible based on equipment
 var current_hunger: int = 100
+var current_seed: int = 0
 
 
 # --- Engine Callbacks ---
@@ -51,6 +55,7 @@ func _ready() -> void:
 	# Initialize nodes
 	_setup_crosshair()
 	_setup_hunger_ui()
+	_setup_seed_ui()
 	
 	# Ensure HUD renders on top of other UI elements
 	z_index = 100
@@ -94,11 +99,12 @@ func _process(_delta: float) -> void:
 		return
 
 	# Only the local player should perform interaction checks
-	# Check if player is still in tree and multiplayer peer exists before checking authority
-	if not player.is_inside_tree() or not multiplayer or not multiplayer.multiplayer_peer:
+	# Check if player is still in tree
+	if not player.is_inside_tree():
 		return
 	
-	if not player.is_multiplayer_authority():
+	# In single player mode or if this is the local player's authority
+	if multiplayer.has_multiplayer_peer() and not player.is_multiplayer_authority():
 		return
 	
 	_check_for_interactable()
@@ -314,13 +320,10 @@ func reset_crosshair_to_default() -> void:
 
 func update_hunger(hunger_value: int) -> void:
 	"""Update the hunger display with new value."""
-	print("HUD: update_hunger called with value: ", hunger_value)
 	current_hunger = clamp(hunger_value, 0, 100)
 	
 	if hunger_bar:
 		hunger_bar.value = current_hunger
-		print("HUD: Updated hunger bar to: ", current_hunger)
-		
 		# Change color based on hunger level
 		var style_box: StyleBoxFlat = hunger_bar.get_theme_stylebox("fill")
 		if style_box:
@@ -330,24 +333,14 @@ func update_hunger(hunger_value: int) -> void:
 				style_box.bg_color = Color.YELLOW
 			else:
 				style_box.bg_color = Color.RED
-	else:
-		print("HUD: Warning - hunger_bar is null!")
 	
 	if hunger_label:
 		hunger_label.text = "Hunger: %d" % current_hunger
-		print("HUD: Updated hunger label to: ", hunger_label.text)
-	else:
-		print("HUD: Warning - hunger_label is null!")
-	
-	print("HUD: Updated hunger display to ", current_hunger)
 
 
 func _setup_hunger_ui() -> void:
 	"""Initialize the hunger UI elements if they don't exist."""
-	# Always create hunger UI programmatically since it's not in the scene file
 	_create_hunger_ui()
-	
-	# Initialize with starting hunger value
 	update_hunger(current_hunger)
 
 
@@ -359,7 +352,6 @@ func _create_hunger_ui() -> void:
 	hunger_container.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	hunger_container.position = Vector2(20, -80)  # Position near hotbar
 	add_child(hunger_container)
-	
 	# Create hunger label
 	var label = Label.new()
 	label.name = "HungerLabel"
@@ -368,7 +360,6 @@ func _create_hunger_ui() -> void:
 	label.add_theme_color_override("font_color", Color.WHITE)
 	hunger_container.add_child(label)
 	hunger_label = label
-	
 	# Create hunger progress bar
 	var progress_bar = ProgressBar.new()
 	progress_bar.name = "HungerBar"
@@ -377,7 +368,6 @@ func _create_hunger_ui() -> void:
 	progress_bar.value = 100
 	progress_bar.custom_minimum_size = Vector2(120, 20)
 	progress_bar.show_percentage = false
-	
 	# Style the progress bar
 	var style_bg = StyleBoxFlat.new()
 	style_bg.bg_color = Color(0.2, 0.2, 0.2, 0.8)
@@ -387,12 +377,56 @@ func _create_hunger_ui() -> void:
 	style_bg.border_width_top = 1
 	style_bg.border_width_bottom = 1
 	progress_bar.add_theme_stylebox_override("background", style_bg)
-	
 	var style_fill = StyleBoxFlat.new()
 	style_fill.bg_color = Color.GREEN
 	progress_bar.add_theme_stylebox_override("fill", style_fill)
-	
 	hunger_container.add_child(progress_bar)
 	hunger_bar = progress_bar
+
+
+# --- Seed System ---
+
+func update_seed(seed_value: int) -> void:
+	"""Update the seed display with new value."""
+	current_seed = seed_value
 	
-	print("HUD: Created hunger UI programmatically")
+	if seed_label:
+		seed_label.text = "World Seed: %d" % current_seed
+
+
+func _setup_seed_ui() -> void:
+	"""Initialize the seed UI elements if they don't exist."""
+	_create_seed_ui()
+	# Get initial seed value from chunk manager
+	_update_seed_from_chunk_manager()
+
+
+func _create_seed_ui() -> void:
+	"""Create seed UI elements programmatically."""
+	# Create seed label
+	var label = Label.new()
+	label.name = "SeedLabel"
+	label.text = "World Seed: 0"
+	label.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	label.position = Vector2(20, 120)  # Position below hunger UI
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", Color.YELLOW)
+	label.add_theme_color_override("font_shadow_color", Color(0.137, 0.2, 0.165, 1))
+	label.add_theme_constant_override("shadow_offset_x", 1)
+	label.add_theme_constant_override("shadow_offset_y", 1)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(label)
+	seed_label = label
+
+
+func _update_seed_from_chunk_manager() -> void:
+	"""Get the seed value from the chunk manager and update display."""
+	var game_manager = get_tree().get_first_node_in_group("game_manager")
+	if game_manager and game_manager.chunk_manager and game_manager.chunk_manager.chunk_generator:
+		var seed = game_manager.chunk_manager.chunk_generator.world_seed
+		update_seed(seed)
+		print("HUD: World seed updated to: ", seed)
+	else:
+		print("HUD: Could not get world seed from chunk manager")

@@ -98,6 +98,9 @@ func _ready() -> void:
 		camera.make_current()
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 		
+		# Add global UI for FPS counter and game code display
+		call_deferred("add_global_ui")
+		
 		# Register with PauseManager for pause functionality
 		if PauseManager:
 			PauseManager.register_player(self)
@@ -635,3 +638,113 @@ func _update_chunk_position() -> void:
 		var game_manager = game_managers[0]
 		if game_manager.has_method("update_player_chunk_position"):
 			game_manager.update_player_chunk_position(self)
+
+
+func add_global_ui() -> void:
+	"""Add global UI elements that should be visible to both human and dog players."""
+	print("Dog: add_global_ui() called")
+	
+	# Get the root viewport
+	var viewport = get_viewport()
+	if not viewport:
+		print("Dog: ERROR - No viewport available")
+		return
+		
+	# Check if GlobalUILayer already exists (might be created by human player)
+	var global_ui_layer = viewport.get_node_or_null("GlobalUILayer")
+	
+	if global_ui_layer:
+		print("Dog: GlobalUILayer already exists, skipping creation")
+		return
+	else:
+		print("Dog: Creating new GlobalUILayer")
+		global_ui_layer = CanvasLayer.new()
+		global_ui_layer.name = "GlobalUILayer"
+		global_ui_layer.layer = 5  # Lower than HUD (10) but above background
+		viewport.add_child(global_ui_layer)
+		print("Dog: GlobalUILayer created and added to viewport")
+	
+	# Create FPS counter
+	var fps_counter = Label.new()
+	fps_counter.name = "FPSCounter"
+	fps_counter.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	fps_counter.offset_left = -120
+	fps_counter.offset_top = 10
+	fps_counter.offset_right = -10
+	fps_counter.offset_bottom = 35
+	fps_counter.add_theme_font_size_override("font_size", 16)
+	fps_counter.add_theme_color_override("font_color", Color(0.918, 0.878, 0.835, 1))
+	fps_counter.add_theme_color_override("font_shadow_color", Color(0.137, 0.2, 0.165, 1))
+	fps_counter.add_theme_constant_override("shadow_offset_x", 1)
+	fps_counter.add_theme_constant_override("shadow_offset_y", 1)
+	fps_counter.text = "FPS: 60"
+	fps_counter.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	fps_counter.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	fps_counter.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	global_ui_layer.add_child(fps_counter)
+	
+	# Create game code display
+	var game_code_display = Label.new()
+	game_code_display.name = "GameCodeDisplay"
+	game_code_display.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	game_code_display.offset_left = 10
+	game_code_display.offset_top = 10
+	game_code_display.offset_right = 150
+	game_code_display.offset_bottom = 35
+	game_code_display.add_theme_font_size_override("font_size", 16)
+	game_code_display.add_theme_color_override("font_color", Color(0.918, 0.878, 0.835, 1))
+	game_code_display.add_theme_color_override("font_shadow_color", Color(0.137, 0.2, 0.165, 1))
+	game_code_display.add_theme_constant_override("shadow_offset_x", 1)
+	game_code_display.add_theme_constant_override("shadow_offset_y", 1)
+	game_code_display.text = "Code: ABC123"
+	game_code_display.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	game_code_display.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	game_code_display.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	global_ui_layer.add_child(game_code_display)
+	
+	# Create a script to handle updates
+	var global_ui_script = GDScript.new()
+	global_ui_script.source_code = """
+extends CanvasLayer
+
+var fps_update_timer: float = 0.0
+var fps_update_interval: float = 0.5
+
+func _ready():
+	_update_game_code_display()
+	var timer = Timer.new()
+	timer.wait_time = 1.0
+	timer.timeout.connect(_update_game_code_display)
+	timer.autostart = true
+	add_child(timer)
+
+func _process(delta):
+	_update_fps_counter(delta)
+
+func _update_fps_counter(delta: float):
+	fps_update_timer += delta
+	if fps_update_timer >= fps_update_interval:
+		fps_update_timer = 0.0
+		var current_fps = Engine.get_frames_per_second()
+		var fps_counter = get_node_or_null('FPSCounter')
+		if fps_counter:
+			fps_counter.text = 'FPS: %d' % current_fps
+
+func _update_game_code_display():
+	var game_code_display = get_node_or_null('GameCodeDisplay')
+	if not game_code_display:
+		return
+		
+	if multiplayer.has_multiplayer_peer():
+		var lobby_code = NetworkManager.get_lobby_code()
+		if lobby_code != '':
+			game_code_display.text = 'Code: %s' % lobby_code
+			game_code_display.visible = true
+		else:
+			game_code_display.visible = false
+	else:
+		game_code_display.visible = false
+"""
+	global_ui_layer.set_script(global_ui_script)
+	
+	print("Dog: Global UI created successfully")

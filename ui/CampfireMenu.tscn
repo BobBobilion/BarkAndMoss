@@ -1,7 +1,7 @@
-[gd_scene load_steps=4 format=3 uid="uid://campfire_menu"]
+[gd_scene load_steps=4 format=3 uid="uid://btmoy2f2sdhbg"]
 
-[ext_resource type="Theme" uid="uid://bark_moss_theme" path="res://ui/bark_moss_theme.tres" id="1_theme"]
-[ext_resource type="Script" path="res://scripts/CampfireMenu.gd" id="2_script"]
+[ext_resource type="Theme" uid="uid://cyoxrwsnvsuny" path="res://ui/bark_moss_theme.tres" id="1_theme"]
+[ext_resource type="Script" uid="uid://wgsncryiybrf" path="res://scripts/CampfireMenu.gd" id="2_script"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
 bg_color = Color(0.137, 0.2, 0.165, 0.9)
@@ -79,4 +79,4 @@ layout_mode = 2
 text = "Press ESC to close"
 theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
 theme_override_font_sizes/font_size = 14
-horizontal_alignment = 1 
+horizontal_alignment = 1

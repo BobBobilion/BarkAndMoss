@@ -44,3 +44,4 @@ night_sky_color = Color(0.12204, 0.205302, 0.288626, 1)
 
 [node name="CloudManager" type="Node3D" parent="."]
 script = ExtResource("7_cloud_manager")
+enable_spawning = true

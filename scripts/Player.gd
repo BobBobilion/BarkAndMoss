@@ -40,9 +40,13 @@ func _ready() -> void:
 	print("=== PLAYER READY STARTED ===")
 	print("Player: Node name: ", name)
 	print("Player: Scene file path: ", get_tree().current_scene.scene_file_path if get_tree().current_scene else "None")
-	print("Player: Multiplayer authority: ", is_multiplayer_authority())
-	print("Player: Has multiplayer peer: ", multiplayer.has_multiplayer_peer())
 	
+	# Check multiplayer status safely
+	var has_multiplayer = multiplayer.has_multiplayer_peer()
+	var is_authority = has_multiplayer and is_multiplayer_authority()
+	print("Player: Has multiplayer peer: ", has_multiplayer)
+	print("Player: Multiplayer authority: ", is_authority if has_multiplayer else "N/A (single player)")
+
 	# Set up hunger decay timer
 	hunger_decay_timer = Timer.new()
 	add_child(hunger_decay_timer)
@@ -72,7 +76,8 @@ func _ready() -> void:
 	print("Player: InteractionArea monitoring = ", $InteractionArea.monitoring)
 	print("Player: InteractionArea monitorable = ", $InteractionArea.monitorable)
 
-	var is_local_player: bool = is_multiplayer_authority() or not multiplayer.has_multiplayer_peer()
+	# Determine if this is the local player (safe for both multiplayer and single player)
+	var is_local_player: bool = not has_multiplayer or is_authority
 	print("Player: Is local player: ", is_local_player)
 	
 	if is_local_player:
@@ -81,12 +86,14 @@ func _ready() -> void:
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 		print("Player: About to call add_hud()")
 		call_deferred("add_hud")
+		# Add global UI for FPS counter and game code display (shared with dog player)
+		call_deferred("add_global_ui")
 		if PauseManager:
 			PauseManager.register_player(self)
 		print("Player: Local player setup complete")
 	else:
 		print("Player: Setting up as remote player...")
-		camera_node.enabled = false
+		camera_node.current = false
 
 	add_to_group("human_player")
 	print("Player: Added to human_player group")
@@ -98,9 +105,10 @@ func _ready() -> void:
 	print("=== PLAYER READY FINISHED ===")
 
 func _physics_process(delta: float) -> void:
-	# Check if multiplayer peer exists before checking authority
-	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
-		return
+	# Only process for local player or in single-player mode
+	if multiplayer.has_multiplayer_peer():
+		if not is_multiplayer_authority():
+			return
 
 	# Movement
 	velocity = movement_controller.handle_movement(delta, self, transform)
@@ -108,7 +116,7 @@ func _physics_process(delta: float) -> void:
 	
 	# Update chunk system with our position
 	_update_chunk_position()
-
+	
 	# Animation
 	if not is_performing_action:
 		animation_controller.update_movement_animation(velocity, is_on_floor(), movement_controller.current_speed)
@@ -126,9 +134,10 @@ func _physics_process(delta: float) -> void:
 		handle_action(action_to_perform)
 
 func _process(delta: float) -> void:
-	# Check if multiplayer peer exists before checking authority
-	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
-		return
+	# Only process for local player or in single-player mode
+	if multiplayer.has_multiplayer_peer():
+		if not is_multiplayer_authority():
+			return
 	camera_controller.process_camera(delta)
 	
 	# Debug: Check hunger timer status periodically
@@ -136,9 +145,10 @@ func _process(delta: float) -> void:
 		print("Player: Debug - Hunger timer stopped?: ", hunger_decay_timer.is_stopped(), " Time left: ", hunger_decay_timer.time_left)
 
 func _unhandled_input(event: InputEvent) -> void:
-	# Check if multiplayer peer exists before checking authority
-	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
-		return
+	# Only process input for local player or in single-player mode
+	if multiplayer.has_multiplayer_peer():
+		if not is_multiplayer_authority():
+			return
 	camera_controller._unhandled_input(event)
 	
 	# Debug: Test hunger decay manually with H key
@@ -162,15 +172,20 @@ func handle_interaction() -> void:
 			interaction_controller.interact_with_object(interactable, self)
 
 func handle_action(action_name: String) -> void:
+	print("Player: handle_action called with action: '", action_name, "'")
+	
 	if is_performing_action:
+		print("Player: Already performing action, ignoring '", action_name, "'")
 		return
 	
 	if action_name == "chop":
+		print("Player: Processing chop action")
 		# Don't enable hitbox immediately - wait for downstroke
 		pass
 		
 	is_performing_action = true
 	pending_interaction_target = interaction_controller.get_closest_interactable()
+	print("Player: Playing animation for action: '", action_name, "'")
 	animation_controller.play_action(action_name)
 	
 	var anim_player = animation_controller.get_animation_player()
@@ -236,37 +251,83 @@ func _on_action_animation_finished() -> void:
 		chop_timer = null
 
 func add_hud() -> void:
-	print("Player: Starting HUD creation...")
-	var hud_scene: PackedScene = preload("res://scenes/HUD.tscn")
-	hud_instance = hud_scene.instantiate()
-	print("Player: HUD instantiated, adding to scene tree...")
+	print("Player: add_hud() called")
 	
-	# Create a persistent UI layer that won't be affected by scene changes
+	# Get the root viewport instead of the local tree
 	var viewport = get_viewport()
-	
-	# Look for existing UI layer or create one
+	if not viewport:
+		print("Player: ERROR - No viewport available")
+		return
+		
+	# First, check if UILayer already exists
 	var ui_layer = viewport.get_node_or_null("UILayer")
-	if not ui_layer:
-		print("Player: Creating UILayer for persistent UI")
+	
+	if ui_layer:
+		print("Player: UILayer already exists, cleaning up old HUD")
+		# Remove any existing HUD from this layer
+		for child in ui_layer.get_children():
+			if child.name == "HUD":
+				print("Player: Removing existing HUD")
+				child.queue_free()
+	else:
+		print("Player: Creating new UILayer")
 		ui_layer = CanvasLayer.new()
 		ui_layer.name = "UILayer"
-		ui_layer.layer = 10  # Render on top
 		viewport.add_child(ui_layer)
-	else:
-		print("Player: Found existing UILayer")
+		print("Player: UILayer created and added to viewport")
 	
-	# Add HUD to the persistent UI layer
-	ui_layer.add_child(hud_instance)
-	print("Player: HUD added to UILayer")
-	print("Player: HUD parent: ", hud_instance.get_parent().name if hud_instance.get_parent() else "None")
-
-	# Pass HUD instance to equipment controller
-	equipment_controller.set_hud(hud_instance)
-	print("Player: HUD instance passed to equipment controller")
-
-	# Use call_deferred to ensure the scene tree is ready
-	call_deferred("_connect_hotbar_signals")
-	call_deferred("_add_test_items")
+	# Now create and add the HUD scene to the UILayer
+	print("Player: Loading HUD scene...")
+	var hud_scene = load("res://scenes/HUD.tscn")
+	if hud_scene:
+		hud_instance = hud_scene.instantiate()  # Fixed: assign to class member, not create local variable
+		ui_layer.add_child(hud_instance)
+		
+		# Pass the player reference to the HUD
+		if hud_instance.has_method("set_player"):
+			hud_instance.set_player(self)
+			print("Player: HUD player reference set")
+			
+		# Pass the hunger value to initialize the HUD
+		if hud_instance.has_method("update_hunger"):
+			hud_instance.update_hunger(hunger)
+			print("Player: HUD hunger initialized to: ", hunger)
+		
+		# DEBUG: Add world seed label
+		var debug_label = Label.new()
+		debug_label.name = "WorldSeedDebug"
+		debug_label.position = Vector2(10, 40)  # Moved down to avoid overlap with game code display
+		debug_label.add_theme_font_size_override("font_size", 14)  # Made slightly smaller
+		debug_label.add_theme_color_override("font_color", Color.YELLOW)
+		
+		# Get the world seed from the chunk manager
+		var world_seed_text = "World Seed: UNKNOWN"
+		var game_manager = get_tree().get_first_node_in_group("game_manager")
+		if game_manager and game_manager.chunk_manager and game_manager.chunk_manager.chunk_generator:
+			var seed = game_manager.chunk_manager.chunk_generator.world_seed
+			world_seed_text = "World Seed: %d" % seed
+			
+			# Also get player ID info
+			var player_id = get_multiplayer_authority() if multiplayer.has_multiplayer_peer() else 0
+			var host_text = " (HOST)" if NetworkManager.is_host else " (CLIENT)"
+			world_seed_text += "\nPlayer ID: %d%s" % [player_id, host_text]
+		
+		debug_label.text = world_seed_text
+		ui_layer.add_child(debug_label)
+		print("Player: Added world seed debug label: ", world_seed_text)
+		
+		print("Player: HUD loaded and initialized successfully")
+		
+		# Give equipment controller access to HUD for hotbar item checking
+		equipment_controller.set_hud_reference(hud_instance)
+		
+		# Connect hotbar and inventory signals after HUD is in scene tree
+		call_deferred("_connect_hotbar_signals")
+		
+		# Add test items for debugging (only in debug builds)
+		call_deferred("_add_test_items")
+	else:
+		print("Player: ERROR - Failed to load HUD scene")
 
 func _connect_hotbar_signals() -> void:
 	"""Connect hotbar and inventory signals after the HUD is added to the scene tree."""
@@ -355,25 +416,15 @@ func _update_chunk_position() -> void:
 
 func _on_hunger_decay() -> void:
 	"""Handle hunger decay every 2 seconds."""
-	print("Player: _on_hunger_decay called! Current hunger: ", hunger)
-	
-	# Temporarily disable multiplayer check for debugging
-	# Only decay for authority player (in multiplayer)
-	#if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
-	#	print("Player: Skipping hunger decay - not multiplayer authority")
-	#	return
-	
 	if hunger > 0:
 		hunger -= 1
 		hunger = max(0, hunger)  # Ensure hunger doesn't go below 0
 		hunger_changed.emit(hunger)
-		print("Player: Hunger decreased to: ", hunger, " - signal emitted")
-		
 		if hunger == 0:
-			print("Player: Hunger reached zero!")
 			# TODO: Implement starvation effects when hunger reaches 0
+			pass
 	else:
-		print("Player: Hunger already at 0, no decay")
+		pass
 
 
 func consume_food(food_name: String) -> void:
@@ -381,10 +432,8 @@ func consume_food(food_name: String) -> void:
 	if food_name == "Cooked Meat":
 		var old_hunger: int = hunger
 		hunger = min(MAX_HUNGER, hunger + 10)  # Restore 10 hunger, capped at 100
-		
 		if hunger != old_hunger:
 			hunger_changed.emit(hunger)
-			print("Player: Consumed cooked meat. Hunger: ", old_hunger, " -> ", hunger)
 
 
 func get_hunger() -> int:
@@ -400,7 +449,115 @@ func set_hunger(new_hunger: int) -> void:
 		hunger_changed.emit(hunger)
 
 func test_hunger_signal() -> void:
-	"""Test method to verify hunger signal is connected properly."""
-	print("Player: Testing hunger signal - current hunger: ", hunger)
+	"""Test if hunger signal connection is working."""
 	hunger_changed.emit(hunger)
-	print("Player: Hunger signal emitted with value: ", hunger)
+
+
+func add_global_ui() -> void:
+	"""Add global UI elements that should be visible to both human and dog players."""
+	print("Player: add_global_ui() called")
+	
+	# Get the root viewport
+	var viewport = get_viewport()
+	if not viewport:
+		print("Player: ERROR - No viewport available")
+		return
+		
+	# Check if GlobalUILayer already exists (might be created by dog player)
+	var global_ui_layer = viewport.get_node_or_null("GlobalUILayer")
+	
+	if global_ui_layer:
+		print("Player: GlobalUILayer already exists, skipping creation")
+		return
+	else:
+		print("Player: Creating new GlobalUILayer")
+		global_ui_layer = CanvasLayer.new()
+		global_ui_layer.name = "GlobalUILayer"
+		global_ui_layer.layer = 5  # Lower than HUD (10) but above background
+		viewport.add_child(global_ui_layer)
+		print("Player: GlobalUILayer created and added to viewport")
+	
+	# Create FPS counter
+	var fps_counter = Label.new()
+	fps_counter.name = "FPSCounter"
+	fps_counter.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	fps_counter.offset_left = -120
+	fps_counter.offset_top = 10
+	fps_counter.offset_right = -10
+	fps_counter.offset_bottom = 35
+	fps_counter.add_theme_font_size_override("font_size", 16)
+	fps_counter.add_theme_color_override("font_color", Color(0.918, 0.878, 0.835, 1))
+	fps_counter.add_theme_color_override("font_shadow_color", Color(0.137, 0.2, 0.165, 1))
+	fps_counter.add_theme_constant_override("shadow_offset_x", 1)
+	fps_counter.add_theme_constant_override("shadow_offset_y", 1)
+	fps_counter.text = "FPS: 60"
+	fps_counter.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	fps_counter.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	fps_counter.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	global_ui_layer.add_child(fps_counter)
+	
+	# Create game code display
+	var game_code_display = Label.new()
+	game_code_display.name = "GameCodeDisplay"
+	game_code_display.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	game_code_display.offset_left = 10
+	game_code_display.offset_top = 10
+	game_code_display.offset_right = 150
+	game_code_display.offset_bottom = 35
+	game_code_display.add_theme_font_size_override("font_size", 16)
+	game_code_display.add_theme_color_override("font_color", Color(0.918, 0.878, 0.835, 1))
+	game_code_display.add_theme_color_override("font_shadow_color", Color(0.137, 0.2, 0.165, 1))
+	game_code_display.add_theme_constant_override("shadow_offset_x", 1)
+	game_code_display.add_theme_constant_override("shadow_offset_y", 1)
+	game_code_display.text = "Code: ABC123"
+	game_code_display.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	game_code_display.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	game_code_display.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	global_ui_layer.add_child(game_code_display)
+	
+	# Create a script to handle updates
+	var global_ui_script = GDScript.new()
+	global_ui_script.source_code = """
+extends CanvasLayer
+
+var fps_update_timer: float = 0.0
+var fps_update_interval: float = 0.5
+
+func _ready():
+	_update_game_code_display()
+	var timer = Timer.new()
+	timer.wait_time = 1.0
+	timer.timeout.connect(_update_game_code_display)
+	timer.autostart = true
+	add_child(timer)
+
+func _process(delta):
+	_update_fps_counter(delta)
+
+func _update_fps_counter(delta: float):
+	fps_update_timer += delta
+	if fps_update_timer >= fps_update_interval:
+		fps_update_timer = 0.0
+		var current_fps = Engine.get_frames_per_second()
+		var fps_counter = get_node_or_null('FPSCounter')
+		if fps_counter:
+			fps_counter.text = 'FPS: %d' % current_fps
+
+func _update_game_code_display():
+	var game_code_display = get_node_or_null('GameCodeDisplay')
+	if not game_code_display:
+		return
+		
+	if multiplayer.has_multiplayer_peer():
+		var lobby_code = NetworkManager.get_lobby_code()
+		if lobby_code != '':
+			game_code_display.text = 'Code: %s' % lobby_code
+			game_code_display.visible = true
+		else:
+			game_code_display.visible = false
+	else:
+		game_code_display.visible = false
+"""
+	global_ui_layer.set_script(global_ui_script)
+	
+	print("Player: Global UI created successfully")
