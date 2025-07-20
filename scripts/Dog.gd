@@ -85,6 +85,7 @@ var current_animation: String = ""
 var is_attacking: bool = false
 var is_eating: bool = false
 var was_moving: bool = false  # Track previous movement state to detect transitions
+var last_synced_animation: String = ""  # Track last synced animation to avoid spam
 
 
 func _ready() -> void:
@@ -160,8 +161,12 @@ func _input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
-	# Only process input for our own player - check if multiplayer peer exists first
+	# For remote players, check if animation needs restarting
 	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+		# Check if current animation has stopped playing and restart it
+		if animation_player and current_animation != "" and not animation_player.is_playing():
+			# Restart the current animation
+			animation_player.play(current_animation)
 		return
 		
 	# Handle mouse look
@@ -223,10 +228,14 @@ func _process(delta: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	# For remote players, just update animations based on synced velocity
+	# For remote players, we still need to apply gravity and move
 	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
-		# Update animations for remote players based on their synced velocity
-		_update_movement_animation()
+		# Apply gravity for remote players
+		if not is_on_floor():
+			velocity.y -= gravity * delta
+		
+		# Move to apply the synced velocity
+		move_and_slide()
 		return
 	
 	# Add the gravity
@@ -258,7 +267,7 @@ func _physics_process(delta: float) -> void:
 	
 	# Sync position to other players if we're the authority
 	if multiplayer.has_multiplayer_peer() and is_multiplayer_authority():
-		_sync_position.rpc(position, rotation, velocity)
+		_sync_position.rpc(position, rotation, velocity, current_speed)
 	
 	# Update chunk system with our position
 	_update_chunk_position()
@@ -316,6 +325,7 @@ func _update_movement_animation() -> void:
 	var speed: float = Vector2(velocity.x, velocity.z).length()
 	var target_animation: String = ""
 	var is_currently_moving: bool = speed > WALK_THRESHOLD
+	
 	
 	# Check if jumping (in air) - jumping takes priority over other actions
 	if not is_on_floor():
@@ -379,10 +389,12 @@ func _play_animation(anim_name: String) -> void:
 			animation_player.play(anim_name)
 			current_animation = anim_name
 			
-			# Sync animation to other players
+			# Sync animation to other players only if it's different from last sync
 			if multiplayer.has_multiplayer_peer() and is_multiplayer_authority():
-				# print("Dog: Sending animation sync RPC: ", anim_name)
-				_sync_animation_rpc.rpc(anim_name)
+				if anim_name != last_synced_animation:
+					# print("Dog: Sending animation sync RPC: ", anim_name)
+					_sync_animation_rpc.rpc(anim_name)
+					last_synced_animation = anim_name
 	else:
 		print("Dog: ERROR - Animation not found: ", anim_name, " (animation_player: ", animation_player != null, ")")
 
@@ -390,24 +402,21 @@ func _play_animation(anim_name: String) -> void:
 @rpc("any_peer", "call_local", "unreliable")
 func _sync_animation_rpc(anim_name: String) -> void:
 	"""RPC to sync animation on remote players."""
-	# Debug: Log when receiving RPC
-	# print("Dog: Received animation sync RPC for: ", anim_name, " (authority: ", is_multiplayer_authority(), ")")
-	
 	# Don't process on the authority (they already played it)
 	if is_multiplayer_authority():
 		return
 		
 	# Play the animation on remote copies
 	if animation_player and animation_player.has_animation(anim_name):
-		# print("Dog: Playing synced animation: ", anim_name)
 		animation_player.play(anim_name)
 		current_animation = anim_name
+		last_synced_animation = anim_name  # Update last synced to prevent conflicts
 	else:
 		print("Dog: ERROR - Cannot play synced animation: ", anim_name, " (animation_player: ", animation_player != null, ")")
 
 @rpc("any_peer", "call_local", "unreliable")
-func _sync_position(pos: Vector3, rot: Vector3, vel: Vector3) -> void:
-	"""RPC to sync position/rotation/velocity to remote players."""
+func _sync_position(pos: Vector3, rot: Vector3, vel: Vector3, speed: float) -> void:
+	"""RPC to sync position/rotation/velocity/speed to remote players."""
 	# Don't process on the authority (we already have the position)
 	if is_multiplayer_authority():
 		return
@@ -416,6 +425,29 @@ func _sync_position(pos: Vector3, rot: Vector3, vel: Vector3) -> void:
 	position = pos
 	rotation = rot
 	velocity = vel
+	current_speed = speed
+	
+	# Don't override special animations with movement updates
+	var is_special_animation: bool = current_animation in [ANIM_ATTACK, ANIM_EATING, ANIM_IDLE_2_HEAD_LOW]
+	if not is_special_animation:
+		# Calculate what animation should be playing based on synced state
+		var speed_2d: float = Vector2(velocity.x, velocity.z).length()
+		var expected_animation: String = ""
+		
+		if not is_on_floor():
+			expected_animation = ANIM_GALLOP_JUMP
+		elif speed_2d > WALK_THRESHOLD:
+			if speed_2d >= GALLOP_THRESHOLD:
+				expected_animation = ANIM_GALLOP
+			else:
+				expected_animation = ANIM_WALK
+		else:
+			expected_animation = ANIM_IDLE
+		
+		# Only update if animation changed
+		if expected_animation != current_animation and expected_animation != "" and animation_player:
+			animation_player.play(expected_animation)
+			current_animation = expected_animation
 
 
 func _handle_camera_rotation(relative_mouse_motion: Vector2) -> void:
