@@ -296,10 +296,11 @@ func _spawn_player(peer_id: int) -> void:
 	
 	# Instance player
 	var player := player_scene.instantiate()
-	player.name = "Player_%d" % peer_id
 	
-	# IMPORTANT: Set the name before adding to tree to ensure proper node path
-	player.set_name("Player_%d" % peer_id)
+	# IMPORTANT: Set the name based on character type to avoid confusion
+	var node_name = "%s_%d" % [character_type.capitalize(), peer_id]
+	player.name = node_name
+	player.set_name(node_name)
 	
 	# Set multiplayer authority only in multiplayer mode
 	if is_multiplayer:

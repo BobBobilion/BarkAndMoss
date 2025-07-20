@@ -61,11 +61,20 @@ func _interpolate_to_target(parent: Node3D, delta: float) -> void:
 	parent.position = parent.position.lerp(target_position, interpolation_speed * delta)
 	parent.rotation = parent.rotation.lerp(target_rotation, interpolation_speed * delta)
 
-@rpc("any_peer", "call_remote", "unreliable_ordered")
+@rpc("any_peer", "call_local", "unreliable_ordered")
 func _sync_transform_rpc(pos: Vector3, rot: Vector3, vel: Vector3) -> void:
 	"""Receive transform update from remote player."""
 	var parent = get_parent()
-	if not parent or parent.is_multiplayer_authority():
+	if not parent:
+		return
+		
+	# Get the sender ID to determine if this is our own update
+	var sender_id = multiplayer.get_remote_sender_id()
+	if sender_id == 0:  # Local call
+		sender_id = multiplayer.get_unique_id()
+	
+	# Only process updates from other players
+	if parent.has_method("get_multiplayer_authority") and parent.get_multiplayer_authority() == sender_id:
 		return  # Don't process our own updates
 	
 	# Update target values for interpolation

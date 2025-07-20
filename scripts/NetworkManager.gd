@@ -206,9 +206,14 @@ func _on_peer_disconnected(id: int) -> void:
 		player_list_changed.emit()
 		
 		# Also remove their character from the game world if it exists
-		var player_node: Node = get_tree().get_root().find_child("Player_" + str(id), true, false)
-		if is_instance_valid(player_node):
-			player_node.queue_free()
+		# Look for both Human and Dog nodes with this peer ID
+		var human_node: Node = get_tree().get_root().find_child("Human_" + str(id), true, false)
+		if is_instance_valid(human_node):
+			human_node.queue_free()
+		
+		var dog_node: Node = get_tree().get_root().find_child("Dog_" + str(id), true, false)
+		if is_instance_valid(dog_node):
+			dog_node.queue_free()
 		
 		print("NetworkManager: Player %d disconnected, stored for potential reconnection" % id)
 

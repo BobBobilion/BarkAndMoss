@@ -27,18 +27,18 @@ const BARK_ANIMATION_DURATION: float = 1.0
 const ANIMATION_BLEND_TIME: float = 0.2  # Time to blend between animations
 
 # Available animation names from the Dog.glb model
-const ANIM_ATTACK: String = "DogArmature|Attack"                     # Bite attack animation
-const ANIM_DEATH: String = "DogArmature|Death"                       # Death animation
-const ANIM_EATING: String = "DogArmature|Eating"                     # Eating raw meat animation
-const ANIM_GALLOP: String = "DogArmature|Gallop"                     # Fast running animation
-const ANIM_GALLOP_JUMP: String = "DogArmature|Gallop_Jump"           # Jumping while running
-const ANIM_IDLE_HIT_REACT_LEFT: String = "DogArmature|Idle_HitReact_Left"   # Left hit reaction
-const ANIM_IDLE_HIT_REACT_RIGHT: String = "DogArmature|Idle_HitReact_Right" # Right hit reaction
-const ANIM_JUMP_TO_IDLE: String = "DogArmature|Jump_ToIdle"          # Landing from jump
-const ANIM_WALK: String = "DogArmature|Walk"                         # Walking animation
-const ANIM_IDLE_2: String = "DogArmature|Idle_2"                     # Alternative idle
-const ANIM_IDLE_2_HEAD_LOW: String = "DogArmature|Idle_2_HeadLow"    # Head down idle
-const ANIM_IDLE: String = "DogArmature|Idle"                         # Default idle pose
+const ANIM_ATTACK: String = "AnimalArmature|Attack"                     # Bite attack animation
+const ANIM_DEATH: String = "AnimalArmature|Death"                       # Death animation
+const ANIM_EATING: String = "AnimalArmature|Eating"                     # Eating raw meat animation
+const ANIM_GALLOP: String = "AnimalArmature|Gallop"                     # Fast running animation
+const ANIM_GALLOP_JUMP: String = "AnimalArmature|Gallop_Jump"           # Jumping while running
+const ANIM_IDLE_HIT_REACT_LEFT: String = "AnimalArmature|Idle_HitReact_Left"   # Left hit reaction
+const ANIM_IDLE_HIT_REACT_RIGHT: String = "AnimalArmature|Idle_HitReact_Right" # Right hit reaction
+const ANIM_JUMP_TO_IDLE: String = "AnimalArmature|Jump_ToIdle"          # Landing from jump
+const ANIM_WALK: String = "AnimalArmature|Walk"                         # Walking animation
+const ANIM_IDLE_2: String = "AnimalArmature|Idle_2"                     # Alternative idle
+const ANIM_IDLE_2_HEAD_LOW: String = "AnimalArmature|Idle_2_HeadLow"    # Head down idle
+const ANIM_IDLE: String = "AnimalArmature|Idle"                         # Default idle pose
 
 # Movement speed thresholds for animation selection
 const WALK_THRESHOLD: float = 0.1                        # Minimum speed to trigger walk
@@ -122,13 +122,13 @@ func _ready() -> void:
 	# Configure MultiplayerSynchronizer for animations
 	_configure_multiplayer_sync()
 	
-	# Add network sync controller for better movement synchronization
-	if multiplayer.has_multiplayer_peer():
-		var NetworkSyncController = preload("res://scripts/components/network_sync_controller.gd")
-		var network_sync_controller = NetworkSyncController.new()
-		network_sync_controller.name = "NetworkSyncController"
-		add_child(network_sync_controller)
-		print("Dog: Added NetworkSyncController for better movement sync")
+	# For remote instances, try setting up animations again after a short delay
+	# This ensures the scene tree is fully ready
+	if not is_multiplayer_authority():
+		call_deferred("_setup_animations_deferred")
+	
+	# Network sync is handled by MultiplayerSynchronizer in the scene
+	# No need for additional NetworkSyncController
 
 
 func _exit_tree() -> void:
@@ -218,8 +218,10 @@ func _process(delta: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	# Only process input for our own player - check if multiplayer peer exists first
+	# For remote players, just update animations based on synced velocity
 	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+		# Update animations for remote players based on their synced velocity
+		_update_movement_animation()
 		return
 	
 	# Add the gravity
@@ -249,6 +251,10 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	
+	# Sync position to other players if we're the authority
+	if multiplayer.has_multiplayer_peer() and is_multiplayer_authority():
+		_sync_position.rpc(position, rotation, velocity)
+	
 	# Update chunk system with our position
 	_update_chunk_position()
 	
@@ -260,22 +266,20 @@ func _setup_animations() -> void:
 	"""Initialize the animation system by finding the AnimationPlayer in the dog model."""
 	# Look for AnimationPlayer in the dog model
 	if dog_model:
+		# print("Dog: DogModel found, searching for AnimationPlayer...")
 		animation_player = _find_animation_player_recursive(dog_model)
 		if animation_player:
-			# DEBUG: Print all available animations
-			print("Dog: Available animations:")
-			var animation_list: PackedStringArray = animation_player.get_animation_list()
-			for anim_name in animation_list:
-				print("  - ", anim_name)
-			
-			# Check if our idle variants exist
-			print("Dog: Checking idle animations:")
-			print("  ANIM_IDLE (", ANIM_IDLE, "): ", animation_player.has_animation(ANIM_IDLE))
-			print("  ANIM_IDLE_2 (", ANIM_IDLE_2, "): ", animation_player.has_animation(ANIM_IDLE_2))
-			print("  ANIM_IDLE_2_HEAD_LOW (", ANIM_IDLE_2_HEAD_LOW, "): ", animation_player.has_animation(ANIM_IDLE_2_HEAD_LOW))
-			
 			# Start with idle animation
 			_play_animation(ANIM_IDLE)
+		else:
+			print("Dog: ERROR - No AnimationPlayer found in DogModel!")
+	else:
+		print("Dog: ERROR - DogModel node not found!")
+
+
+func _setup_animations_deferred() -> void:
+	"""Deferred setup for remote instances to ensure scene is fully ready."""
+	_setup_animations()
 
 
 func _find_animation_player_recursive(node: Node) -> AnimationPlayer:
@@ -289,6 +293,13 @@ func _find_animation_player_recursive(node: Node) -> AnimationPlayer:
 			return result
 	
 	return null
+
+
+func _print_scene_tree(node: Node, indent: String = "") -> void:
+	"""Debug function to print the scene tree structure."""
+	print(indent + node.name + " (" + node.get_class() + ")")
+	for child in node.get_children():
+		_print_scene_tree(child, indent + "  ")
 
 
 func _update_movement_animation() -> void:
@@ -334,12 +345,11 @@ func _update_movement_animation() -> void:
 	# Update movement state tracking
 	was_moving = is_currently_moving
 	
-	# Play the appropriate animation - but be careful with idle animation restarts
-	# FIXED: Only restart if we're switching to a different animation, not when idle animations finish
+	# Play the appropriate animation
 	if target_animation != current_animation:
 		_play_animation(target_animation)
 	elif not animation_player.is_playing():
-		# Handle animation finishing cases
+		# Animation finished, restart it
 		if target_animation in [ANIM_IDLE, ANIM_IDLE_2, ANIM_IDLE_2_HEAD_LOW]:
 			# 30% chance to switch to a different idle animation when current idle finishes
 			if randf() < 0.30:
@@ -347,36 +357,36 @@ func _update_movement_animation() -> void:
 				# Remove current animation from options to ensure we get a different one
 				idle_variants.erase(current_animation)
 				var new_idle: String = idle_variants[randi() % idle_variants.size()]
-				print("Dog: Switching from '", current_animation, "' to '", new_idle, "' (30% chance triggered)")
 				_play_animation(new_idle)
 			else:
 				# 70% chance to continue with same idle animation
-				print("Dog: Continuing with '", target_animation, "' (70% chance - no variation)")
 				_play_animation(target_animation)
 		else:
-			# Restart non-idle animations when they finish
+			# Restart movement animations when they finish
 			_play_animation(target_animation)
 
 
 func _play_animation(anim_name: String) -> void:
 	"""Play an animation on the AnimationPlayer."""
 	if animation_player and animation_player.has_animation(anim_name):
-		if current_animation != anim_name:
+		if current_animation != anim_name or not animation_player.is_playing():
+			# print("Dog: Playing animation locally: ", anim_name, " (authority: ", is_multiplayer_authority(), ")")
 			animation_player.play(anim_name)
 			current_animation = anim_name
 			
 			# Sync animation to other players
 			if multiplayer.has_multiplayer_peer() and is_multiplayer_authority():
+				# print("Dog: Sending animation sync RPC: ", anim_name)
 				_sync_animation_rpc.rpc(anim_name)
 	else:
-		# print("Dog: Animation not found: ", anim_name)
-		pass
+		print("Dog: ERROR - Animation not found: ", anim_name, " (animation_player: ", animation_player != null, ")")
 
 
 @rpc("any_peer", "call_local", "unreliable")
 func _sync_animation_rpc(anim_name: String) -> void:
 	"""RPC to sync animation on remote players."""
 	# Debug: Log when receiving RPC
+	# print("Dog: Received animation sync RPC for: ", anim_name, " (authority: ", is_multiplayer_authority(), ")")
 	
 	# Don't process on the authority (they already played it)
 	if is_multiplayer_authority():
@@ -384,8 +394,23 @@ func _sync_animation_rpc(anim_name: String) -> void:
 		
 	# Play the animation on remote copies
 	if animation_player and animation_player.has_animation(anim_name):
+		# print("Dog: Playing synced animation: ", anim_name)
 		animation_player.play(anim_name)
 		current_animation = anim_name
+	else:
+		print("Dog: ERROR - Cannot play synced animation: ", anim_name, " (animation_player: ", animation_player != null, ")")
+
+@rpc("any_peer", "call_local", "unreliable")
+func _sync_position(pos: Vector3, rot: Vector3, vel: Vector3) -> void:
+	"""RPC to sync position/rotation/velocity to remote players."""
+	# Don't process on the authority (we already have the position)
+	if is_multiplayer_authority():
+		return
+	
+	# Apply the position and rotation
+	position = pos
+	rotation = rot
+	velocity = vel
 
 
 func _handle_camera_rotation(relative_mouse_motion: Vector2) -> void:

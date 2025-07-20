@@ -75,12 +75,8 @@ func _ready() -> void:
 	# Configure MultiplayerSynchronizer for animations
 	_configure_multiplayer_sync()
 	
-	# Add network sync controller for better movement synchronization
-	if has_multiplayer:
-		network_sync_controller = NetworkSyncController.new()
-		network_sync_controller.name = "NetworkSyncController"
-		add_child(network_sync_controller)
-		print("Player: Added NetworkSyncController for better movement sync")
+	# Network sync is handled by MultiplayerSynchronizer in the scene
+	# No need for additional NetworkSyncController
 	
 	# Set collision layers and mask for proper terrain interaction
 	collision_layer = 2      # Player is on layer 2
@@ -129,6 +125,10 @@ func _physics_process(delta: float) -> void:
 	# Movement
 	velocity = movement_controller.handle_movement(delta, self, transform)
 	move_and_slide()
+	
+	# Sync position to other players if we're the authority
+	if multiplayer.has_multiplayer_peer() and is_multiplayer_authority():
+		_sync_position.rpc(position, rotation, velocity)
 	
 	# Update chunk system with our position
 	_update_chunk_position()
@@ -629,3 +629,15 @@ func _sync_animation_rpc(animation_name: String) -> void:
 			animation_controller.play_animation_from_sync(animation_name)
 		else:
 			animation_controller.play_animation(animation_name)
+
+@rpc("any_peer", "call_local", "unreliable")
+func _sync_position(pos: Vector3, rot: Vector3, vel: Vector3) -> void:
+	"""RPC to sync position/rotation/velocity to remote players."""
+	# Don't process on the authority (we already have the position)
+	if is_multiplayer_authority():
+		return
+	
+	# Apply the position and rotation
+	position = pos
+	rotation = rot
+	velocity = vel

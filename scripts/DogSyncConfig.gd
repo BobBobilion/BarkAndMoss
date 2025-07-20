@@ -1,9 +1,9 @@
-# PlayerSyncConfig.gd
-# Enhanced synchronization configuration for Player nodes
+# DogSyncConfig.gd
+# Synchronization configuration for Dog nodes
 extends SceneReplicationConfig
 
 func _init() -> void:
-	# Sync transform properties with spawn values
+	# Sync transform properties
 	add_property(NodePath(".:position"))
 	add_property(NodePath(".:rotation"))
 	
