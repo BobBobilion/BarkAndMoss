@@ -40,6 +40,42 @@ func _ready() -> void:
 	_create_chunk_manager()
 	
 	print("GameManager: Initialized (Server: %s)" % is_server)
+	
+	# If we're a client joining a running game, request existing players
+	if multiplayer.has_multiplayer_peer() and not is_server and not is_game_started:
+		print("GameManager: Client detected, checking if game is already running...")
+		# Give a moment for scene to settle
+		await get_tree().create_timer(0.5).timeout
+		
+		# Check if there's already a Main scene (indicates mid-game join)
+		var main_scene = get_tree().get_first_node_in_group("main")
+		if main_scene:
+			print("GameManager: Client joining mid-game, waiting for terrain to be ready...")
+			is_game_started = true  # Mark game as started for this client
+			
+			# CRITICAL: Wait for terrain to be ready signal from Main
+			if not main_scene.terrain_generated:
+				print("GameManager: Waiting for terrain_ready signal from Main...")
+				await main_scene.terrain_ready
+				print("GameManager: Received terrain_ready signal!")
+			else:
+				print("GameManager: Terrain already generated")
+			
+			# Additional safety wait to ensure physics bodies are ready
+			await get_tree().create_timer(0.5).timeout
+			
+			print("GameManager: Terrain ready, now spawning players...")
+			
+			# Request existing players from server
+			request_existing_players.rpc_id(1)
+			
+			# Also spawn our local player if we have a role
+			var local_id = multiplayer.get_unique_id()
+			if NetworkManager.players.has(local_id):
+				var local_data = NetworkManager.players[local_id]
+				if local_data.has("role") and local_data.role != "unassigned":
+					print("GameManager: Client spawning local player %d" % local_id)
+					_spawn_player(local_id)
 
 # --- Public Methods ---
 func initialize_world(world: Node3D, seed: int) -> void:
@@ -59,6 +95,11 @@ func start_game() -> void:
 	"""Start the game and spawn initial players."""
 	# Remove server check - allow single player mode
 	print("GameManager: Starting game (multiplayer: %s)" % multiplayer.has_multiplayer_peer())
+	
+	# Don't start if already started
+	if is_game_started:
+		print("GameManager: Game already started, skipping")
+		return
 		
 	is_game_started = true
 	game_started.emit()
@@ -85,22 +126,36 @@ func spawn_initial_players() -> void:
 	print("GameManager: Multiplayer mode - is_server: ", is_server_mode)
 	print("GameManager: Multiplayer peer count: ", multiplayer.get_peers().size())
 	
-	# Always spawn the local player
-	var local_id: int = multiplayer.get_unique_id()
-	print("GameManager: Local player ID: %d" % local_id)
-	_spawn_player(local_id)
-	
-	# If we're the server and have connected players, spawn them too
 	if is_server_mode:
-		var peer_list = multiplayer.get_peers()
-		print("GameManager: Server spawning peers: ", peer_list)
-		for peer_id in peer_list:
-			print("GameManager: Spawning connected player: %d" % peer_id)
-			_spawn_player(peer_id)
+		# Server spawns all players with assigned roles
+		print("GameManager: Server spawning all players with roles...")
+		
+		# Spawn all players that have roles assigned
+		for peer_id in NetworkManager.players:
+			var player_data = NetworkManager.players[peer_id]
+			if player_data.has("role") and player_data.role != "unassigned":
+				print("GameManager: Spawning player %d with role %s" % [peer_id, player_data.role])
+				_spawn_player(peer_id)
+			else:
+				print("GameManager: Skipping player %d - no role assigned yet" % peer_id)
 		
 		# After spawning all players, sync their positions to all clients
 		await get_tree().process_frame
 		_sync_all_player_positions()
+	else:
+		# Client - spawn all existing players
+		print("GameManager: Client requesting existing players from server...")
+		
+		# First spawn local player if we have a role
+		var local_id = multiplayer.get_unique_id()
+		if NetworkManager.players.has(local_id):
+			var local_data = NetworkManager.players[local_id]
+			if local_data.has("role") and local_data.role != "unassigned":
+				print("GameManager: Client spawning local player %d" % local_id)
+				_spawn_player(local_id)
+		
+		# Request server to tell us about other players
+		request_existing_players.rpc_id(1)
 
 	print("GameManager: Final players count: ", players.size())
 	print("GameManager: Final players dictionary: ", players.keys())
@@ -120,20 +175,29 @@ func get_spawn_position() -> Vector3:
 	
 	# Fallback: spawn at new world spawn location (100, 0, 100) on terrain surface
 	var base_position = Vector3(100, 0, 100)  # Changed from (0, 0, 0) to (100, 0, 100)
-	if chunk_manager:
-		var terrain_height = chunk_manager.get_height_at_position(base_position)
-		print("GameManager: Terrain height at spawn location: ", terrain_height)
+	
+	# Wait for chunk manager to be ready
+	if not chunk_manager:
+		print("GameManager: WARNING - No chunk manager available for spawn position!")
+		# Return a safe high position
+		return Vector3(100, 200, 100)
+	
+	# First try terrain height
+	var terrain_height = chunk_manager.get_height_at_position(base_position)
+	print("GameManager: Terrain height at spawn location: ", terrain_height)
+	
+	# Validate terrain height before using it
+	if terrain_height < -50 or terrain_height > 500:
+		print("GameManager: WARNING - Suspicious terrain height (", terrain_height, "), using raycast")
 		
-		# Validate terrain height before using it
-		if terrain_height < 0 or terrain_height > 500:
-			print("GameManager: WARNING - Suspicious terrain height (", terrain_height, "), using raycast")
-			
-			# Try raycast to find ground
+		# Try raycast to find ground
+		if world_node and world_node.is_inside_tree():
 			var space_state: PhysicsDirectSpaceState3D = world_node.get_world_3d().direct_space_state
 			if space_state:
 				var from: Vector3 = Vector3(100, 1000, 100)  # Cast from very high
 				var to: Vector3 = Vector3(100, -100, 100)    # Cast down deep
 				var query = PhysicsRayQueryParameters3D.create(from, to)
+				query.collision_mask = 1  # Only collide with terrain layer
 				query.collide_with_areas = false
 				query.collide_with_bodies = true
 				var result = space_state.intersect_ray(query)
@@ -145,21 +209,19 @@ func get_spawn_position() -> Vector3:
 					print("GameManager: Using raycast spawn position: ", base_position)
 					return base_position
 				else:
-					print("GameManager: Raycast found no ground! Using emergency position")
-					base_position = Vector3(100, 100, 100)  # High emergency position
-					print("GameManager: Using emergency spawn position: ", base_position)
-					return base_position
+					print("GameManager: Raycast found no ground! Using high safety position")
+					return Vector3(100, 200, 100)  # High safety position
+			else:
+				print("GameManager: No physics space state available")
+				return Vector3(100, 200, 100)  # High safety position
 		else:
-			# Terrain height seems reasonable
-			base_position.y = terrain_height + SPAWN_HEIGHT_OFFSET
-			print("GameManager: Using terrain-based spawn position: ", base_position, " (terrain: ", terrain_height, ")")
-			return base_position
+			print("GameManager: No physics space available for raycast")
+			return Vector3(100, 200, 100)  # High safety position
 	else:
-		# Last resort: just use a high position at the new spawn coordinates
-		base_position = Vector3(100, 100, 100)  # Increased from 50 to 100 for safety
-		print("GameManager: Using emergency fallback spawn position (no chunk manager): ", base_position)
-	
-	return base_position
+		# Terrain height seems reasonable
+		base_position.y = terrain_height + SPAWN_HEIGHT_OFFSET
+		print("GameManager: Using terrain-based spawn position: ", base_position, " (terrain: ", terrain_height, ")")
+		return base_position
 
 
 func _find_campfire() -> Node:
@@ -236,6 +298,9 @@ func _spawn_player(peer_id: int) -> void:
 	var player := player_scene.instantiate()
 	player.name = "Player_%d" % peer_id
 	
+	# IMPORTANT: Set the name before adding to tree to ensure proper node path
+	player.set_name("Player_%d" % peer_id)
+	
 	# Set multiplayer authority only in multiplayer mode
 	if is_multiplayer:
 		player.set_multiplayer_authority(peer_id)
@@ -245,12 +310,23 @@ func _spawn_player(peer_id: int) -> void:
 	
 	# Add to world first
 	if world_node:
-		world_node.add_child(player)
+		world_node.add_child(player, true)  # Force readable name
 	else:
-		add_child(player)
+		add_child(player, true)  # Force readable name
 	
 	# Wait a frame to ensure the node is fully in the scene tree
 	await get_tree().process_frame
+	
+	# Debug: Log the player's full path
+	print("GameManager: Player %d full path: %s" % [peer_id, player.get_path()])
+	print("GameManager: Player %d parent: %s" % [peer_id, player.get_parent().get_path() if player.get_parent() else "none"])
+	print("GameManager: Main scene path: %s" % [get_tree().current_scene.get_path() if get_tree().current_scene else "none"])
+	
+	# Check if we need to notify the multiplayer spawner
+	var main_scene = get_tree().get_first_node_in_group("main")
+	if main_scene and main_scene.has_node("MultiplayerSpawner"):
+		var spawner = main_scene.get_node("MultiplayerSpawner")
+		print("GameManager: MultiplayerSpawner found at: ", spawner.get_path())
 	
 	# Debug: Check player node structure
 	print("GameManager: Player node children:")
@@ -303,9 +379,9 @@ func _on_peer_connected(id: int) -> void:
 	"""Handle peer connection."""
 	print("GameManager: Peer connected: %d" % id)
 	
-	# If game already started, spawn the new player
-	if is_game_started and multiplayer.is_server():
-		_spawn_player(id)
+	# Don't immediately spawn - wait for role assignment
+	# The NetworkManager will handle spawning after role is claimed
+	print("GameManager: Waiting for peer %d to claim role before spawning" % id)
 
 func _on_peer_disconnected(id: int) -> void:
 	"""Handle peer disconnection."""
@@ -320,6 +396,34 @@ func _on_peer_disconnected(id: int) -> void:
 		# Remove from chunk manager tracking
 		if chunk_manager and chunk_manager.player_tracker:
 			chunk_manager.player_tracker.unregister_multiplayer_player(id)
+
+# Add new method to handle late-joining clients
+func spawn_player_for_client(client_id: int, peer_id: int) -> void:
+	"""Spawn a specific player for a specific client (used for late-joining)."""
+	if not multiplayer.is_server():
+		return
+	
+	print("GameManager: Server spawning player %d for client %d" % [peer_id, client_id])
+	
+	# Check if player exists in our tracking
+	if not players.has(peer_id):
+		# Spawn the player first
+		_spawn_player(peer_id)
+	
+	# The MultiplayerSpawner should handle replication to the specific client
+
+# Add method to handle role-based spawning
+func spawn_player_with_role(peer_id: int) -> void:
+	"""Spawn a player after their role has been assigned."""
+	if not multiplayer.is_server():
+		return
+		
+	print("GameManager: Spawning player %d with assigned role" % peer_id)
+	_spawn_player(peer_id)
+	
+	# After spawning, sync to all clients
+	await get_tree().process_frame
+	_sync_all_player_positions()
 
 # --- Public Methods for Chunk System ---
 func get_chunk_manager() -> ChunkManager:
@@ -614,3 +718,75 @@ func _sync_all_player_positions() -> void:
 			# Player synchronization is now handled by Godot's built-in MultiplayerSynchronizer
 			# The MultiplayerSynchronizer on each player handles automatic state sync
 			print("GameManager: Player %d position synced via MultiplayerSynchronizer" % peer_id)
+
+# Add RPC to request existing players
+@rpc("any_peer", "call_remote", "reliable")
+func request_existing_players() -> void:
+	"""Client requests list of existing players from server."""
+	if not multiplayer.is_server():
+		return
+		
+	var requester_id = multiplayer.get_remote_sender_id()
+	print("GameManager: Client %d requesting existing players" % requester_id)
+	
+	# Send info about all existing players to the requesting client
+	for peer_id in NetworkManager.players:
+		if peer_id != requester_id:  # Don't tell them about themselves
+			var player_data = NetworkManager.players[peer_id]
+			if player_data.has("role") and player_data.role != "unassigned":
+				print("GameManager: Telling client %d about player %d" % [requester_id, peer_id])
+				spawn_remote_player.rpc_id(requester_id, peer_id, player_data.role)
+
+# Add RPC for spawning remote players on clients
+@rpc("authority", "call_remote", "reliable")
+func spawn_remote_player(peer_id: int, role: String) -> void:
+	"""Server tells client to spawn a specific player."""
+	print("GameManager: Client received instruction to spawn player %d as %s" % [peer_id, role])
+	
+	# Ensure terrain is ready before spawning
+	var main_scene = get_tree().get_first_node_in_group("main")
+	if main_scene and not main_scene.terrain_generated:
+		print("GameManager: Waiting for terrain before spawning remote player...")
+		await main_scene.terrain_ready
+	
+	# Additional safety wait
+	await get_tree().create_timer(0.2).timeout
+	
+	# Temporarily store the role in NetworkManager if not present
+	if not NetworkManager.players.has(peer_id):
+		NetworkManager.players[peer_id] = {"role": role, "name": "Player_%d" % peer_id}
+	
+	_spawn_player(peer_id)
+
+# Add new method to wait for terrain
+func _wait_for_terrain_ready() -> void:
+	"""Wait for terrain chunks to be generated before spawning players."""
+	if not chunk_manager:
+		print("GameManager: No chunk manager, skipping terrain wait")
+		return
+	
+	var max_wait_time: float = 10.0  # Maximum 10 seconds to wait
+	var wait_interval: float = 0.5
+	var elapsed: float = 0.0
+	
+	while elapsed < max_wait_time:
+		# Check if we have any active chunks
+		if chunk_manager.active_chunks.size() > 0:
+			print("GameManager: Found %d active chunks" % chunk_manager.active_chunks.size())
+			
+			# Try to get terrain height at spawn position to verify it's ready
+			var spawn_pos = Vector3(100, 0, 100)
+			var terrain_height = chunk_manager.get_height_at_position(spawn_pos)
+			
+			# If we get a reasonable height, terrain is ready
+			if terrain_height > -100 and terrain_height < 500:
+				print("GameManager: Terrain ready with height ", terrain_height, " at spawn position")
+				# Give a bit more time for physics bodies to be created
+				await get_tree().create_timer(1.0).timeout
+				return
+		
+		print("GameManager: Waiting for terrain... (", elapsed, "s elapsed, chunks: ", chunk_manager.active_chunks.size(), ")")
+		await get_tree().create_timer(wait_interval).timeout
+		elapsed += wait_interval
+	
+	print("GameManager: WARNING - Terrain wait timeout! Proceeding anyway...")

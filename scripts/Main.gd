@@ -1,6 +1,9 @@
 class_name Main
 extends Node3D
 
+# --- Signals ---
+signal terrain_ready()
+
 # --- Properties ---
 @onready var game_manager: GameManager = $GameManager as GameManager
 @onready var animal_spawner: Node = $AnimalSpawner
@@ -26,7 +29,14 @@ func _ready() -> void:
 	multiplayer_spawner = MultiplayerSpawner.new()
 	multiplayer_spawner.name = "MultiplayerSpawner"
 	# The root path determines where spawned objects are added as children.
-	multiplayer_spawner.set_spawn_path("..") # Spawn players as siblings of Main
+	multiplayer_spawner.set_spawn_path(".") # Spawn players as children of Main
+	
+	# Configure spawnable scenes
+	multiplayer_spawner.add_spawnable_scene("res://scenes/Player.tscn")
+	multiplayer_spawner.add_spawnable_scene("res://scenes/Dog.tscn")
+	
+	# Set spawn limit (-1 = unlimited)
+	multiplayer_spawner.spawn_limit = -1
 
 	# DISABLED: PlayerSpawner conflicts with GameManager's spawning system
 	# Set the spawn function. The host calls this, and the spawner replicates it.
@@ -55,23 +65,43 @@ func _ready() -> void:
 	# Initialize game manager with this as the world node
 	if game_manager:
 		print("Main: GameManager found, initializing world...")
-		# Use a simple seed generation approach
-		# The NetworkManager handles proper world state synchronization
-		var world_seed: int
-		if multiplayer.is_server():
-			# Host generates seed
-			world_seed = randi()
-			print("Main: Host generated world seed: ", world_seed)
+		
+		# CRITICAL: Clients must wait for world state before initializing
+		if not multiplayer.is_server() and multiplayer.has_multiplayer_peer():
+			# Client - wait for world state from WorldStateManager
+			print("Main: Client waiting for world state from host...")
+			var world_state_manager = get_node("/root/WorldStateManager")
+			var world_state = world_state_manager.world_state
+			
+			# Check if we already have the world state (joining mid-game)
+			if world_state.world_seed != 0:
+				print("Main: Client using received world seed: ", world_state.world_seed)
+				game_manager.initialize_world(self, world_state.world_seed)
+				call_deferred("_setup_and_start")
+			else:
+				# World state not yet received - this shouldn't happen as NetworkManager
+				# should wait for world state before loading this scene
+				print("Main: ERROR - Client loaded scene before receiving world state!")
+				# Use fallback but log error
+				game_manager.initialize_world(self, 12345)
+				call_deferred("_setup_and_start")
 		else:
-			# Client uses a fallback - the proper seed will be applied via WorldStateManager
-			world_seed = 12345
-			print("Main: Client using fallback seed, will be corrected by WorldStateManager")
-		
-		game_manager.initialize_world(self, world_seed)
-		
-		# Start immediate chunk loading and game setup
-		print("Main: Starting immediate setup...")
-		call_deferred("_setup_and_start")
+			# Host or single player - generate new seed
+			var world_seed: int = randi()
+			print("Main: Host/Single player generated world seed: ", world_seed)
+			
+			# Initialize world state manager if host
+			if multiplayer.is_server() and multiplayer.has_multiplayer_peer():
+				var world_state_manager = get_node("/root/WorldStateManager")
+				# Only initialize if not already done by NetworkManager
+				if world_state_manager.world_state.world_seed == 0:
+					world_state_manager.initialize_world_state(world_seed)
+			
+			game_manager.initialize_world(self, world_seed)
+			
+			# Start immediate chunk loading and game setup
+			print("Main: Starting immediate setup...")
+			call_deferred("_setup_and_start")
 	else:
 		print("Main: ERROR - GameManager not found!")
 	
@@ -83,35 +113,6 @@ func _ready() -> void:
 		print("Main: ERROR - DayNightCycle not found!")
 	
 	print("Main: Initialization complete")
-
-
-func _ensure_day_night_cycle_working() -> void:
-	"""Ensure the day/night cycle is working properly - this addresses the sun/moon issue."""
-	# Wait for the DayNightCycle to initialize
-	await get_tree().create_timer(2.0).timeout
-	
-	if day_night_cycle and day_night_cycle.has_method("_ready"):
-		# Check if sun and moon were created
-		var sun_light = day_night_cycle.get_node_or_null("SunLight")
-		var moon_light = day_night_cycle.get_node_or_null("MoonLight")
-		var sun_sphere = day_night_cycle.get_node_or_null("SunSphere")
-		var moon_sphere = day_night_cycle.get_node_or_null("MoonSphere")
-		
-		print("Main: Day/Night Cycle Status:")
-		print("  - SunLight: ", "Found" if sun_light else "Missing")
-		print("  - MoonLight: ", "Found" if moon_light else "Missing")
-		print("  - SunSphere: ", "Found" if sun_sphere else "Missing")
-		print("  - MoonSphere: ", "Found" if moon_sphere else "Missing")
-		
-		if sun_light:
-			print("  - Sun visible: ", sun_light.visible, " Energy: ", sun_light.light_energy)
-		if moon_light:
-			print("  - Moon visible: ", moon_light.visible, " Energy: ", moon_light.light_energy)
-			
-		# Force set time to midday to ensure sun is visible
-		if day_night_cycle.has_method("set_time_of_day"):
-			day_night_cycle.set_time_of_day(0.5)  # Midday - sun should be bright and visible
-			print("Main: Set day/night cycle to midday (0.5) to ensure sun visibility")
 
 
 func _setup_and_start() -> void:
@@ -157,10 +158,15 @@ func _setup_and_start() -> void:
 	# Position campfire on terrain
 	await _position_campfire_on_terrain()
 	
-	# Start the game
+	# Emit signal that terrain is ready
+	print("Main: Terrain generation complete, emitting terrain_ready signal")
+	terrain_ready.emit()
+	
+	# Start the game (this will spawn players)
 	if game_manager:
+		print("Main: Calling GameManager.start_game() after terrain is ready")
 		game_manager.start_game()
-	print("Main: Game started!")
+	print("Main: Setup complete!") 
 
 
 func _create_fallback_terrain() -> void:
@@ -283,4 +289,33 @@ func _position_campfire_on_terrain() -> void:
 	
 	# Position campfire
 	campfire.global_position = Vector3(100, terrain_height + 1.0, 100)
-	print("Main: Campfire positioned at: ", campfire.global_position) 
+	print("Main: Campfire positioned at: ", campfire.global_position)
+
+
+func _ensure_day_night_cycle_working() -> void:
+	"""Ensure the day/night cycle is working properly - this addresses the sun/moon issue."""
+	# Wait for the DayNightCycle to initialize
+	await get_tree().create_timer(2.0).timeout
+	
+	if day_night_cycle and day_night_cycle.has_method("_ready"):
+		# Check if sun and moon were created
+		var sun_light = day_night_cycle.get_node_or_null("SunLight")
+		var moon_light = day_night_cycle.get_node_or_null("MoonLight")
+		var sun_sphere = day_night_cycle.get_node_or_null("SunSphere")
+		var moon_sphere = day_night_cycle.get_node_or_null("MoonSphere")
+		
+		print("Main: Day/Night Cycle Status:")
+		print("  - SunLight: ", "Found" if sun_light else "Missing")
+		print("  - MoonLight: ", "Found" if moon_light else "Missing")
+		print("  - SunSphere: ", "Found" if sun_sphere else "Missing")
+		print("  - MoonSphere: ", "Found" if moon_sphere else "Missing")
+		
+		if sun_light:
+			print("  - Sun visible: ", sun_light.visible, " Energy: ", sun_light.light_energy)
+		if moon_light:
+			print("  - Moon visible: ", moon_light.visible, " Energy: ", moon_light.light_energy)
+			
+		# Force set time to midday to ensure sun is visible
+		if day_night_cycle.has_method("set_time_of_day"):
+			day_night_cycle.set_time_of_day(0.5)  # Midday - sun should be bright and visible
+			print("Main: Set day/night cycle to midday (0.5) to ensure sun visibility") 

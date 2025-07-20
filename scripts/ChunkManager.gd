@@ -362,7 +362,6 @@ void fragment() {
 	cached_terrain_material = ShaderMaterial.new()
 	cached_terrain_material.shader = shader
 	
-	# Removed: print("ChunkManager: Simple biome material created")
 
 func _create_default_texture(color: Color) -> ImageTexture:
 	"""Create a simple default texture with the given color."""

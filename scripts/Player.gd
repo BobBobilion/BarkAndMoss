@@ -69,6 +69,13 @@ func _ready() -> void:
 	animation_controller.setup($AdventurerModel)
 	interaction_controller.setup($InteractionArea, self)
 	equipment_controller.setup(self, $AdventurerModel, camera_node)
+	
+	# Configure MultiplayerSynchronizer for animations
+	_configure_multiplayer_sync()
+	
+	# Set collision layers and mask for proper terrain interaction
+	collision_layer = 2      # Player is on layer 2
+	collision_mask = 1 | 2 | 8  # Player collides with terrain (1), players/environment (2), and animals (8)
 
 	# Debug interaction setup
 	print("Player: InteractionArea collision layer = ", $InteractionArea.collision_layer)
@@ -467,7 +474,9 @@ func add_global_ui() -> void:
 	var global_ui_layer = viewport.get_node_or_null("GlobalUILayer")
 	
 	if global_ui_layer:
-		print("Player: GlobalUILayer already exists, skipping creation")
+		print("Player: GlobalUILayer already exists, updating player reference")
+		# Update the player reference
+		global_ui_layer.set_meta("player_ref", self)
 		return
 	else:
 		print("Player: Creating new GlobalUILayer")
@@ -476,6 +485,9 @@ func add_global_ui() -> void:
 		global_ui_layer.layer = 5  # Lower than HUD (10) but above background
 		viewport.add_child(global_ui_layer)
 		print("Player: GlobalUILayer created and added to viewport")
+	
+	# Store player reference
+	global_ui_layer.set_meta("player_ref", self)
 	
 	# Create FPS counter
 	var fps_counter = Label.new()
@@ -496,6 +508,25 @@ func add_global_ui() -> void:
 	fps_counter.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	global_ui_layer.add_child(fps_counter)
 	
+	# Create position display
+	var position_display = Label.new()
+	position_display.name = "PositionDisplay"
+	position_display.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	position_display.offset_left = -200
+	position_display.offset_top = 40  # Below FPS counter
+	position_display.offset_right = -10
+	position_display.offset_bottom = 65
+	position_display.add_theme_font_size_override("font_size", 14)
+	position_display.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
+	position_display.add_theme_color_override("font_shadow_color", Color(0.137, 0.2, 0.165, 1))
+	position_display.add_theme_constant_override("shadow_offset_x", 1)
+	position_display.add_theme_constant_override("shadow_offset_y", 1)
+	position_display.text = "X: 0.0 Y: 0.0 Z: 0.0"
+	position_display.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	position_display.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	position_display.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	global_ui_layer.add_child(position_display)
+	
 	# Create game code display
 	var game_code_display = Label.new()
 	game_code_display.name = "GameCodeDisplay"
@@ -509,55 +540,83 @@ func add_global_ui() -> void:
 	game_code_display.add_theme_color_override("font_shadow_color", Color(0.137, 0.2, 0.165, 1))
 	game_code_display.add_theme_constant_override("shadow_offset_x", 1)
 	game_code_display.add_theme_constant_override("shadow_offset_y", 1)
-	game_code_display.text = "Code: ABC123"
+	game_code_display.text = "Code: Loading..."  # Start with loading text
 	game_code_display.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	game_code_display.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	game_code_display.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	global_ui_layer.add_child(game_code_display)
 	
-	# Create a script to handle updates
-	var global_ui_script = GDScript.new()
-	global_ui_script.source_code = """
-extends CanvasLayer
-
-var fps_update_timer: float = 0.0
-var fps_update_interval: float = 0.5
-
-func _ready():
-	_update_game_code_display()
-	var timer = Timer.new()
-	timer.wait_time = 1.0
-	timer.timeout.connect(_update_game_code_display)
-	timer.autostart = true
-	add_child(timer)
-
-func _process(delta):
-	_update_fps_counter(delta)
-
-func _update_fps_counter(delta: float):
-	fps_update_timer += delta
-	if fps_update_timer >= fps_update_interval:
-		fps_update_timer = 0.0
-		var current_fps = Engine.get_frames_per_second()
-		var fps_counter = get_node_or_null('FPSCounter')
+	# Create update timer directly on the layer
+	var update_timer = Timer.new()
+	update_timer.name = "UpdateTimer"
+	update_timer.wait_time = 0.1  # Update every 100ms
+	update_timer.autostart = true
+	update_timer.timeout.connect(func():
+		# Update FPS
 		if fps_counter:
-			fps_counter.text = 'FPS: %d' % current_fps
-
-func _update_game_code_display():
-	var game_code_display = get_node_or_null('GameCodeDisplay')
-	if not game_code_display:
-		return
+			fps_counter.text = "FPS: %d" % Engine.get_frames_per_second()
 		
-	if multiplayer.has_multiplayer_peer():
-		var lobby_code = NetworkManager.get_lobby_code()
-		if lobby_code != '':
-			game_code_display.text = 'Code: %s' % lobby_code
-			game_code_display.visible = true
+		# Update position
+		var player = global_ui_layer.get_meta("player_ref", null)
+		if position_display and is_instance_valid(player):
+			var pos = player.global_position
+			position_display.text = "X: %.1f Y: %.1f Z: %.1f" % [pos.x, pos.y, pos.z]
+		
+		# Update lobby code
+		if game_code_display and is_instance_valid(NetworkManager):
+			var lobby_code = NetworkManager.get_lobby_code()
+			if lobby_code != "":
+				game_code_display.text = "Code: %s" % lobby_code
+			else:
+				if multiplayer.has_multiplayer_peer():
+					game_code_display.text = "Code: Waiting..."
+				else:
+					game_code_display.text = "Code: Offline"
 		else:
-			game_code_display.visible = false
-	else:
-		game_code_display.visible = false
-"""
-	global_ui_layer.set_script(global_ui_script)
+			game_code_display.text = "Code: N/A"
+	)
+	global_ui_layer.add_child(update_timer)
 	
 	print("Player: Global UI created successfully")
+
+# Add new method to configure multiplayer synchronization
+func _configure_multiplayer_sync() -> void:
+	"""Configure the MultiplayerSynchronizer to include animation state."""
+	if not multiplayer.has_multiplayer_peer():
+		return  # Skip in single player mode
+		
+	var sync = $MultiplayerSynchronizer
+	if not sync:
+		print("Player: Warning - MultiplayerSynchronizer not found!")
+		return
+		
+	# For now, just log that we would configure animation sync
+	# The actual animation sync needs to be configured in the scene file
+	# or through a different approach since SceneReplicationConfig API is limited
+	print("Player: Animation sync should be configured in the scene file")
+	
+	# Alternative approach: sync animation manually via RPC
+	# This will be handled by the animation controller
+
+
+func sync_animation(animation_name: String) -> void:
+	"""Called by AnimationController to sync animations across network."""
+	# Only sync if we're the authority and in multiplayer
+	if multiplayer.has_multiplayer_peer() and is_multiplayer_authority():
+		_sync_animation_rpc.rpc(animation_name)
+
+
+@rpc("any_peer", "call_local", "unreliable")
+func _sync_animation_rpc(animation_name: String) -> void:
+	"""RPC to sync animation on remote players."""
+	# Don't process on the authority (they already played it)
+	if is_multiplayer_authority():
+		return
+		
+	# Play the animation on remote copies
+	if animation_controller:
+		# Use the special sync method to avoid recursive sync calls
+		if animation_controller.has_method("play_animation_from_sync"):
+			animation_controller.play_animation_from_sync(animation_name)
+		else:
+			animation_controller.play_animation(animation_name)

@@ -303,6 +303,12 @@ func claim_role(role: String) -> void:
 	var main_scene = get_tree().get_first_node_in_group("main")
 	if main_scene and id != 1 and multiplayer.is_server():  # Only server spawns players
 		print("NetworkManager: Auto-spawning client %d with role %s into running game" % [id, role])
+		
+		# Now that role is assigned, spawn the player
+		var game_manager = get_tree().get_first_node_in_group("game_manager")
+		if game_manager:
+			game_manager.spawn_player_with_role(id)
+		
 		# Tell the client to load the game scene
 		load_main_scene.rpc_id(id)
 		# The GameManager will handle spawning when the client's scene is ready
@@ -628,7 +634,6 @@ func _check_discovery_requests(udp: PacketPeerUDP, timer: Timer) -> void:
 		# Stop the discovery server if we're no longer hosting
 		print("NetworkManager: Stopping discovery server - is_host: ", is_host, ", lobby_code: '", lobby_code, "'")
 		timer.queue_free()
-		udp.close()
 		
 		# Also stop status timer
 		var status_timer = get_node_or_null("DiscoveryStatusTimer")

@@ -46,7 +46,6 @@ var settings_loaded: bool = false  # Track if settings have been loaded to avoid
 
 func _ready() -> void:
 	"""Initialize the pause menu and connect signals."""
-	print("PauseMenu: Initializing...")
 	
 	# Initially hide the pause menu and settings modal
 	hide()
@@ -66,8 +65,6 @@ func _ready() -> void:
 	
 	# Load saved settings
 	_load_settings()
-	
-	print("PauseMenu: Ready!")
 
 
 func _input(event: InputEvent) -> void:
@@ -91,7 +88,7 @@ func show_pause_menu() -> void:
 	if is_paused:
 		return
 		
-	print("PauseMenu: Showing pause menu")
+	
 	is_paused = true
 	show()
 	
@@ -122,7 +119,7 @@ func hide_pause_menu() -> void:
 	if not is_paused:
 		return
 		
-	print("PauseMenu: Hiding pause menu")
+	
 	is_paused = false
 	hide()
 	
@@ -148,21 +145,21 @@ func toggle_pause_menu() -> void:
 
 func _on_resume_pressed() -> void:
 	"""Handle resume button press."""
-	print("PauseMenu: Resume button pressed")
+	
 	hide_pause_menu()
 	resume_requested.emit()
 
 
 func _on_settings_pressed() -> void:
 	"""Handle settings button press."""
-	print("PauseMenu: Settings button pressed")
+	
 	settings_modal.show()
 	settings_requested.emit()
 
 
 func _on_quit_to_menu_pressed() -> void:
 	"""Handle quit to main menu button press."""
-	print("PauseMenu: Quit to menu button pressed")
+	
 	confirmation_dialog.dialog_text = "Are you sure you want to quit to the main menu?\nAny unsaved progress will be lost."
 	confirmation_dialog.popup_centered()
 	# Store what action to take when confirmed
@@ -171,7 +168,7 @@ func _on_quit_to_menu_pressed() -> void:
 
 func _on_quit_game_pressed() -> void:
 	"""Handle quit game button press."""
-	print("PauseMenu: Quit game button pressed")
+	
 	confirmation_dialog.dialog_text = "Are you sure you want to quit the game?\nAny unsaved progress will be lost."
 	confirmation_dialog.popup_centered()
 	# Store what action to take when confirmed
@@ -182,7 +179,7 @@ func _on_quit_game_pressed() -> void:
 
 func _on_settings_close_pressed() -> void:
 	"""Handle the close button in the settings modal."""
-	print("PauseMenu: Closing settings modal")
+	
 	_save_settings()
 	settings_modal.hide()
 
@@ -276,7 +273,6 @@ func _on_confirmation_confirmed() -> void:
 
 func _quit_to_main_menu() -> void:
 	"""Quit to the main menu."""
-	print("PauseMenu: Quitting to main menu...")
 	
 	# Don't call hide_pause_menu() as it sets mouse to captured
 	# Instead, handle pause menu cleanup directly
@@ -287,7 +283,6 @@ func _quit_to_main_menu() -> void:
 	
 	# Ensure mouse is visible for main menu
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
-	print("PauseMenu: Set mouse mode to visible for main menu")
 	
 	# Clean up game state - find and cleanup GameManager
 	var game_managers = get_tree().get_nodes_in_group("game_manager")
@@ -318,7 +313,6 @@ func _quit_to_main_menu() -> void:
 
 func _quit_game() -> void:
 	"""Quit the entire game."""
-	print("PauseMenu: Quitting game...")
 	
 	# Disconnect from multiplayer if connected
 	if NetworkManager:
@@ -368,19 +362,16 @@ func _save_settings() -> void:
 		int(render_slider.value)  # Render distance
 	)
 	
-	print("PauseMenu: Settings saved")
+	
 
 
 func _apply_render_distance_deferred() -> void:
 	"""Apply render distance setting asynchronously to avoid blocking the pause menu."""
-	print("PauseMenu: Applying render distance setting asynchronously...")
 	SettingsManager.apply_render_distance_setting(int(render_slider.value))
-	print("PauseMenu: Render distance applied successfully")
 
 
 func _cleanup_persistent_ui() -> void:
 	"""Clean up persistent UI layers that survive scene changes."""
-	print("PauseMenu: Cleaning up persistent UI layers...")
 	
 	var viewport = get_viewport()
 	if not viewport:
@@ -389,16 +380,14 @@ func _cleanup_persistent_ui() -> void:
 	# Remove UILayer (contains HUD/hotbar)
 	var ui_layer = viewport.get_node_or_null("UILayer")
 	if ui_layer:
-		print("PauseMenu: Removing UILayer with %d children" % ui_layer.get_child_count())
 		ui_layer.queue_free()
 	
 	# Remove HUDLayer if it exists (alternative name)
 	var hud_layer = viewport.get_node_or_null("HUDLayer")
 	if hud_layer:
-		print("PauseMenu: Removing HUDLayer with %d children" % hud_layer.get_child_count())
 		hud_layer.queue_free()
 	
-	print("PauseMenu: Persistent UI cleanup complete")
+	
 
 
 # --- Utility Methods ---

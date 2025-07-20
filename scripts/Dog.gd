@@ -119,6 +119,8 @@ func _ready() -> void:
 	# Initialize animation system
 	_setup_animations()
 	
+	# Configure MultiplayerSynchronizer for animations
+	_configure_multiplayer_sync()
 
 
 func _exit_tree() -> void:
@@ -348,68 +350,34 @@ func _update_movement_animation() -> void:
 			_play_animation(target_animation)
 
 
-func _play_animation(animation_name: String) -> void:
-	"""Play the specified animation with fallback handling."""
-	if not animation_player:
-		return
-	
-	# Check if the animation exists
-	if animation_player.has_animation(animation_name):
-		print("Dog: Playing animation '", animation_name, "' (found directly)")
-		animation_player.play(animation_name, ANIMATION_BLEND_TIME)
-		current_animation = animation_name
-		
-		# Ensure movement animations loop properly
-		if animation_name in [ANIM_WALK, ANIM_GALLOP, ANIM_IDLE, ANIM_IDLE_2, ANIM_IDLE_2_HEAD_LOW, ANIM_EATING]:
-			var animation_resource: Animation = animation_player.get_animation(animation_name)
-			if animation_resource:
-				animation_resource.loop_mode = Animation.LOOP_LINEAR
+func _play_animation(anim_name: String) -> void:
+	"""Play an animation on the AnimationPlayer."""
+	if animation_player and animation_player.has_animation(anim_name):
+		if current_animation != anim_name:
+			animation_player.play(anim_name)
+			current_animation = anim_name
+			
+			# Sync animation to other players
+			if multiplayer.has_multiplayer_peer() and is_multiplayer_authority():
+				_sync_animation_rpc.rpc(anim_name)
 	else:
+		# print("Dog: Animation not found: ", anim_name)
+		pass
 
+
+@rpc("any_peer", "call_local", "unreliable")
+func _sync_animation_rpc(anim_name: String) -> void:
+	"""RPC to sync animation on remote players."""
+	# Debug: Log when receiving RPC
+	
+	# Don't process on the authority (they already played it)
+	if is_multiplayer_authority():
+		return
 		
-		# Try fallback alternatives for common animations
-		var alternatives: Array[String] = []
-		match animation_name:
-			ANIM_IDLE:
-				alternatives = ["DogArmature|Idle", "Armature|Idle", "Dog|Idle", "Idle", "DogArmature|idle", "Armature|idle", "Dog|idle", "idle", "DogArmature|Idle_1", "Armature|Idle_1", "Dog|Idle_1", "Idle_1"]
-			ANIM_IDLE_2:
-				alternatives = ["DogArmature|Idle_2", "Armature|Idle_2", "Dog|Idle_2", "Idle_2", "DogArmature|idle_2", "Armature|idle_2", "Dog|idle_2", "idle_2", "DogArmature|Idle2", "Armature|Idle2", "Dog|Idle2", "Idle2", "DogArmature|Idle", "Armature|Idle", "Dog|Idle", "Idle"]
-			ANIM_IDLE_2_HEAD_LOW:
-				alternatives = ["DogArmature|Idle_2_HeadLow", "Armature|Idle_2_HeadLow", "Dog|Idle_2_HeadLow", "Idle_2_HeadLow", "DogArmature|idle_2_headlow", "Armature|idle_2_headlow", "Dog|idle_2_headlow", "idle_2_headlow", "DogArmature|Idle_HeadLow", "Armature|Idle_HeadLow", "Dog|Idle_HeadLow", "Idle_HeadLow", "DogArmature|Idle_2", "Armature|Idle_2", "Dog|Idle_2", "Idle_2", "DogArmature|Idle", "Armature|Idle", "Dog|Idle", "Idle"]
-			ANIM_WALK:
-				alternatives = ["DogArmature|Walk", "Armature|Walk", "Dog|Walk", "Walk", "DogArmature|walking", "Armature|walking", "Dog|walking", "walking"]
-			ANIM_GALLOP:
-				alternatives = ["DogArmature|Gallop", "Armature|Gallop", "Dog|Gallop", "Gallop", "DogArmature|Run", "Armature|Run", "Dog|Run", "Run", "DogArmature|run", "Armature|run", "Dog|run", "run"]
-			ANIM_GALLOP_JUMP:
-				alternatives = ["DogArmature|Gallop_Jump", "Armature|Gallop_Jump", "Dog|Gallop_Jump", "Gallop_Jump", "DogArmature|Jump", "Armature|Jump", "Dog|Jump", "Jump", "DogArmature|jump", "Armature|jump", "Dog|jump", "jump", "DogArmature|Gallop", "Armature|Gallop", "Dog|Gallop", "Gallop"]
-			ANIM_JUMP_TO_IDLE:
-				alternatives = ["DogArmature|Jump_ToIdle", "Armature|Jump_ToIdle", "Dog|Jump_ToIdle", "Jump_ToIdle", "DogArmature|Landing", "Armature|Landing", "Dog|Landing", "Landing", "DogArmature|Idle", "Armature|Idle", "Dog|Idle", "Idle"]
-			ANIM_ATTACK:
-				alternatives = ["DogArmature|Attack", "Armature|Attack", "Dog|Attack", "Attack", "DogArmature|Bite", "Armature|Bite", "Dog|Bite", "Bite", "DogArmature|bite", "Armature|bite", "Dog|bite", "bite"]
-			ANIM_EATING:
-				alternatives = ["DogArmature|Eating", "Armature|Eating", "Dog|Eating", "Eating", "DogArmature|Eat", "Armature|Eat", "Dog|Eat", "Eat", "DogArmature|eat", "Armature|eat", "Dog|eat", "eat"]
-			ANIM_DEATH:
-				alternatives = ["DogArmature|Death", "Armature|Death", "Dog|Death", "Death", "DogArmature|Die", "Armature|Die", "Dog|Die", "Die", "DogArmature|die", "Armature|die", "Dog|die", "die"]
-		
-		# Try to find an alternative
-		for alt in alternatives:
-			if animation_player.has_animation(alt):
-				animation_player.play(alt, ANIMATION_BLEND_TIME)
-				current_animation = alt
-				
-				# Ensure fallback movement animations loop properly too
-				if alt.to_lower().contains("walk") or alt.to_lower().contains("gallop") or alt.to_lower().contains("idle") or alt.to_lower().contains("eat"):
-					var animation_resource: Animation = animation_player.get_animation(alt)
-					if animation_resource:
-						animation_resource.loop_mode = Animation.LOOP_LINEAR
-				
-				return
-		
-		# If no animation found, try to play the first available animation
-		var animation_list: PackedStringArray = animation_player.get_animation_list()
-		if animation_list.size() > 0:
-			animation_player.play(animation_list[0], ANIMATION_BLEND_TIME)
-			current_animation = animation_list[0]
+	# Play the animation on remote copies
+	if animation_player and animation_player.has_animation(anim_name):
+		animation_player.play(anim_name)
+		current_animation = anim_name
 
 
 func _handle_camera_rotation(relative_mouse_motion: Vector2) -> void:
@@ -654,7 +622,9 @@ func add_global_ui() -> void:
 	var global_ui_layer = viewport.get_node_or_null("GlobalUILayer")
 	
 	if global_ui_layer:
-		print("Dog: GlobalUILayer already exists, skipping creation")
+		print("Dog: GlobalUILayer already exists, updating player reference")
+		# Update the player reference
+		global_ui_layer.set_meta("player_ref", self)
 		return
 	else:
 		print("Dog: Creating new GlobalUILayer")
@@ -663,6 +633,9 @@ func add_global_ui() -> void:
 		global_ui_layer.layer = 5  # Lower than HUD (10) but above background
 		viewport.add_child(global_ui_layer)
 		print("Dog: GlobalUILayer created and added to viewport")
+	
+	# Store player reference
+	global_ui_layer.set_meta("player_ref", self)
 	
 	# Create FPS counter
 	var fps_counter = Label.new()
@@ -683,6 +656,25 @@ func add_global_ui() -> void:
 	fps_counter.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	global_ui_layer.add_child(fps_counter)
 	
+	# Create position display
+	var position_display = Label.new()
+	position_display.name = "PositionDisplay"
+	position_display.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	position_display.offset_left = -200
+	position_display.offset_top = 40  # Below FPS counter
+	position_display.offset_right = -10
+	position_display.offset_bottom = 65
+	position_display.add_theme_font_size_override("font_size", 14)
+	position_display.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
+	position_display.add_theme_color_override("font_shadow_color", Color(0.137, 0.2, 0.165, 1))
+	position_display.add_theme_constant_override("shadow_offset_x", 1)
+	position_display.add_theme_constant_override("shadow_offset_y", 1)
+	position_display.text = "X: 0.0 Y: 0.0 Z: 0.0"
+	position_display.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	position_display.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	position_display.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	global_ui_layer.add_child(position_display)
+	
 	# Create game code display
 	var game_code_display = Label.new()
 	game_code_display.name = "GameCodeDisplay"
@@ -696,55 +688,88 @@ func add_global_ui() -> void:
 	game_code_display.add_theme_color_override("font_shadow_color", Color(0.137, 0.2, 0.165, 1))
 	game_code_display.add_theme_constant_override("shadow_offset_x", 1)
 	game_code_display.add_theme_constant_override("shadow_offset_y", 1)
-	game_code_display.text = "Code: ABC123"
+	game_code_display.text = "Code: Loading..."  # Start with loading text
 	game_code_display.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	game_code_display.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	game_code_display.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	global_ui_layer.add_child(game_code_display)
 	
-	# Create a script to handle updates
-	var global_ui_script = GDScript.new()
-	global_ui_script.source_code = """
-extends CanvasLayer
-
-var fps_update_timer: float = 0.0
-var fps_update_interval: float = 0.5
-
-func _ready():
-	_update_game_code_display()
-	var timer = Timer.new()
-	timer.wait_time = 1.0
-	timer.timeout.connect(_update_game_code_display)
-	timer.autostart = true
-	add_child(timer)
-
-func _process(delta):
-	_update_fps_counter(delta)
-
-func _update_fps_counter(delta: float):
-	fps_update_timer += delta
-	if fps_update_timer >= fps_update_interval:
-		fps_update_timer = 0.0
-		var current_fps = Engine.get_frames_per_second()
-		var fps_counter = get_node_or_null('FPSCounter')
+	# Create world seed display (for dog player)
+	var seed_display = Label.new()
+	seed_display.name = "SeedDisplay"
+	seed_display.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	seed_display.offset_left = 10
+	seed_display.offset_top = 40  # Below game code
+	seed_display.offset_right = 200
+	seed_display.offset_bottom = 65
+	seed_display.add_theme_font_size_override("font_size", 14)
+	seed_display.add_theme_color_override("font_color", Color.YELLOW)
+	seed_display.add_theme_color_override("font_shadow_color", Color(0.137, 0.2, 0.165, 1))
+	seed_display.add_theme_constant_override("shadow_offset_x", 1)
+	seed_display.add_theme_constant_override("shadow_offset_y", 1)
+	seed_display.text = "World Seed: Loading..."
+	seed_display.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	seed_display.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	seed_display.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	global_ui_layer.add_child(seed_display)
+	
+	# Create update timer directly on the layer
+	var update_timer = Timer.new()
+	update_timer.name = "UpdateTimer"
+	update_timer.wait_time = 0.1  # Update every 100ms
+	update_timer.autostart = true
+	update_timer.timeout.connect(func():
+		# Update FPS
 		if fps_counter:
-			fps_counter.text = 'FPS: %d' % current_fps
-
-func _update_game_code_display():
-	var game_code_display = get_node_or_null('GameCodeDisplay')
-	if not game_code_display:
-		return
+			fps_counter.text = "FPS: %d" % Engine.get_frames_per_second()
 		
-	if multiplayer.has_multiplayer_peer():
-		var lobby_code = NetworkManager.get_lobby_code()
-		if lobby_code != '':
-			game_code_display.text = 'Code: %s' % lobby_code
-			game_code_display.visible = true
+		# Update position
+		var player = global_ui_layer.get_meta("player_ref", null)
+		if position_display and is_instance_valid(player):
+			var pos = player.global_position
+			position_display.text = "X: %.1f Y: %.1f Z: %.1f" % [pos.x, pos.y, pos.z]
+		
+		# Update lobby code
+		if game_code_display and is_instance_valid(NetworkManager):
+			var lobby_code = NetworkManager.get_lobby_code()
+			if lobby_code != "":
+				game_code_display.text = "Code: %s" % lobby_code
+			else:
+				if multiplayer.has_multiplayer_peer():
+					game_code_display.text = "Code: Waiting..."
+				else:
+					game_code_display.text = "Code: Offline"
 		else:
-			game_code_display.visible = false
-	else:
-		game_code_display.visible = false
-"""
-	global_ui_layer.set_script(global_ui_script)
+			game_code_display.text = "Code: N/A"
+		
+		# Update world seed (for dog player)
+		if seed_display:
+			var game_manager = get_tree().get_first_node_in_group("game_manager")
+			if game_manager and game_manager.chunk_manager and game_manager.chunk_manager.chunk_generator:
+				var seed = game_manager.chunk_manager.chunk_generator.world_seed
+				seed_display.text = "World Seed: %d" % seed
+			else:
+				seed_display.text = "World Seed: Unknown"
+	)
+	global_ui_layer.add_child(update_timer)
 	
 	print("Dog: Global UI created successfully")
+
+# Add new method to configure multiplayer synchronization
+func _configure_multiplayer_sync() -> void:
+	"""Configure the MultiplayerSynchronizer to include animation state."""
+	if not multiplayer.has_multiplayer_peer():
+		return  # Skip in single player mode
+		
+	var sync = $MultiplayerSynchronizer
+	if not sync:
+		print("Dog: Warning - MultiplayerSynchronizer not found!")
+		return
+		
+	# For now, just log that we would configure animation sync
+	# The actual animation sync needs to be configured in the scene file
+	# or through a different approach since SceneReplicationConfig API is limited
+	print("Dog: Animation sync should be configured in the scene file")
+	
+	# Alternative approach: sync animation manually via RPC
+	# This will be handled by the animation update methods

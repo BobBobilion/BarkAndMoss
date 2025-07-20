@@ -36,6 +36,7 @@ var adventurer_model: Node3D
 var animation_player: AnimationPlayer
 var current_animation: String = ""
 var is_aiming: bool = false  # Track aiming state for gun-aim animations
+var is_syncing: bool = false  # Prevent recursive sync calls
 
 # --- Initialization ---
 func setup(p_adventurer_model: Node3D) -> void:
@@ -86,17 +87,16 @@ func update_movement_animation(velocity: Vector3, is_on_floor: bool, current_spe
 
 func play_animation(animation_name: String) -> void:
 	if not animation_player:
+		push_error("AnimationController: AnimationPlayer not set.")
 		return
-
-	if animation_name == current_animation and animation_player.is_playing():
-		return
-
+	
 	if not animation_player.has_animation(animation_name):
-		# Simple fallback, can be expanded with the original's alternative names logic if needed
-		var anim_list: PackedStringArray = animation_player.get_animation_list()
-		if anim_list.size() > 0:
-			animation_name = anim_list[0]
-		else:
+		print("AnimationController: Animation '%s' not found. Available animations:" % animation_name)
+		var available_animations = animation_player.get_animation_list()
+		for anim in available_animations:
+			print("  - %s" % anim)
+		
+		if available_animations.size() == 0:
 			push_error("AnimationController: No animations found in AnimationPlayer.")
 			return
 	
@@ -109,6 +109,18 @@ func play_animation(animation_name: String) -> void:
 			anim_resource.loop_mode = Animation.LOOP_LINEAR
 		else:
 			anim_resource.loop_mode = Animation.LOOP_NONE
+	
+	# Notify parent player to sync animation (but not if we're already syncing)
+	if not is_syncing:
+		var player = get_parent()
+		if player and player.has_method("sync_animation"):
+			player.sync_animation(animation_name)
+
+func play_animation_from_sync(animation_name: String) -> void:
+	"""Play animation from network sync without triggering another sync."""
+	is_syncing = true
+	play_animation(animation_name)
+	is_syncing = false
 
 func play_action(action_name: String) -> void:
 	match action_name:
