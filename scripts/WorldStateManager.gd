@@ -37,6 +37,8 @@ func record_tree_chopped(tree_position: Vector3) -> void:
 		return
 	if not world_state.chopped_trees.has(tree_position):
 		world_state.chopped_trees.append(tree_position)
+		# Sync to all connected clients in real-time
+		_sync_tree_chopped.rpc(tree_position)
 
 ## Records that a rock has been mined. Called by the host.
 func record_rock_mined(rock_position: Vector3) -> void:
@@ -44,6 +46,8 @@ func record_rock_mined(rock_position: Vector3) -> void:
 		return
 	if not world_state.mined_rocks.has(rock_position):
 		world_state.mined_rocks.append(rock_position)
+		# Sync to all connected clients in real-time
+		_sync_rock_mined.rpc(rock_position)
 
 # --- RPCs for State Sync ---
 
@@ -73,3 +77,51 @@ func send_world_state(state: Dictionary) -> void:
 	# Now that we have the state, we emit a signal that the NetworkManager is
 	# waiting for, which will then trigger loading the main scene.
 	world_state_applied.emit()
+
+
+# --- Real-time sync RPCs ---
+
+## [Server->Client] Host sends this when a tree is chopped
+@rpc("authority", "call_remote", "reliable")
+func _sync_tree_chopped(tree_position: Vector3) -> void:
+	"""Sync a chopped tree to all clients in real-time."""
+	print("WorldStateManager: Client received tree chop sync at position ", tree_position)
+	
+	# Add to local state if not already there
+	if not world_state.chopped_trees.has(tree_position):
+		world_state.chopped_trees.append(tree_position)
+	
+	# Find and remove the tree at this position
+	_remove_tree_at_position(tree_position)
+
+
+## [Server->Client] Host sends this when a rock is mined
+@rpc("authority", "call_remote", "reliable")
+func _sync_rock_mined(rock_position: Vector3) -> void:
+	"""Sync a mined rock to all clients in real-time."""
+	print("WorldStateManager: Client received rock mine sync at position ", rock_position)
+	
+	# Add to local state if not already there  
+	if not world_state.mined_rocks.has(rock_position):
+		world_state.mined_rocks.append(rock_position)
+	
+	# Find and remove the rock at this position
+	_remove_rock_at_position(rock_position)
+
+
+func _remove_tree_at_position(position: Vector3) -> void:
+	"""Find and remove a tree at the given position."""
+	# Search all tree nodes in the scene
+	var trees = get_tree().get_nodes_in_group("interactable")
+	for tree in trees:
+		if tree.has_method("_chop_tree_networked") and tree.global_position.distance_to(position) < 1.0:
+			print("WorldStateManager: Found and removing tree at ", position)
+			tree._chop_tree_networked()
+			return
+
+
+func _remove_rock_at_position(position: Vector3) -> void:
+	"""Find and remove a rock at the given position."""
+	# Similar to trees but for rocks
+	# This would be implemented when rocks have a similar system
+	pass

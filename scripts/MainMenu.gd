@@ -183,34 +183,15 @@ func _on_play_character_pressed() -> void:
 	is_hosting = true
 	is_connecting = false  # Cancel any pending connection attempts
 	
-	# Clean up any leftover game state before starting new game
-	_ensure_clean_game_state()
-	
-	# Set up networking FIRST
-	NetworkManager.host_game()
-	print("MainMenu: host_game() called, players should contain host")
-	print("MainMenu: NetworkManager.players = ", NetworkManager.players)
-	
-	# Display lobby code in character selection modal
-	var lobby_code = NetworkManager.get_lobby_code()
-	if lobby_code != "":
-		print("MainMenu: Lobby code generated: ", lobby_code)
-		# Create or update lobby code display
-		_show_lobby_code_in_modal(lobby_code)
-	
-	# Wait a frame to ensure host is registered
-	await get_tree().process_frame
-	print("MainMenu: After wait, NetworkManager.players = ", NetworkManager.players)
-	
-	# Claim the chosen role AFTER networking is set up
+	# Determine role before transitioning
 	var role: String = "human" if selected_character == "moss" else "dog"
-	NetworkManager.claim_role(role)
-	print("MainMenu: claim_role() called")
 	
-	# Start the game
-	print("MainMenu: About to call _transition_to_loading_screen()")
-	_transition_to_loading_screen(role)
-	print("MainMenu: _transition_to_loading_screen() returned - this shouldn't print if scene changed")
+	# IMMEDIATELY transition to loading screen to avoid freeze
+	print("MainMenu: Transitioning to loading screen...")
+	get_tree().change_scene_to_file(LOADING_SCENE_PATH)
+	
+	# Use call_deferred to set up networking after scene transition starts
+	call_deferred("_setup_host_after_transition", role)
 
 
 func _update_character_selection_ui() -> void:
@@ -405,8 +386,12 @@ func _on_connect_pressed() -> void:
 		ip = DEFAULT_IP
 	
 	print("Attempting to join game at: ", ip)
-	NetworkManager.join_game(ip)
-	get_tree().change_scene_to_file(LOBBY_SCENE_PATH)
+	
+	# First transition to loading screen
+	get_tree().change_scene_to_file(LOADING_SCENE_PATH)
+	
+	# Then initiate connection after scene change
+	call_deferred("_connect_to_ip_after_transition", ip)
 
 func _on_join_by_code_pressed() -> void:
 	"""
@@ -431,18 +416,11 @@ func _on_join_by_code_pressed() -> void:
 	if not NetworkManager.connection_failed.is_connected(_on_connection_failed):
 		NetworkManager.connection_failed.connect(_on_connection_failed)
 	
-	# For debugging - check if code looks like an IP address (for testing)
-	if _is_ip_address(code):
-		print("MainMenu: Code looks like IP address, trying direct connection")
-		NetworkManager.join_game(code)
-		_wait_for_actual_connection()
-	else:
-		print("MainMenu: Using discovery system for lobby code")
-		NetworkManager.join_game_by_code(code)
-		# Don't wait for connection here - let discovery complete first
-		# The discovery process will call join_game() when it finds the host
-		# We'll detect the connection via peer_connected signal
-		_wait_for_discovery_connection()
+	# First transition to loading screen
+	get_tree().change_scene_to_file(LOADING_SCENE_PATH)
+	
+	# Then initiate connection after scene change
+	call_deferred("_join_by_code_after_transition", code)
 
 func _wait_for_discovery_connection() -> void:
 	"""Wait for discovery to find host and establish connection."""
@@ -775,3 +753,69 @@ func _show_lobby_code_in_modal(code: String) -> void:
 	# Update the text
 	lobby_code_label.text = "Lobby Code: " + code
 	lobby_code_label.visible = true
+
+
+func _setup_host_after_transition(role: String) -> void:
+	"""Set up host networking after transitioning to loading screen."""
+	print("MainMenu: Setting up host after transition...")
+	
+	# Clean up any leftover game state before starting new game
+	_ensure_clean_game_state()
+	
+	# Wait for loading screen to be ready
+	await get_tree().create_timer(0.1).timeout
+	
+	# Set up networking
+	NetworkManager.host_game()
+	print("MainMenu: host_game() called, players should contain host")
+	
+	# Wait a frame to ensure host is registered
+	await get_tree().process_frame
+	
+	# Claim the chosen role
+	NetworkManager.claim_role(role)
+	print("MainMenu: claim_role() called")
+	
+	# Request to start the game
+	NetworkManager.request_start_game()
+
+
+func _connect_to_ip_after_transition(ip: String) -> void:
+	"""Connect to a server after transitioning to loading screen."""
+	print("MainMenu: Connecting to IP after transition: ", ip)
+	
+	# Wait for loading screen to be ready
+	await get_tree().create_timer(0.1).timeout
+	
+	# Now connect
+	NetworkManager.join_game(ip)
+	
+	# After a moment, transition to lobby
+	await get_tree().create_timer(1.0).timeout
+	
+	# Check if connection was successful
+	if multiplayer.has_multiplayer_peer():
+		var peer = multiplayer.get_multiplayer_peer()
+		if peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
+			get_tree().change_scene_to_file(LOBBY_SCENE_PATH)
+
+
+func _join_by_code_after_transition(code: String) -> void:
+	"""Join a game by code after transitioning to loading screen."""
+	print("MainMenu: Joining by code after transition: ", code)
+	
+	# Wait for loading screen to be ready
+	await get_tree().create_timer(0.1).timeout
+	
+	# For debugging - check if code looks like an IP address (for testing)
+	if _is_ip_address(code):
+		print("MainMenu: Code looks like IP address, trying direct connection")
+		NetworkManager.join_game(code)
+		_wait_for_actual_connection()
+	else:
+		print("MainMenu: Using discovery system for lobby code")
+		NetworkManager.join_game_by_code(code)
+		# Don't wait for connection here - let discovery complete first
+		# The discovery process will call join_game() when it finds the host
+		# We'll detect the connection via peer_connected signal
+		_wait_for_discovery_connection()

@@ -40,6 +40,29 @@ var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var corpse_scene: PackedScene
 
 # =============================================================================
+# LOD OPTIMIZATION
+# =============================================================================
+
+## LOD state tracking
+var lod_level: int = 0
+var ai_update_timer: float = 0.0
+var animations_enabled: bool = true
+var ai_enabled: bool = true
+
+## Animation cache for performance
+var animation_player: AnimationPlayer
+var current_animation: String = ""
+var animation_cache: Dictionary = {}  # Cache animation lookups
+
+# =============================================================================
+# MULTIPLAYER SYNC
+# =============================================================================
+
+## Network properties
+var is_remote: bool = false
+var interpolation_speed: float = 10.0
+
+# =============================================================================
 # ABSTRACT PROPERTIES (to be overridden by subclasses)
 # =============================================================================
 
@@ -90,6 +113,9 @@ func _ready() -> void:
 	# Initialize health
 	current_health = max_health
 	
+	# Cache animation player for performance
+	_cache_animation_player()
+	
 	# Set up detection area signals if it exists
 	_setup_detection_signals()
 	
@@ -99,16 +125,40 @@ func _ready() -> void:
 	print(GameUtils.format_log(get_class(), "%s ready at position %s" % [name, global_position]))
 
 func _physics_process(delta: float) -> void:
-	"""Handle movement and physics. Override movement logic in subclasses."""
+	"""Optimized physics process with LOD awareness."""
+	# Check if we should process based on LOD
+	var lod_meta = get_meta("current_lod", 0)
+	if lod_meta >= 3:  # Disabled LOD
+		return
+	
 	# Handle gravity
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 	
-	# Update AI behavior
-	_update_ai_behavior(delta)
+	# Handle remote interpolation for multiplayer
+	if is_remote or has_meta("target_position"):
+		_interpolate_remote_position(delta)
+		return
+	
+	# Check if AI should update based on LOD timer
+	var should_update_ai = false
+	if ai_enabled:
+		ai_update_timer += delta
+		var update_interval = _get_ai_update_interval()
+		if ai_update_timer >= update_interval:
+			should_update_ai = true
+			ai_update_timer = 0.0
+	
+	# Update AI behavior only when needed
+	if should_update_ai:
+		_update_ai_behavior(delta * ai_update_timer)  # Pass accumulated time
 	
 	# Apply movement
 	move_and_slide()
+	
+	# Update animations if enabled
+	if animations_enabled and get_meta("animations_enabled", true):
+		_update_movement_animation()
 
 # =============================================================================
 # AI BEHAVIOR SYSTEM
@@ -282,8 +332,9 @@ func die() -> void:
 	print(GameUtils.format_log(get_class(), "%s died at position %s" % [name, global_position]))
 	change_state(AnimalState.DEAD)
 	
-	# Spawn corpse if available
-	_spawn_corpse()
+	# Spawn corpse if available (only if not a synced death)
+	if not get_meta("synced_death", false):
+		_spawn_corpse()
 	
 	# Emit death signal
 	animal_died.emit(self)
@@ -338,5 +389,136 @@ func get_debug_info() -> Dictionary:
 		"position": global_position,
 		"target": target_position,
 		"movement_center": movement_center,
-		"flee_target": flee_target.name if is_instance_valid(flee_target) else "None"
-	} 
+		"flee_target": flee_target.name if is_instance_valid(flee_target) else "None",
+		"lod_level": lod_level,
+		"ai_enabled": ai_enabled,
+		"animations_enabled": animations_enabled
+	}
+
+# =============================================================================
+# LOD OPTIMIZATION METHODS
+# =============================================================================
+
+func _cache_animation_player() -> void:
+	"""Cache the animation player for performance."""
+	animation_player = _find_animation_player_recursive(self)
+	
+	if animation_player:
+		# Cache all animation names for faster lookup
+		var animations = animation_player.get_animation_list()
+		for anim_name in animations:
+			animation_cache[anim_name.to_lower()] = anim_name
+
+func _find_animation_player_recursive(node: Node) -> AnimationPlayer:
+	"""Recursively find AnimationPlayer in children."""
+	if node is AnimationPlayer:
+		return node
+	
+	for child in node.get_children():
+		var result = _find_animation_player_recursive(child)
+		if result:
+			return result
+	
+	return null
+
+func _get_ai_update_interval() -> float:
+	"""Get AI update interval based on LOD level."""
+	match get_meta("current_lod", 0):
+		0:
+			return 0.1  # Close - 10Hz
+		1:
+			return 0.3  # Medium - ~3Hz
+		2:
+			return 1.0  # Far - 1Hz
+		_:
+			return 999.0  # Effectively disabled
+
+func _interpolate_remote_position(delta: float) -> void:
+	"""Smoothly interpolate remote animal position."""
+	if has_meta("target_position"):
+		var target_pos = get_meta("target_position")
+		global_position = global_position.lerp(target_pos, interpolation_speed * delta)
+	
+	if has_meta("target_rotation"):
+		var target_rot = get_meta("target_rotation")
+		rotation.y = lerp_angle(rotation.y, target_rot, interpolation_speed * delta)
+
+func _update_movement_animation() -> void:
+	"""Update animations based on movement. Override in subclasses."""
+	pass
+
+func play_animation_optimized(animation_name: String, blend_time: float = 0.2) -> void:
+	"""Play animation with caching and LOD awareness."""
+	if not animation_player or not animations_enabled:
+		return
+	
+	# Skip if already playing
+	if current_animation == animation_name and animation_player.is_playing():
+		return
+	
+	# Try direct name first
+	if animation_player.has_animation(animation_name):
+		animation_player.play(animation_name, blend_time)
+		current_animation = animation_name
+		return
+	
+	# Try cached lowercase lookup
+	var lower_name = animation_name.to_lower()
+	if animation_cache.has(lower_name):
+		animation_player.play(animation_cache[lower_name], blend_time)
+		current_animation = animation_cache[lower_name]
+		return
+
+func set_lod_level(level: int) -> void:
+	"""Set LOD level for this animal."""
+	lod_level = level
+	set_meta("current_lod", level)
+	
+	# Adjust behavior based on LOD
+	match level:
+		0:  # Close
+			ai_enabled = true
+			animations_enabled = true
+			set_physics_process(true)
+		1:  # Medium
+			ai_enabled = true
+			animations_enabled = true
+			set_physics_process(true)
+		2:  # Far
+			ai_enabled = true
+			animations_enabled = false
+			set_physics_process(true)
+		3:  # Disabled
+			ai_enabled = false
+			animations_enabled = false
+			set_physics_process(false)
+
+# =============================================================================
+# MULTIPLAYER SYNC METHODS
+# =============================================================================
+
+func get_state_string() -> String:
+	"""Get current state as string for network sync."""
+	match current_state:
+		AnimalState.IDLE:
+			return "IDLE"
+		AnimalState.WANDERING:
+			return "WANDERING"
+		AnimalState.FLEEING:
+			return "FLEEING"
+		AnimalState.DEAD:
+			return "DEAD"
+		_:
+			return "UNKNOWN"
+
+func set_state_from_string(state: String) -> void:
+	"""Set state from string for network sync."""
+	match state:
+		"IDLE":
+			current_state = AnimalState.IDLE
+		"WANDERING":
+			current_state = AnimalState.WANDERING
+		"FLEEING":
+			current_state = AnimalState.FLEEING
+		"DEAD":
+			current_state = AnimalState.DEAD

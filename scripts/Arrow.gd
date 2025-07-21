@@ -98,11 +98,22 @@ func _hit_animal(animal: Node) -> void:
 	
 	has_hit = true
 	
-	# Deal damage to the animal
-	if animal.has_method("take_damage"):
-		animal.take_damage(ARROW_DAMAGE)
-	elif animal.has_method("die"):
-		animal.die()
+	# Get animal ID for multiplayer sync
+	var animal_id = animal.get_meta("animal_id", -1)
+	
+	# Only the player who shot the arrow should deal damage
+	if shooter and shooter.has_method("get_multiplayer_authority"):
+		var shooter_id = shooter.get_multiplayer_authority()
+		if multiplayer.get_unique_id() == shooter_id:
+			# Deal damage to the animal
+			if animal.has_method("take_damage"):
+				animal.take_damage(ARROW_DAMAGE)
+			elif animal.has_method("die"):
+				animal.die()
+			
+			# Notify other players that this animal was hit
+			if multiplayer.has_multiplayer_peer() and animal_id != -1:
+				_sync_animal_hit.rpc(animal_id, ARROW_DAMAGE)
 	
 	# Stop the arrow's physics
 	set_freeze_mode(RigidBody3D.FREEZE_MODE_KINEMATIC)
@@ -118,6 +129,12 @@ func _hit_animal(animal: Node) -> void:
 		call_deferred("_reparent_to_animal", animal, current_parent, old_transform)
 	
 	print("Arrow hit animal: ", animal.name)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _sync_animal_hit(animal_id: int, damage: float) -> void:
+	"""Sync animal hit to other players."""
+	print("Arrow: Received animal hit sync for ID ", animal_id, " with damage ", damage)
 
 
 func _stick_to_surface(surface: Node) -> void:

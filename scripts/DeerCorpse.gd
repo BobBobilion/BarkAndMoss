@@ -76,6 +76,12 @@ func _process_corpse(player: Node3D) -> void:
 		
 		if success:
 			print("Deer processed: gained %d Raw Meat and %d Hide" % [meat_count, hide_count])
+			
+			# Sync corpse removal to other players
+			if multiplayer.has_multiplayer_peer():
+				var corpse_path = get_path()
+				_sync_corpse_harvested.rpc(corpse_path)
+			
 			# Remove the corpse after processing
 			queue_free()
 		else:
@@ -118,4 +124,13 @@ func _spawn_raw_meat(count: int) -> void:
 	# TODO: Add meat to player inventory when inventory system is ready
 	if grabber and grabber.has_method("add_to_inventory"):
 		for i in count:
-			grabber.add_to_inventory("raw_meat") 
+			grabber.add_to_inventory("raw_meat")
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _sync_corpse_harvested(corpse_path: NodePath) -> void:
+	"""Sync corpse removal to other players."""
+	print("DeerCorpse: Received corpse harvest sync for ", corpse_path)
+	var corpse = get_node_or_null(corpse_path)
+	if corpse and corpse == self:
+		queue_free() 

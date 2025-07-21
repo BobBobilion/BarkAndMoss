@@ -37,6 +37,11 @@ func _ready() -> void:
 	multiplayer_spawner.add_spawnable_scene("res://scenes/Player.tscn")
 	multiplayer_spawner.add_spawnable_scene("res://scenes/Dog.tscn")
 	
+	# Add animal scenes for multiplayer spawning
+	multiplayer_spawner.add_spawnable_scene("res://scenes/Rabbit.tscn")
+	multiplayer_spawner.add_spawnable_scene("res://scenes/Deer.tscn")
+	multiplayer_spawner.add_spawnable_scene("res://scenes/Bird.tscn")
+	
 	# Set spawn limit (-1 = unlimited)
 	multiplayer_spawner.spawn_limit = -1
 
@@ -168,6 +173,14 @@ func _setup_and_start() -> void:
 	if game_manager:
 		print("Main: Calling GameManager.start_game() after terrain is ready")
 		game_manager.start_game()
+	
+	# Enable animal spawning after terrain is ready
+	if animal_spawner and animal_spawner.has_method("set_spawning_enabled"):
+		print("Main: Enabling animal spawner...")
+		animal_spawner.set_spawning_enabled(true)
+	else:
+		print("Main: Warning - AnimalSpawner not found or missing set_spawning_enabled method")
+	
 	print("Main: Setup complete!") 
 
 

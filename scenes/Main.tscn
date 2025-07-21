@@ -34,6 +34,7 @@ script = ExtResource("1_1q3rw")
 
 [node name="AnimalSpawner" type="Node" parent="."]
 script = ExtResource("4_animal_spawner")
+enable_spawning = true
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_1u7xv")

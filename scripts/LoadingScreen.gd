@@ -14,6 +14,38 @@ const TOTAL_LOAD_TIME := RESOURCE_LOAD_TIME + CHUNK_PRELOAD_TIME
 
 # --- Engine Callbacks ---
 func _ready() -> void:
+	# Check if we're the host who just transitioned from main menu
+	if NetworkManager.is_host and multiplayer.has_multiplayer_peer():
+		print("LoadingScreen: Host mode - waiting for NetworkManager setup...")
+		loading_label.text = "Setting up server..."
+		progress_bar.value = 10.0
+		
+		# Wait for NetworkManager to finish setting up (from MainMenu's deferred call)
+		await get_tree().create_timer(0.5).timeout
+		progress_bar.value = 20.0
+		
+		# Now wait for the game to be ready to start
+		loading_label.text = "Starting world..."
+		await get_tree().create_timer(0.5).timeout
+		
+		# The NetworkManager should handle the rest
+		return
+	
+	# Check if we're a client waiting for world state
+	if multiplayer.has_multiplayer_peer() and not NetworkManager.is_host:
+		print("LoadingScreen: Client mode - waiting for world state...")
+		loading_label.text = "Connecting to server..."
+		progress_bar.value = 10.0
+		
+		# Wait for connection to stabilize
+		await get_tree().create_timer(0.5).timeout
+		progress_bar.value = 30.0
+		loading_label.text = "Receiving world data..."
+		
+		# The NetworkManager will trigger the scene transition when ready
+		return
+	
+	# Normal loading process for single player only
 	# Start loading the main scene in the background
 	ResourceLoader.load_threaded_request(MAIN_SCENE_PATH)
 	loading_label.text = "Loading world..."
@@ -56,7 +88,9 @@ func _ready() -> void:
 			
 		await get_tree().process_frame
 	
-	_transition_to_main_scene()
+	# Only transition for single player
+	if not multiplayer.has_multiplayer_peer():
+		_transition_to_main_scene()
 
 func _get_elapsed_time(start_time: Dictionary) -> float:
 	"""Calculate elapsed time since start_time."""
@@ -75,4 +109,10 @@ func _transition_to_main_scene() -> void:
 	
 	# Use Godot's proper scene transition to avoid gray screen
 	var packed_scene = ResourceLoader.load_threaded_get(MAIN_SCENE_PATH) as PackedScene
-	get_tree().change_scene_to_packed(packed_scene) 
+	get_tree().change_scene_to_packed(packed_scene)
+
+
+func update_client_progress(message: String, progress: float) -> void:
+	"""Update loading screen for clients waiting for server."""
+	loading_label.text = message
+	progress_bar.value = progress 

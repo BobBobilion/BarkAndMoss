@@ -384,6 +384,12 @@ func load_main_scene() -> void:
 		get_tree().change_scene_to_file("res://scenes/Main.tscn")
 	# Clients must first get the world state from the host.
 	else:
+		# First transition to loading screen if not already there
+		var current_scene = get_tree().current_scene
+		if not current_scene or current_scene.scene_file_path != "res://scenes/LoadingScreen.tscn":
+			print("NetworkManager: Client transitioning to loading screen...")
+			get_tree().change_scene_to_file("res://scenes/LoadingScreen.tscn")
+		
 		# We connect a one-shot signal. This function will be called once, then the connection is freed.
 		var world_state_manager = get_node("/root/WorldStateManager")
 		world_state_manager.world_state_applied.connect(
